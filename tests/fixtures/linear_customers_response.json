@@ -1,0 +1,75 @@
+{
+  "data": {
+    "customers": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "endCursor": "f8414fa4-28b3-4f0b-bd74-79f8c3264a66"
+      },
+      "nodes": [
+        {
+          "id": "52fbc9a4-ff93-4ffd-82b8-d82328bb3ec7",
+          "name": "Acme Robotics",
+          "domains": [],
+          "revenue": null,
+          "externalIds": [],
+          "updatedAt": "2026-08-12T08:11:45.318Z",
+          "status": {
+            "id": "3268692d-6176-4a8e-9be5-91be10c75816",
+            "name": "Active"
+          },
+          "tier": null
+        },
+        {
+          "id": "99eceeb2-7111-4c2c-b1a7-bb03acf0daaa",
+          "name": "Globex Labs",
+          "domains": [
+            "globexlabs.example.test"
+          ],
+          "revenue": null,
+          "externalIds": [],
+          "updatedAt": "2026-09-03T14:26:09.742Z",
+          "status": {
+            "id": "3268692d-6176-4a8e-9be5-91be10c75816",
+            "name": "Active"
+          },
+          "tier": null
+        },
+        {
+          "id": "4a8ef358-7122-4852-a149-bfb7a71c221b",
+          "name": "Initrode Systems",
+          "domains": [
+            "initrode.example.test"
+          ],
+          "revenue": null,
+          "externalIds": [],
+          "updatedAt": "2026-06-22T11:05:31.087Z",
+          "status": {
+            "id": "2173a49e-5668-46e6-9058-2401bc3cdde6",
+            "name": "Prospect"
+          },
+          "tier": null
+        },
+        {
+          "id": "f8414fa4-28b3-4f0b-bd74-79f8c3264a66",
+          "name": "Soylent Metrics",
+          "domains": [
+            "soylentmetrics.example.test"
+          ],
+          "revenue": 24000,
+          "externalIds": [
+            "soylent-metrics"
+          ],
+          "updatedAt": "2026-09-17T20:48:56.653Z",
+          "status": {
+            "id": "3268692d-6176-4a8e-9be5-91be10c75816",
+            "name": "Active"
+          },
+          "tier": {
+            "id": "cb8f163b-7905-4058-87f6-d2985e3d5ea7",
+            "name": "Tier 1"
+          }
+        }
+      ]
+    }
+  }
+}

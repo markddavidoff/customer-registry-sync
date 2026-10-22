@@ -1,0 +1,10 @@
+# Per-domain or per-name classification overrides. An override wins over the
+# classification derived from the bucket.
+#
+# classification: real | prospect | churned | partner | internal
+#
+# Example entry (uncomment and edit):
+#   - match: demo.example.test
+#     classification: internal
+#     reason: internal demo organization
+overrides: []

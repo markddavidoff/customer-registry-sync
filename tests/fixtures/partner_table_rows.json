@@ -1,0 +1,728 @@
+[
+  {
+    "object": "block",
+    "id": "1486f52d-9484-495a-a8ce-ebc667728076",
+    "parent": {
+      "type": "block_id",
+      "block_id": "4fa8cf5e-5e59-43dc-b8ae-539031cb0983"
+    },
+    "created_time": "2026-03-20T15:41:00.000Z",
+    "last_edited_time": "2026-03-20T15:41:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "0fa7f2c3-86d3-46a0-83fd-e516212a4d0a"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "0fa7f2c3-86d3-46a0-83fd-e516212a4d0a"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "table_row",
+    "table_row": {
+      "cells": [
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Account",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Account",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Contact",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Contact",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Reason Kept Active",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Reason Kept Active",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Flagged By",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Flagged By",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Status",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Status",
+            "href": null
+          }
+        ]
+      ]
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "a9c7df4e-3fc6-4665-8980-28f6f383fb18",
+    "parent": {
+      "type": "block_id",
+      "block_id": "4fa8cf5e-5e59-43dc-b8ae-539031cb0983"
+    },
+    "created_time": "2026-03-20T15:41:00.000Z",
+    "last_edited_time": "2026-03-20T15:41:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "0fa7f2c3-86d3-46a0-83fd-e516212a4d0a"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "0fa7f2c3-86d3-46a0-83fd-e516212a4d0a"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "table_row",
+    "table_row": {
+      "cells": [
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Northwind Partners",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Northwind Partners",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Ada Fenwick",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Ada Fenwick",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Early design partner",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Early design partner",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Partnerships",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Partnerships",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Active — VAR",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Active — VAR",
+            "href": null
+          }
+        ]
+      ]
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "941ec16f-4006-4069-b97d-29f7ddeccc4c",
+    "parent": {
+      "type": "block_id",
+      "block_id": "4fa8cf5e-5e59-43dc-b8ae-539031cb0983"
+    },
+    "created_time": "2026-03-20T15:41:00.000Z",
+    "last_edited_time": "2026-03-20T15:41:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "0fa7f2c3-86d3-46a0-83fd-e516212a4d0a"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "0fa7f2c3-86d3-46a0-83fd-e516212a4d0a"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "table_row",
+    "table_row": {
+      "cells": [
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Pied Piper Consulting",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Pied Piper Consulting",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Devin Mora",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Devin Mora",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Early design partner",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Early design partner",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Sales",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Sales",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Active",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Active",
+            "href": null
+          }
+        ]
+      ]
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "331b69d3-9d29-447b-add9-0aa39b84cf9c",
+    "parent": {
+      "type": "block_id",
+      "block_id": "4fa8cf5e-5e59-43dc-b8ae-539031cb0983"
+    },
+    "created_time": "2026-03-20T15:41:00.000Z",
+    "last_edited_time": "2026-03-20T15:41:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "0fa7f2c3-86d3-46a0-83fd-e516212a4d0a"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "0fa7f2c3-86d3-46a0-83fd-e516212a4d0a"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "table_row",
+    "table_row": {
+      "cells": [
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Tyrell Advisory",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Tyrell Advisory",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "—",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "—",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Resells to two accounts",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Resells to two accounts",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Sales",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Sales",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Active",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Active",
+            "href": null
+          }
+        ]
+      ]
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "3c1f0feb-b62c-4863-8c61-23371114930f",
+    "parent": {
+      "type": "block_id",
+      "block_id": "4fa8cf5e-5e59-43dc-b8ae-539031cb0983"
+    },
+    "created_time": "2026-03-20T15:41:00.000Z",
+    "last_edited_time": "2026-03-20T15:41:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "0fa7f2c3-86d3-46a0-83fd-e516212a4d0a"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "0fa7f2c3-86d3-46a0-83fd-e516212a4d0a"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "table_row",
+    "table_row": {
+      "cells": [
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Cyberdyne Resellers",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Cyberdyne Resellers",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Jules Brandt",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Jules Brandt",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Still evaluating",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Still evaluating",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Support",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Support",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Active",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Active",
+            "href": null
+          }
+        ]
+      ]
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "23d0bb43-8fda-4c9b-bb91-cc06bb2a9cb8",
+    "parent": {
+      "type": "block_id",
+      "block_id": "4fa8cf5e-5e59-43dc-b8ae-539031cb0983"
+    },
+    "created_time": "2026-03-20T15:41:00.000Z",
+    "last_edited_time": "2026-03-20T15:41:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "0fa7f2c3-86d3-46a0-83fd-e516212a4d0a"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "0fa7f2c3-86d3-46a0-83fd-e516212a4d0a"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "table_row",
+    "table_row": {
+      "cells": [
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Massive Dynamic Group",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Massive Dynamic Group",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "—",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "—",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "1 user",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "1 user",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "—",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "—",
+            "href": null
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": {
+              "content": "Active",
+              "link": null
+            },
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            },
+            "plain_text": "Active",
+            "href": null
+          }
+        ]
+      ]
+    },
+    "archived": false
+  }
+]

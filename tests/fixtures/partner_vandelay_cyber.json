@@ -1,0 +1,854 @@
+[
+  {
+    "object": "block",
+    "id": "511bbef4-c500-4101-8d8d-a8aebc53ce34",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Company Overview [HubSpot]",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Company Overview [HubSpot]",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "c86fc1f4-f211-4991-b884-604fb55b7c05",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Domain: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Domain: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "vandelaycyber.example.test",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "vandelaycyber.example.test",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "900c3045-7a0d-4ecc-a80f-e21046a7de86",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Industry: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Industry: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "COMPUTER_SOFTWARE",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "COMPUTER_SOFTWARE",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "07e48230-aa97-4d86-af83-e3edc3689e62",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Account Relationship",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Account Relationship",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "dee5b9b0-19a3-4b26-8279-3a22dc6a4dfc",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Status: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Status: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "🟢 Customer",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "🟢 Customer",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "f5e7bf03-a98e-4647-9958-ae33e7b00c99",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Active Deals [HubSpot]",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Active Deals [HubSpot]",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "c4d4eb67-fe84-4857-8883-aabbf23c0128",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Reseller agreement under review",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Reseller agreement under review",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "1b192c4c-daf2-4e62-902c-c57e1a3f14f8",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Key Contacts [HubSpot]",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Key Contacts [HubSpot]",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "40b731d4-f21d-485e-bd0a-bdca5e354ee5",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Jess Duarte - Chief Growth Officer (jess@vandelaycyber.example.test)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Jess Duarte - Chief Growth Officer (jess@vandelaycyber.example.test)",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "8c6c3671-aa5e-4de7-8ef9-f60773688dfd",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Tom Rhodes - Technical Lead (tom@vandelaycyber.example.test)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Tom Rhodes - Technical Lead (tom@vandelaycyber.example.test)",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "7f2da9a1-08a5-4a70-b01c-22bc13f87b2e",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Joan Gasper - Quantum Entanglement Officer (joan.gasper@vandelaycyber.example.test)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Joan Gasper - Quantum Entanglement Officer (joan.gasper@vandelaycyber.example.test)",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "7ec4d6ce-b63c-4cc0-a8f3-62d2c2600a48",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Jay Byrd - Chief Executive Officer (jay.byrd@vandelaycyber.example.test)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Jay Byrd - Chief Executive Officer (jay.byrd@vandelaycyber.example.test)",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "b000191d-f10b-4ece-8dc7-5ea45a5e1b96",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Pat Clayton - CISO (pat.clayton@acmerobotics.example.test)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Pat Clayton - CISO (pat.clayton@acmerobotics.example.test)",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "f5fd69cb-23d3-423d-8ee7-7696ef6fadc4",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Health Signal",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Health Signal",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "29c7959c-c286-43c7-90a8-f1b3e6ee6ab5",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Account health is steady; no open escalations.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Account health is steady; no open escalations.",
+          "href": null
+        }
+      ],
+      "icon": null,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "2ac5e8bc-3169-4469-91ab-b0dfc61cdd27",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Last synced: 2026-03-26 17:05 UTC | Sources: HubSpot",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Last synced: 2026-03-26 17:05 UTC | Sources: HubSpot",
+          "href": null
+        }
+      ],
+      "icon": null,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "66c001cd-7f03-4b58-86f6-af590942f191",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Changelog",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Changelog",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "394d25c3-7e20-4cc5-b44e-caac789a5db9",
+    "parent": {
+      "type": "page_id",
+      "page_id": "3ac74096-0bd6-416d-a04d-eabcd815a05f"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "25e29bc2-4729-46c1-9c67-5914daa4fb77"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Changelog",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Changelog",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  }
+]

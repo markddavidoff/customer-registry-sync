@@ -1,0 +1,3942 @@
+[
+  {
+    "object": "block",
+    "id": "bc70f107-37c1-4e0f-b1af-76b3377b4296",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Acme Robotics builds warehouse automation. This page is maintained by an automated account-sync job; edits are overwritten.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Acme Robotics builds warehouse automation. This page is maintained by an automated account-sync job; edits are overwritten.",
+          "href": null
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "🤖"
+      },
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "6e2746eb-a8cb-4d18-a2f2-8df6ee4d70bd",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Company Overview",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Company Overview",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "b19ea718-3955-4c0c-88af-ef6354bfd2db",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Domain: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Domain: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "acmerobotics.example.test",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "acmerobotics.example.test",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "9249db7d-c8e0-4816-8100-c5208ebc6e8b",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Industry: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Industry: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "Industrial Automation",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Industrial Automation",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "cb1165fc-2816-4f48-9a7a-7b299f263c08",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Employees: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Employees: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "1,200",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "1,200",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "bd0d8650-8616-4396-8c1e-3271cd11ee72",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "HQ: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "HQ: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "Springfield",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Springfield",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "25eb1f03-7591-4155-a7ad-acd1ad4a4ac1",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Annual Revenue: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Annual Revenue: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "~$50M",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "~$50M",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "6162a74a-68c0-4ebb-a6f5-718554a1b73e",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Founded: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Founded: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "2009",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "2009",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "c90a40e1-ce1c-4eb0-a0be-ed5a7513199c",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Phone: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Phone: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "+1 555 0100",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "+1 555 0100",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "f9cab0f8-7865-415b-a18a-898d1adf24ab",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Parent Company: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Parent Company: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "Acme Holdings (separate CRM deal track)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Acme Holdings (separate CRM deal track)",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "2ba8bd9b-340e-4bc9-a9b2-d4e8241a1ce0",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "HubSpot ID: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "HubSpot ID: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "48201937465 | HubSpot Lifecycle: Customer [HubSpot]",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "48201937465 | HubSpot Lifecycle: Customer [HubSpot]",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "9230e30d-51fe-4854-9cce-eeeaf4825b94",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Account Relationship",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Account Relationship",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "e0ebfe46-24cd-48d2-8daf-6afa836309d2",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "ARR: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "ARR: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "$250,000.00/yr — Source: account owner (2026-05-27)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "$250,000.00/yr — Source: account owner (2026-05-27)",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "debd97ad-13e3-47bf-856f-293639a27cce",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Usage Allocation",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Usage Allocation",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "b59663c2-fd27-4359-806f-381b4a004752",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Base allocation: 40M units per quarter",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Base allocation: 40M units per quarter",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "a3c1fc4e-ec58-4ef1-9fa5-65192e6620c4",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Overage billed monthly at the list rate",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Overage billed monthly at the list rate",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "ba9a008a-0245-4b07-8d3c-2631289548d4",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Source: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Source: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "Order form signed 2025-01-15",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Order form signed 2025-01-15",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "3a832459-b9aa-42b2-b4f1-149fc298f585",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Deployment: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Deployment: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "Self-Managed (primary) + SaaS components",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Self-Managed (primary) + SaaS components",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "3a19640e-739d-407e-8d96-a292e1debc4b",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Slack Channel: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Slack Channel: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "#acme-robotics (C0000000001)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "#acme-robotics (C0000000001)",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "68989dee-e526-4fff-8450-b5a5838a134a",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Status: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Status: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "Active customer — expansion pipeline reduced; renewal due Q4",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Active customer — expansion pipeline reduced; renewal due Q4",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "164f88ed-1a71-475c-a4ef-79494259f4ed",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Active Deals Summary",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Active Deals Summary",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "3d5b301b-49c1-4135-ac0a-92970fe99752",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Two open deals as of the last sync.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Two open deals as of the last sync.",
+          "href": null
+        }
+      ],
+      "icon": null,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "022e33aa-f501-4c51-81a8-b2139be758f6",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Acme Robotics Expansion | $120,000 | Proposal | 2026-09-30",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Acme Robotics Expansion | $120,000 | Proposal | 2026-09-30",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "b861d085-6068-4aee-812b-1e63bfb0e102",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Acme Robotics SaaS Add-on | $60,000 | ",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Acme Robotics SaaS Add-on | $60,000 | ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "Closed Won",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Closed Won",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": " | 2026-07-14",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": " | 2026-07-14",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "4009105d-c621-437a-a4d8-1b73710d42e9",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Acme Robotics Training Package | $15,000 | Negotiation | 2026-10-15",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Acme Robotics Training Package | $15,000 | Negotiation | 2026-10-15",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "bcd8b382-7a01-461b-97c9-079bb677a950",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": true,
+    "in_trash": false,
+    "type": "table",
+    "table": {
+      "table_width": 4,
+      "has_column_header": true,
+      "has_row_header": false
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "37b17e5f-2d23-45b2-844e-1fa43894099a",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Closed Deals (Historical)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Closed Deals (Historical)",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "22b5b667-f36a-41f3-b6bf-9793e76fe653",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": true,
+    "in_trash": false,
+    "type": "table",
+    "table": {
+      "table_width": 4,
+      "has_column_header": true,
+      "has_row_header": false
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "bdc580bb-d0d1-49eb-8eb5-dabcd729294d",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📊 Usage History (Jan 2025 – Feb 2026)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "📊 Usage History (Jan 2025 – Feb 2026)",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "e4b23688-ded9-485d-b0c3-ad551c07e514",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Source: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": true,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Source: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "Usage export (2026-04-07)",
+            "link": {
+              "url": "https://docs.example.test/exports/usage-2026-04-07"
+            }
+          },
+          "annotations": {
+            "bold": false,
+            "italic": true,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Usage export (2026-04-07)",
+          "href": "https://docs.example.test/exports/usage-2026-04-07"
+        }
+      ],
+      "icon": null,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "adbcec24-fa3a-4d49-9402-f603b4fa1517",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Q1 2025: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Q1 2025: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "41K units, 190 calls",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "41K units, 190 calls",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "48534893-e2de-4125-9526-2a503b07488c",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Q2 2025: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Q2 2025: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "1.9M units, 5.2K calls",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "1.9M units, 5.2K calls",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "d3f445d8-321e-40cf-91e3-0ded5709b826",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Q3 2025: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Q3 2025: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "4.4M units, 7.1K calls",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "4.4M units, 7.1K calls",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "a918d275-5a5a-4fa1-9946-4b3864ea47ef",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Total (14 months): ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Total (14 months): ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "309.6M units, 118.4K calls",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "309.6M units, 118.4K calls",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "0a666e4d-f7cc-4e16-895d-2f0e2ca33265",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_3",
+    "heading_3": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Key Signals",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Key Signals",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "9e0c913c-88c3-455c-b55a-30bb29cbd3fa",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📈 Jan→Feb 2026: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "📈 Jan→Feb 2026: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "usage up 64% month over month",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "usage up 64% month over month",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "00c514a3-93e1-4044-b16b-f1a5e32b15d8",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Adoption is concentrated in the engineering group",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Adoption is concentrated in the engineering group",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "8dcb9ff5-4a72-4db9-ab71-67e9ff432648",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Peak month: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Peak month: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "Feb 2026 (96M units)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Feb 2026 (96M units)",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "5d76c8a7-efdc-4ee4-8d01-f094e6be5eb4",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "💰 Cost & Margin Analysis",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "💰 Cost & Margin Analysis",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "ee2c4010-a0f4-4e7f-93ef-7fe3b145334b",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Methodology: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Methodology: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "$50 per 1M units",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "$50 per 1M units",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": ". Modeled from usage exports.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": ". Modeled from usage exports.",
+          "href": null
+        }
+      ],
+      "icon": null,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "ccb02dc3-60db-421b-961f-655ac6f8eb4f",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_3",
+    "heading_3": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Margin Analysis",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Margin Analysis",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "7a8d2f2f-2130-4673-87fc-804f2bfa2650",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Current ARR: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Current ARR: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "$250,000",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "$250,000",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "ce05ce3a-b20a-45ab-b975-efbbb17ee186",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Margin: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Margin: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "-5.0%",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "-5.0%",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "dc16876e-11d4-4d50-9a1f-d6779015745b",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Status: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Status: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "🔴 NEGATIVE MARGIN. Losing about $12,500/yr at current usage.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "🔴 NEGATIVE MARGIN. Losing about $12,500/yr at current usage.",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "5a78cacb-52d2-4052-8ad9-b691523b49d3",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_3",
+    "heading_3": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Assessment",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Assessment",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "eb42c48d-c714-4c8b-9397-1196c66f2683",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Usage outpaces the contracted allocation; revisit pricing at renewal.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Usage outpaces the contracted allocation; revisit pricing at renewal.",
+          "href": null
+        }
+      ],
+      "icon": null,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "e9f850b6-c9a9-4ca0-a593-4647119d4a37",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "divider",
+    "divider": {},
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "dd61466e-10ab-42f0-9dda-bb132faa1eca",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Margin warning: usage growth is not matched by contract value.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Margin warning: usage growth is not matched by contract value.",
+          "href": null
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "📊"
+      },
+      "color": "yellow_background"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "01cc4be9-35f7-421a-829c-c300be42d42d",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Health Signal",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Health Signal",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "299a5098-3849-433d-8068-b03273ca1a09",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Account health is steady; no open escalations.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Account health is steady; no open escalations.",
+          "href": null
+        }
+      ],
+      "icon": null,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "7b5824bc-87ae-4cd2-b880-11ece660d4a7",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Last synced: 2026-07-29 | Sources: HubSpot, Slack",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Last synced: 2026-07-29 | Sources: HubSpot, Slack",
+          "href": null
+        }
+      ],
+      "icon": null,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "6a8991eb-783d-4092-a3bc-c68cc46a1a7c",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Health Score Breakdown",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Health Score Breakdown",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "a4e4c2eb-75b8-4bbe-88d7-65211ee3a627",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Champion Strength: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Champion Strength: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "8/10",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "8/10",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "a14ddb66-738c-4fa6-b930-d9a8401e15e6",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Adoption Depth: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Adoption Depth: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "6/10",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "6/10",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "38d2b18f-b59a-4b67-ad80-2a5d367b6e5a",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "divider",
+    "divider": {},
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "655587a6-0706-4566-b2ef-92973c0e312f",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Key Contacts",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Key Contacts",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "08b3872c-7fad-4244-b2e6-073854a7210a",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "[HubSpot — last synced 2026-05-21]",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "[HubSpot — last synced 2026-05-21]",
+          "href": null
+        }
+      ],
+      "icon": null,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "50710929-8489-4e1f-bd1b-fbd4a94f7271",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": true,
+    "in_trash": false,
+    "type": "table",
+    "table": {
+      "table_width": 4,
+      "has_column_header": true,
+      "has_row_header": false
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "ce5a3e7d-0217-4497-8ea7-f013077824ef",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "divider",
+    "divider": {},
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "525fc841-465b-4cde-a01f-0ace14034cf1",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Last synced: 2026-07-29 | Source: HubSpot | Maintained by: account-sync job",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Last synced: 2026-07-29 | Source: HubSpot | Maintained by: account-sync job",
+          "href": null
+        }
+      ],
+      "icon": null,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "fb31d66e-359b-474f-9217-e8a538208b0c",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Key Contacts (Acme Side)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Key Contacts (Acme Side)",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "a0c5a9aa-d027-4ca5-8910-0ca3adccf510",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Robin (Robin A / Robin B) - Primary technical lead. Owns the rollout",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Robin (Robin A / Robin B) - Primary technical lead. Owns the rollout",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "bd9b0d79-5676-4e05-8c8a-c32014aba744",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Quinn - Day-to-day technical contact",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Quinn - Day-to-day technical contact",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "571f1ecc-41a2-495d-bf45-0f6d303562f3",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Morgan - Procurement contact",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Morgan - Procurement contact",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "f65afa11-5a33-45d2-a25d-66359bf91974",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Technical Profile",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Technical Profile",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "2c537297-4c8c-43da-9f20-db1b112daf04",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Deployment: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Deployment: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "Self-Managed on AWS [Slack]",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Self-Managed on AWS [Slack]",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "4341540d-0e9b-4a6b-b130-b367ef0fd985",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "App URL: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "App URL: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "https://app.acmerobotics.example.test",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "https://app.acmerobotics.example.test",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "64a9501a-73b3-4c3e-b4ad-ebe52f15e7de",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "SSO: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "SSO: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "SAML via the customer's identity provider",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "SAML via the customer's identity provider",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "b0cba4cd-6f64-4428-bc3b-26bdf3368597",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Customer Priorities (as of Oct 2025)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Customer Priorities (as of Oct 2025)",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "c9f63f6f-dd39-439f-9439-cd85112563fa",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "numbered_list_item",
+    "numbered_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Roll the platform out to the second plant",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Roll the platform out to the second plant",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "5a0005b4-72b3-4f4a-9840-0610c8f7d165",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "numbered_list_item",
+    "numbered_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Reduce time to onboard new engineers",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Reduce time to onboard new engineers",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "9bb6eda7-cfe7-4b56-8d75-3a70d74cfd25",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "numbered_list_item",
+    "numbered_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Document the change-approval workflow",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Document the change-approval workflow",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "4517e3ac-08ae-462e-a974-8d212df4cf82",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Support Commitments",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Support Commitments",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "5c1e8bf5-190e-4a90-b45e-7bc7a714a7b2",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Tier: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Tier: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "Tier 1 | Revenue: $150,000 | Open Requests: 1",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Tier 1 | Revenue: $150,000 | Open Requests: 1",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "942d6889-7936-4c00-bf17-d4ba233d0646",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "📋 Changelog",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "📋 Changelog",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "2c47b2ff-4b3e-4d46-a2de-6a0005781031",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "2026-07-29: refreshed contacts and deal summary",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "2026-07-29: refreshed contacts and deal summary",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "65640294-bea2-4127-8652-782451c2a1b0",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "2026-05-27: ARR confirmed by the account owner.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "2026-05-27: ARR confirmed by the account owner.",
+          "href": null
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "📋"
+      },
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "33ab2c97-1a72-49de-86b8-a431a6dcfdd0",
+    "parent": {
+      "type": "page_id",
+      "page_id": "678d5327-2d80-416b-a745-74132920ac10"
+    },
+    "created_time": "2026-03-18T09:05:00.000Z",
+    "last_edited_time": "2026-03-18T09:05:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "13ed204b-1d70-4e8f-aae3-c4470449115f"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "callout",
+    "callout": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "2026-03-18: page created from the account template.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "2026-03-18: page created from the account template.",
+          "href": null
+        }
+      ],
+      "icon": {
+        "type": "emoji",
+        "emoji": "📁"
+      },
+      "color": "default"
+    },
+    "archived": false
+  }
+]

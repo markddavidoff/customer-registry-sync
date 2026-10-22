@@ -1,0 +1,1052 @@
+[
+  {
+    "object": "block",
+    "id": "7a8966b9-36bf-4e01-8a40-f6154473aa95",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Company Overview [HubSpot]",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Company Overview [HubSpot]",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "4374ef1b-ad99-4d19-bc48-a08a57c85b2a",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Domain: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Domain: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "initrode.example.test",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "initrode.example.test",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "fb52b8c9-7f92-426a-af6c-9c22f2f7f191",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Industry: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Industry: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "HUMAN_RESOURCES",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "HUMAN_RESOURCES",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "72b196f1-7d0a-4f54-9a8e-911f1ac7af30",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Employees: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Employees: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "350",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "350",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "90315c76-9adc-484e-8a9a-5dda5c1e18ad",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Location: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Location: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "Pawnee",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Pawnee",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "df09239b-539e-4c8d-a44a-c8db967c2f03",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Annual Revenue: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Annual Revenue: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "$50,000,000",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "$50,000,000",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "b9b2bfcc-343c-4b40-8621-f8435e64ebfd",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Founded: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Founded: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "1998",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "1998",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "fb8c7251-7ecf-49a1-9a73-c263460db751",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Account Relationship",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Account Relationship",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "42f07b3d-4b89-4d28-ab09-529e0d163256",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Status: ",
+            "link": null
+          },
+          "annotations": {
+            "bold": true,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Status: ",
+          "href": null
+        },
+        {
+          "type": "text",
+          "text": {
+            "content": "🟢 Customer",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "🟢 Customer",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "74f775f5-87fd-4a6f-aca0-d890be102d5c",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Active Deals [HubSpot]",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Active Deals [HubSpot]",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "aec07bff-bccf-4f41-aa05-b37dd9c4de75",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Initrode Platform Evaluation | $30,000 | Discovery | 2026-12-01",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Initrode Platform Evaluation | $30,000 | Discovery | 2026-12-01",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "678a8428-2679-424f-8de3-875bcd8349df",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Initrode Analytics Seats | $18,000 | Discovery | 2027-01-15",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Initrode Analytics Seats | $18,000 | Discovery | 2027-01-15",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "08cbd01c-1683-416e-84ec-91fc9c86ca59",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Initrode Security Review | $9,500 | Discovery | 2027-02-01",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Initrode Security Review | $9,500 | Discovery | 2027-02-01",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "d9cdd242-a2d9-4ea4-94a7-12f005c691b1",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Key Contacts [HubSpot]",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Key Contacts [HubSpot]",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "1c9b3661-d60e-4fa3-af61-1f5f745abeb5",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Mara Foster - Chief Information Officer (mfoster@initrode.example.test)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Mara Foster - Chief Information Officer (mfoster@initrode.example.test)",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "e5067e48-8b18-47c9-9cc5-a3e4fecb9584",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Jo Okabe - CIO (jo.okabe@initrode.example.test)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Jo Okabe - CIO (jo.okabe@initrode.example.test)",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "0435a9e3-5731-4250-83bb-f43528117f99",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Clark Hallam - Treasury Manager (challam@initrode.example.test)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Clark Hallam - Treasury Manager (challam@initrode.example.test)",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "1fcbc267-a591-465b-b0c0-16d1de8f15fa",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "bulleted_list_item",
+    "bulleted_list_item": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Jen Bucks - Software Engineer (jen.bucks@initrode.example.test)",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Jen Bucks - Software Engineer (jen.bucks@initrode.example.test)",
+          "href": null
+        }
+      ],
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "6e9578fb-9651-4531-809b-90d316ce20ee",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "heading_2",
+    "heading_2": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Health Signal",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Health Signal",
+          "href": null
+        }
+      ],
+      "is_toggleable": false,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "463da643-5f61-4597-8bc2-eb5021e73f1f",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Account health is steady; no open escalations.",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Account health is steady; no open escalations.",
+          "href": null
+        }
+      ],
+      "icon": null,
+      "color": "default"
+    },
+    "archived": false
+  },
+  {
+    "object": "block",
+    "id": "893eda70-2d40-4e1e-bd4a-401ff8004db3",
+    "parent": {
+      "type": "page_id",
+      "page_id": "d21f1260-1b1f-43e8-8c42-723bc9f54be4"
+    },
+    "created_time": "2026-03-19T08:30:00.000Z",
+    "last_edited_time": "2026-03-19T08:30:00.000Z",
+    "created_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "last_edited_by": {
+      "object": "user",
+      "id": "8433847d-0fd4-4978-bc00-0200b5b70163"
+    },
+    "has_children": false,
+    "in_trash": false,
+    "type": "paragraph",
+    "paragraph": {
+      "rich_text": [
+        {
+          "type": "text",
+          "text": {
+            "content": "Last synced: 2026-03-19 | Sources: HubSpot",
+            "link": null
+          },
+          "annotations": {
+            "bold": false,
+            "italic": false,
+            "strikethrough": false,
+            "underline": false,
+            "code": false,
+            "color": "default"
+          },
+          "plain_text": "Last synced: 2026-03-19 | Sources: HubSpot",
+          "href": null
+        }
+      ],
+      "icon": null,
+      "color": "default"
+    },
+    "archived": false
+  }
+]

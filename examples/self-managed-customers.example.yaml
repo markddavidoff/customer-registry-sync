@@ -1,0 +1,15 @@
+# Hand-curated on-prem / hybrid deployment registry. The ingest merges these
+# rows into the dataset and never overwrites them.
+#
+# deployment: on-prem | hybrid (required)
+# classification: defaults to "real" (a paying customer)
+customers:
+  - name: Stark Fabrication LLC (The Forge)
+    domains:
+      - starkforge.example.test
+    deployment: on-prem
+    notes: Air-gapped install; upgrades ship on removable media.
+  - name: Tyrell Corporation
+    domains:
+      - tyrell.example.test
+    deployment: hybrid
