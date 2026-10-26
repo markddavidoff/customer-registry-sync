@@ -2,33 +2,18 @@ from pathlib import Path
 
 import pytest
 
-from customer_registry_sync.inputs import load_aliases, load_overrides, load_self_managed_customers
+from customer_registry_sync import inputs
+from customer_registry_sync.inputs import load_overrides, load_self_managed_customers
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 SELF_MANAGED_SEED = EXAMPLES / "self-managed-customers.example.yaml"
 OVERRIDES_SEED = EXAMPLES / "classification-overrides.example.yaml"
-ALIASES_SEED = EXAMPLES / "linear-aliases.example.yaml"
 
 
-def test_aliases_example_maps_dataset_name_to_linear_name():
-    a = load_aliases(ALIASES_SEED)
-    assert a["Stark Fabrication LLC (The Forge)"] == "The Forge"
-    assert a["Tyrell Corporation"] == "Tyrell"
-    assert a["Wonka Industries Ltd"] == "Wonka"
-    assert a["Wayne Enterprises Group"] == "Wayne Enterprises"
-
-
-def test_aliases_rejects_entry_missing_fields(tmp_path):
-    p = tmp_path / "a.yaml"
-    p.write_text("aliases:\n  - dataset_name: X\n")  # no linear_name
-    with pytest.raises(ValueError, match="linear_name"):
-        load_aliases(p)
-
-
-def test_aliases_empty_file_is_empty_map(tmp_path):
-    p = tmp_path / "a.yaml"
-    p.write_text("aliases: []\n")
-    assert load_aliases(p) == {}
+def test_alias_input_is_gone():
+    # Identity links now live in identities.yaml; there is no aliases file to load.
+    assert not hasattr(inputs, "load_aliases")
+    assert not (EXAMPLES / "linear-aliases.example.yaml").exists()
 
 
 def test_self_managed_example_loads_and_has_on_prem_entries():

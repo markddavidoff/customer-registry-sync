@@ -17,7 +17,7 @@ import re
 
 from gitops_engine import SyncMark
 
-from .generate import strip_status_suffix
+from .identity import strip_status_suffix
 from .linear_client import LiveCustomer
 from .linear_schema import LinearCustomer, LinearSynced, content_hash_of
 

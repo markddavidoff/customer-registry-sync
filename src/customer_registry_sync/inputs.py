@@ -43,23 +43,6 @@ def load_self_managed_customers(path: str | Path) -> list[CustomerRecord]:
     return out
 
 
-def load_aliases(path: str | Path) -> dict[str, str]:
-    """dataset canonical_name -> existing Linear customer name (identity links
-    for rows that can't be auto-matched by domain/name)."""
-    data: dict[str, Any] = yaml.safe_load(Path(path).read_text()) or {}
-    out: dict[str, str] = {}
-    for entry in data.get("aliases") or []:
-        entry = entry or {}
-        dataset_name = entry.get("dataset_name")
-        linear_name = entry.get("linear_name")
-        if not dataset_name:
-            raise ValueError(f"alias entry missing 'dataset_name': {entry!r}")
-        if not linear_name:
-            raise ValueError(f"alias entry missing 'linear_name' for {dataset_name!r}")
-        out[dataset_name] = linear_name
-    return out
-
-
 def load_overrides(path: str | Path) -> dict[str, dict[str, Any]]:
     data: dict[str, Any] = yaml.safe_load(Path(path).read_text()) or {}
     out: dict[str, dict[str, Any]] = {}

@@ -31,7 +31,7 @@ from .datasets import NOTION, dataset_dir
 from .deploy import apply_deploy, plan_deploy
 from .generate import generate_linear
 from .inbound_sync import reconcile_inbound
-from .inputs import load_aliases, load_overrides, load_self_managed_customers
+from .inputs import load_overrides, load_self_managed_customers
 from .linear_client import LinearError
 from .notion_ingest import extract_customers
 from .writers import (
@@ -184,10 +184,8 @@ def _cmd_deploy(args) -> int:
         print("No <data_dir>/linear/* found — run `generate` first.", file=sys.stderr)
         return 2
     state = _scope_recs(load_state(out_dir), args.scope)
-    aliases_path = out_dir / "linear-aliases.yaml"
-    aliases = load_aliases(aliases_path) if aliases_path.exists() else {}
     live = _scope_live(client.list_customers(), args.scope)
-    plan = plan_deploy(desired, live, aliases, state=state)
+    plan = plan_deploy(desired, live, state=state)
     _print_plan(plan)
     if not args.apply:
         print(
@@ -224,14 +222,13 @@ def _cmd_check(args) -> int:
     out_dir = _out_dir(args)
     desired = _scope_recs(load_desired(out_dir), args.scope)
     state = _scope_recs(load_state(out_dir), args.scope)
-    aliases_path = out_dir / "linear-aliases.yaml"
-    aliases = load_aliases(aliases_path) if aliases_path.exists() else {}
     try:
         live = _scope_live(client.list_customers(), args.scope)
     except LinearError as e:
         print(f"ERROR: Linear read failed: {e}", file=sys.stderr)
         return EXIT_OPERROR
-    code, drift, plan = run_check(desired, state, live, aliases)
+    # No alias file any more; `run_check` loses its `aliases` parameter with the planner port.
+    code, drift, plan = run_check(desired, state, live, {})
     print(
         f"check: drift changed={len(drift.changed)} added={len(drift.added)} deleted={len(drift.deleted)}"
     )

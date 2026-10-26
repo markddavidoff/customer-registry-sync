@@ -7,6 +7,9 @@ from customer_registry_sync.curated import (
     load_curated,
     write_curated,
 )
+from customer_registry_sync.datasets import DATASETS_FILE
+from customer_registry_sync.identity import IDENTITIES_FILE
+from customer_registry_sync.ignore import IGNORE_FILE
 
 CURATED_FILE = RETIRE_FILE  # the one curated file of this shape left (enrichment is gone)
 
@@ -41,6 +44,5 @@ def test_header_written_as_comment(tmp_path):
 
 def test_curated_inputs_name_the_files_check_and_deploy_read():
     # Names relative to the registry's data_dir; no module reads a hard-coded
-    # `customers/` path. Tasks 3 and 4 add IDENTITIES_FILE, DATASETS_FILE and
-    # IGNORE_FILE, after which this should compare against those constants.
-    assert CURATED_INPUTS == ("identities.yaml", "linear-ignore.yaml", "datasets.yaml", RETIRE_FILE)
+    # `customers/` path. Each constant is the one the loading module uses.
+    assert CURATED_INPUTS == (IDENTITIES_FILE, IGNORE_FILE, DATASETS_FILE, RETIRE_FILE)

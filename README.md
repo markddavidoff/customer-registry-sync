@@ -89,7 +89,6 @@ An unexpected API error outside `check` (for example a Linear or Notion failure 
 | `linear-state/<slug>.yaml` | `sync-inbound`, `deploy` | **Layer 2, state:** the last-synced mirror of live Linear |
 | `self-managed-customers.yaml` | you | On-prem and hybrid deployment registry; merged, never overwritten |
 | `classification-overrides.yaml` | you | Per-domain or per-name classification overrides |
-| `linear-aliases.yaml` | you | Identity links for rows that cannot be matched to a Linear customer by domain or name |
 
 [`examples/`](examples/) has a sample of each hand-curated input.
 
