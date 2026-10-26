@@ -40,6 +40,26 @@ def make_config(tmp_path_factory):
     return _make
 
 
+@pytest.fixture
+def run_cli(make_config):
+    """Call `cli.main` under a synthetic config: ``run_cli(argv, data_dir=None)``.
+
+    ``data_dir`` is the configured data directory, the one `--prod` guards (the
+    default is a fresh directory the test never uses, so `--out-dir` is not prod).
+    One config is written per distinct ``data_dir``."""
+    from customer_registry_sync import cli
+
+    configs = {}
+
+    def _run(argv, *, data_dir=None):
+        key = str(data_dir)
+        if key not in configs:
+            configs[key] = make_config(data_dir=data_dir)
+        return cli.main(["--config", str(configs[key]), *argv])
+
+    return _run
+
+
 def pytest_addoption(parser):
     parser.addoption(
         "--run-live",

@@ -1,8 +1,4 @@
-"""Building the `linear-found` dataset and appending identities (spec §2, §4; D2, D4).
-
-The `ingest` command arrives with the CLI port. `_ingest` below runs the same library calls
-the command makes for `--only linear-found` (identities, ignore list, mirror, stub files,
-manifest), so these tests exercise the real producers end to end."""
+"""`ingest` builds the `linear-found` dataset and appends identities."""
 
 import shutil
 from datetime import date
@@ -78,26 +74,8 @@ def _managed(tmp_path):
     return partition_live(live, ignore, scope=None)[0]
 
 
-def _ingest(tmp_path, today=DAY1):
-    """What `ingest --only linear-found` does: append identities, build and write the stubs."""
-    store = IdentityStore(tmp_path / IDENTITIES_FILE)
-    entries = load_datasets(tmp_path, BOTH)
-    append_record_identities(store, entries)
-    build = build_linear_found(
-        _managed(tmp_path), store, entries, load_datasets_config(tmp_path), today=today
-    )
-    for msg in build.reports:
-        print(f"  NOTE: {msg}")
-    target = dataset_dir(tmp_path, LINEAR_FOUND)
-    write_dataset(
-        [rec for _, rec in build.stubs],
-        tmp_path,
-        dataset=LINEAR_FOUND,
-        stems=[cid for cid, _ in build.stubs],
-    )
-    write_manifest(target, "ingest")
-    store.save()
-    return 0
+def _ingest(run_cli, tmp_path):
+    return run_cli(["ingest", "--only", "linear-found", "--out-dir", str(tmp_path), "--no-input"])
 
 
 def _stubs(tmp_path):
@@ -121,12 +99,10 @@ def _build(tmp_path, today=DAY1):
     )
 
 
-ACME = CustomerRecord(
-    canonical_name="Acme", domains=["acme.example.test"], classification="real"
-)
+ACME = CustomerRecord(canonical_name="Acme", domains=["acme.example.test"], classification="real")
 
 
-def test_stubs_only_customers_without_notion_identity(tmp_path):
+def test_stubs_only_customers_without_notion_identity(tmp_path, run_cli):
     _tree(
         tmp_path,
         records=[ACME],
@@ -135,7 +111,7 @@ def test_stubs_only_customers_without_notion_identity(tmp_path):
             _node("lin_b", "Beta Corp", domains=["beta.example.test"], revenue=5000, tier="Tier 2"),
         ],
     )
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     stubs = _stubs(tmp_path)
     assert list(stubs) == ["beta"]
     beta = stubs["beta"]
@@ -153,7 +129,7 @@ def test_stubs_only_customers_without_notion_identity(tmp_path):
     assert (dataset_dir(tmp_path, LINEAR_FOUND) / MANIFEST).is_file()
 
 
-def test_canonical_id_kept_across_runs_and_rebuild_from_empty_dir(tmp_path):
+def test_canonical_id_kept_across_runs_and_rebuild_from_empty_dir(tmp_path, run_cli):
     _tree(
         tmp_path,
         nodes=[
@@ -161,13 +137,13 @@ def test_canonical_id_kept_across_runs_and_rebuild_from_empty_dir(tmp_path):
             _node("lin_c", "Gamma", domains=["beta.other.example.test"]),
         ],
     )
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     first = sorted(_stubs(tmp_path))
     assert first == ["beta", "beta-2"]
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     assert sorted(_stubs(tmp_path)) == first
     shutil.rmtree(dataset_dir(tmp_path, LINEAR_FOUND))
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     stubs = _stubs(tmp_path)
     assert {s: r.linear_customer_id for s, r in stubs.items()} == {
         "beta": "lin_b",
@@ -175,29 +151,29 @@ def test_canonical_id_kept_across_runs_and_rebuild_from_empty_dir(tmp_path):
     }
 
 
-def test_stub_keeps_canonical_id_when_its_domain_changes(tmp_path):
+def test_stub_keeps_canonical_id_when_its_domain_changes(tmp_path, run_cli):
     _tree(tmp_path, nodes=[_node("lin_b", "Beta Corp", domains=["beta.example.test"])])
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     # Linear owns the stub: its domain and name change there
     _mirror(
         tmp_path,
         _node("lin_b", "Beta Holdings", domains=["newbeta.example.test"], xids=["beta"]),
     )
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     stubs = _stubs(tmp_path)
     assert list(stubs) == ["beta"]
     assert stubs["beta"].canonical_name == "Beta Holdings"
     assert [r.external_ids for r in generate_from_dir(tmp_path).rows] == [["beta"]]
     # keyed by Linear id: with the identity table gone, the stub still keeps its stem
     (tmp_path / IDENTITIES_FILE).unlink()
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     assert list(_stubs(tmp_path)) == ["beta"]
     assert list(_identities(tmp_path)) == ["beta"]
 
 
-def test_generate_uses_stub_stem_when_stub_has_no_identity(tmp_path):
+def test_generate_uses_stub_stem_when_stub_has_no_identity(tmp_path, run_cli):
     _tree(tmp_path, nodes=[_node("lin_b", "Beta Corp", domains=["beta.example.test"])])
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     (tmp_path / IDENTITIES_FILE).unlink()
     _mirror(tmp_path, _node("lin_b", "Beta Corp", domains=["newbeta.example.test"]))
     # rebuild the stub from a later mirror (its domain changed) with no identity table
@@ -212,9 +188,9 @@ def test_generate_uses_stub_stem_when_stub_has_no_identity(tmp_path):
     assert [r.external_ids for r in generate_from_dir(tmp_path).rows] == [["beta"]]
 
 
-def test_status_suffix_stripped(tmp_path):
+def test_status_suffix_stripped(tmp_path, run_cli):
     _tree(tmp_path, nodes=[_node("lin_p", "Pilot Co [Prospect]", status="Prospect")])
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     [(stem, rec)] = _stubs(tmp_path).items()
     assert stem == "pilot-co"
     assert rec.canonical_name == "Pilot Co"
@@ -238,9 +214,9 @@ def test_first_sighting_date_kept(tmp_path):
     assert later.stubs[0][1].notes == first_note
 
 
-def test_stub_with_no_domains(tmp_path):
+def test_stub_with_no_domains(tmp_path, run_cli):
     _tree(tmp_path, nodes=[_node("lin_r", "Vandelay Global Services")])
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     stubs = _stubs(tmp_path)
     assert list(stubs) == ["vandelay-global-services"]
     assert stubs["vandelay-global-services"].domains == []
@@ -248,7 +224,7 @@ def test_stub_with_no_domains(tmp_path):
     assert "domains: []" in text
 
 
-def test_name_only_and_alias_name_only_match_create_no_stub(tmp_path):
+def test_name_only_and_alias_name_only_match_create_no_stub(tmp_path, run_cli):
     dunder = CustomerRecord(
         canonical_name="Dunder Technologies",
         domains=["dunder.example.test"],
@@ -266,14 +242,14 @@ def test_name_only_and_alias_name_only_match_create_no_stub(tmp_path):
     append_record_identities(store, load_datasets(tmp_path, BOTH))
     store.add_values("dunder", names=["Dunder"])
     store.save()
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     assert _stubs(tmp_path) == {}
     ids = _identities(tmp_path)
     assert sorted(ids) == ["acme", "dunder"]
     assert ids["dunder"].sources["linear"] == "lin_t"
 
 
-def test_linear_only_domain_appended_to_identity(tmp_path):
+def test_linear_only_domain_appended_to_identity(tmp_path, run_cli):
     _tree(
         tmp_path,
         records=[ACME],
@@ -282,7 +258,7 @@ def test_linear_only_domain_appended_to_identity(tmp_path):
             _node("lin_b", "Beta Corp", domains=["beta.example.test"]),
         ],
     )
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     assert _identities(tmp_path)["acme"].domains == ["acme.example.test", "Acme-Alt.example.test"]
     # a stub's later Linear-only domain lands on its identity too
     _mirror(
@@ -290,11 +266,11 @@ def test_linear_only_domain_appended_to_identity(tmp_path):
         _node("lin_a", "Acme [Active]", domains=["acme.example.test", "Acme-Alt.example.test"]),
         _node("lin_b", "Beta Corp", domains=["beta.example.test", "beta-two.example.test"]),
     )
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     assert _identities(tmp_path)["beta"].domains == ["beta.example.test", "beta-two.example.test"]
 
 
-def test_ignored_customer_not_stubbed_and_gets_no_identity(tmp_path):
+def test_ignored_customer_not_stubbed_and_gets_no_identity(tmp_path, run_cli):
     _tree(
         tmp_path,
         nodes=[
@@ -306,12 +282,12 @@ def test_ignored_customer_not_stubbed_and_gets_no_identity(tmp_path):
     (tmp_path / IGNORE_FILE).write_text(
         "customers:\n  - linear_id: lin_own\n    name: Pied Piper\n    reason: our own company\n"
     )
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     assert list(_stubs(tmp_path)) == ["beta"]
     assert list(_identities(tmp_path)) == ["beta"]
 
 
-def test_same_name_live_customers_make_one_stub(tmp_path, capsys):
+def test_same_name_live_customers_make_one_stub(tmp_path, capsys, run_cli):
     _tree(
         tmp_path,
         nodes=[
@@ -319,7 +295,7 @@ def test_same_name_live_customers_make_one_stub(tmp_path, capsys):
             _node("lin_1", "Dup Co [Active]", domains=["dup.example.test"]),
         ],
     )
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     stubs = _stubs(tmp_path)
     assert list(stubs) == ["dup"]
     assert stubs["dup"].linear_customer_id == "lin_1"
@@ -332,7 +308,7 @@ def test_same_name_live_customers_make_one_stub(tmp_path, capsys):
     assert "'Dup Co' (lin_2)" in out
 
 
-def test_linear_found_ingest_is_idempotent(tmp_path):
+def test_linear_found_ingest_is_idempotent(tmp_path, run_cli):
     _tree(
         tmp_path,
         records=[ACME],
@@ -342,7 +318,7 @@ def test_linear_found_ingest_is_idempotent(tmp_path):
             _node("lin_r", "Vandelay"),
         ],
     )
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     lf = dataset_dir(tmp_path, LINEAR_FOUND)
 
     def snapshot():
@@ -350,12 +326,25 @@ def test_linear_found_ingest_is_idempotent(tmp_path):
         return (tmp_path / IDENTITIES_FILE).read_bytes(), files
 
     before = snapshot()
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     assert snapshot() == before
     assert set(before[1]) == {"beta.yaml", "vandelay.yaml"}
 
 
-def test_ambiguous_duplicates_record_no_linear_source(tmp_path, capsys):
+def test_linear_found_refuses_without_mirror(tmp_path, capsys, run_cli):
+    _tree(tmp_path, nodes=[_node("lin_b", "Beta Corp", domains=["beta.example.test"])])
+    assert _ingest(run_cli, tmp_path) == 0
+    stub = dataset_dir(tmp_path, LINEAR_FOUND) / "beta.yaml"
+    stub_bytes = stub.read_bytes()
+    ids_bytes = (tmp_path / IDENTITIES_FILE).read_bytes()
+    shutil.rmtree(tmp_path / STATE_SUBDIR)
+    assert _ingest(run_cli, tmp_path) == 2
+    assert "run sync-inbound first" in capsys.readouterr().err
+    assert stub.read_bytes() == stub_bytes
+    assert (tmp_path / IDENTITIES_FILE).read_bytes() == ids_bytes
+
+
+def test_ambiguous_duplicates_record_no_linear_source(tmp_path, capsys, run_cli):
     """Two unstamped customers on a Notion identity with no recorded Linear id: the build
     records nothing on the identity, reports it, and the planner's error still fails
     after the build saves."""
@@ -367,7 +356,7 @@ def test_ambiguous_duplicates_record_no_linear_source(tmp_path, capsys):
             _node("lin_2", "Acme Inc", domains=["acme.example.test", "acme-two.example.test"]),
         ],
     )
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     ident = _identities(tmp_path)["acme"]
     assert ident.sources == {"notion": "acme"}
     assert ident.domains == ["acme.example.test"]
@@ -385,7 +374,9 @@ def test_ambiguous_duplicates_record_no_linear_source(tmp_path, capsys):
     )
 
 
-def test_new_identity_for_two_unstamped_duplicates_records_no_linear_source(tmp_path, capsys):
+def test_new_identity_for_two_unstamped_duplicates_records_no_linear_source(
+    tmp_path, capsys, run_cli
+):
     """Two unstamped customers that resolve to nothing: the new identity records no
     Linear id (the lowest id must not settle the pick), the build reports it, and the
     planner's error stands."""
@@ -396,7 +387,7 @@ def test_new_identity_for_two_unstamped_duplicates_records_no_linear_source(tmp_
             _node("lin_2", "Gamma Inc", domains=["gamma.example.test"]),
         ],
     )
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     ident = _identities(tmp_path)["gamma"]
     assert ident.sources == {}
     out = capsys.readouterr().out
@@ -432,7 +423,7 @@ def test_status_errors_name_unmapped_and_unclassified_stubs(tmp_path):
     assert "ignore --linear-id lin_s" in errors[1]
 
 
-def test_two_customers_stamped_with_the_canonical_id_are_reported(tmp_path, capsys):
+def test_two_customers_stamped_with_the_canonical_id_are_reported(tmp_path, capsys, run_cli):
     _tree(
         tmp_path,
         records=[ACME],
@@ -441,7 +432,7 @@ def test_two_customers_stamped_with_the_canonical_id_are_reported(tmp_path, caps
             _node("lin_2", "Acme Inc", domains=["acme.example.test"], xids=["acme"]),
         ],
     )
-    assert _ingest(tmp_path) == 0
+    assert _ingest(run_cli, tmp_path) == 0
     assert _identities(tmp_path)["acme"].sources == {"notion": "acme"}
     out = capsys.readouterr().out
     assert "two or more Linear customers carry the canonical id acme" in out
@@ -464,8 +455,6 @@ def test_recorded_linear_id_picks_the_primary_and_the_other_is_a_known_duplicate
     store, build = _build(tmp_path)
     assert build.stubs == []
     assert build.reports == []
-    assert build.duplicates == [
-        "acme: 'Acme Inc' (lin_1) is a known duplicate; merge it in Linear"
-    ]
+    assert build.duplicates == ["acme: 'Acme Inc' (lin_1) is a known duplicate; merge it in Linear"]
     # only the primary contributes its Linear-only domain
     assert store.table.entries["acme"].domains == ["acme.example.test", "acme-two.example.test"]

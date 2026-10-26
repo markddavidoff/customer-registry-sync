@@ -1,13 +1,13 @@
-"""Tests for the gitops-engine adapter (drift detection and matching) and the
-local `deploy` planner/apply it no longer drives (plan-time and write-time aborts,
+"""Tests for the gitops-engine adapter (drift detection only), the one pairing
+(`deploy.pair_rows`) and the local `deploy` planner/apply it no longer drives (plan-time and write-time aborts,
 the never-null write path). All data here is invented.
 """
 
 import pytest
 
 from customer_registry_sync.check import detect_drift
-from customer_registry_sync.deploy import apply_deploy, live_to_linear, plan_deploy
-from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
+from customer_registry_sync.deploy import apply_deploy, live_to_linear, pair_rows, plan_deploy
+from customer_registry_sync.identity import IDENTITIES_FILE, IdentityTable, load_identities
 from customer_registry_sync.identity_store import IdentityStore
 from customer_registry_sync.linear_adapter import LinearCustomersAdapter
 from customer_registry_sync.linear_client import LiveCustomer
@@ -98,9 +98,13 @@ def _table(tmp_path, *identities):
     return load_identities(tmp_path / IDENTITIES_FILE)
 
 
-def test_adapter_matches_through_identity_resolve(tmp_path):
-    adapter = LinearCustomersAdapter()
+def _match(d, live, table=None):
+    """The live customer `pair_rows` pairs with `d`: the one pairing check and deploy use."""
+    [(_, lv)] = pair_rows([d], live, table or IdentityTable()).pairs
+    return lv
 
+
+def test_pairing_matches_through_identity_resolve(tmp_path):
     by_xid = livec(
         id="x1", name="Totally Other", domains=["other.example.test"], external_ids=["xenon-labs"]
     )
@@ -111,47 +115,54 @@ def test_adapter_matches_through_identity_resolve(tmp_path):
     d_xid = desired(
         name="Helios Freight [Active]", domains=["orbit.example.test"], external_ids=["xenon-labs"]
     )
-    assert adapter.match(d_xid, [by_xid, by_dom, by_name]) is by_xid
+    assert _match(d_xid, [by_xid]) is by_xid
 
     # domain when no customer carries the external id
     d_dom = desired(name="No Name Match", domains=["orbit.example.test"], external_ids=["no-such"])
-    assert adapter.match(d_dom, [by_dom, by_name]) is by_dom
+    assert _match(d_dom, [by_dom, by_name]) is by_dom
 
     # name next (status suffix ignored on both sides)
     d_name = desired(name="Helios Freight [Prospect]", domains=[], external_ids=[])
-    assert adapter.match(d_name, [by_name]) is by_name
+    assert _match(d_name, [by_name]) is by_name
 
     # nothing matches -> None (a create)
-    assert adapter.match(desired(name="Ghost Co", domains=[], external_ids=[]), []) is None
+    assert _match(desired(name="Ghost Co", domains=[], external_ids=[]), []) is None
 
     # a Linear name recorded on the identity links rows no key would match (no aliases)
     by_identity_name = livec(id="x4", name="Gotham Industries", domains=[], external_ids=[])
     d_ident = desired(name="Wayne Technologies", domains=[], external_ids=["wayne"])
-    assert adapter.match(d_ident, [by_identity_name]) is None
+    assert _match(d_ident, [by_identity_name]) is None
     table = _table(tmp_path, ("wayne", ["Wayne Technologies", "Gotham Industries"], [], {}))
-    assert (
-        LinearCustomersAdapter(table=table).match(d_ident, [by_identity_name]) is by_identity_name
-    )
+    assert _match(d_ident, [by_identity_name], table) is by_identity_name
 
 
-def test_adapter_match_on_a_duplicate_group_uses_pick_primary(tmp_path):
+def test_pairing_on_a_duplicate_group_uses_pick_primary(tmp_path):
     d = desired(name="Helios Freight", domains=["helios.example.test"], external_ids=["helios"])
     a = livec(id="lin-a", name="Helios Freight", external_ids=[])
     b = livec(id="lin-b", name="Helios Freight Inc", external_ids=[])
-    # neither carries the canonical id and none is recorded: no match, never API order
-    assert LinearCustomersAdapter().match(d, [a, b]) is None
+    # neither carries the canonical id and none is recorded: no pair, never API order
+    pairing = pair_rows([d], [a, b], IdentityTable())
+    assert pairing.pairs == [] and pairing.errors
     table = _table(
         tmp_path, ("helios", ["Helios Freight"], ["helios.example.test"], {"linear": "lin-b"})
     )
-    assert LinearCustomersAdapter(table=table).match(d, [a, b]) is b
+    assert _match(d, [a, b], table) is b
     stamped = livec(id="lin-c", name="Helios Freight Inc", external_ids=["helios"])
-    assert LinearCustomersAdapter(table=table).match(d, [a, b, stamped]) is stamped
+    assert _match(d, [a, b, stamped], table) is stamped
 
 
-def test_adapter_refuses_writes():
+def test_adapter_refuses_planning_and_writes():
+    """The adapter serves drift detection only: planning is `deploy.plan_deploy`
+    (pairing `deploy.pair_rows`), writes are `deploy.apply_deploy`."""
     adapter = LinearCustomersAdapter()
+    with pytest.raises(NotImplementedError, match="plan_deploy"):
+        adapter.match(desired(), [livec()])
+    with pytest.raises(NotImplementedError, match="plan_deploy"):
+        adapter.mark_for(desired(), livec(), [])
     with pytest.raises(NotImplementedError, match="apply_deploy"):
         adapter.preflight(None)
+    with pytest.raises(NotImplementedError, match="apply_deploy"):
+        adapter.get("lin-1")
     with pytest.raises(NotImplementedError, match="apply_deploy"):
         adapter.create(desired())
     with pytest.raises(NotImplementedError, match="apply_deploy"):
