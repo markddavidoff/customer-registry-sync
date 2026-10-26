@@ -5,7 +5,10 @@
 #
 # - GitHub can call this reusable workflow only when the customer-registry-sync
 #   repository is public, or has the same owner as this repository (and allows
-#   Actions access from it). Pin `uses:` to a release tag or commit.
+#   Actions access from it). That repository is private today, so a caller in
+#   another owner cannot use it until it is made public.
+# - No release tag exists yet. Replace `@main` below with `@<full commit sha>`,
+#   the same commit your pyproject.toml pins with `rev`, until a tag is published.
 # - Secrets are passed explicitly by name: `secrets: inherit` passes nothing to a
 #   workflow owned by another account. Map the names on the left (fixed by the
 #   reusable workflow) to your own secrets on the right. A secret with the
@@ -39,6 +42,7 @@ on:
 
 jobs:
   registry-sync:
+    # `@main` is a placeholder: pin a commit sha here (see the note at the top).
     uses: markddavidoff/customer-registry-sync/.github/workflows/registry-sync.yml@main
     permissions:
       contents: read

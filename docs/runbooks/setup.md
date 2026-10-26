@@ -24,6 +24,17 @@ caller's `uv.lock` and runs one of four modes:
 - **refresh**: once a day (and on demand), re-reads Linear without writing to it and
   opens a PR only when a refreshed file changed.
 
+The workflow never reads Notion and holds no Notion token. Notion ingest is manual: on
+your own machine you run `customer-registry-sync ingest` (with `NOTION_API_TOKEN` set),
+then `generate`, and open a PR with the result.
+
+**Visibility today.** The tool repository and `gitops-engine` are both private, so
+installing the tool needs an SSH key with read access to both (Stage 3). A caller in the
+same owner account as the tool repository can call the reusable workflow once Actions
+access is granted to it. A caller in a different owner can call it only if the tool
+repository is public; that is an owner decision still pending. No release tag exists
+yet, so pin a commit sha wherever these steps say to pin a version (Stage 5).
+
 ## Stage 0: Prerequisites
 
 On the operator's machine: [uv](https://docs.astral.sh/uv/), Python 3.12 or later, and
@@ -32,12 +43,16 @@ the [GitHub CLI](https://cli.github.com/) (`gh auth login`).
 You need:
 
 - A Linear workspace with **Customers** enabled (a workspace setting).
-- A Notion integration token with the six bucket pages shared with it, if you run
-  `ingest` (see [`../notion-template.md`](../notion-template.md)).
+- A Notion integration token with the six bucket pages shared with it, for the manual
+  `ingest` on your machine (see [`../notion-template.md`](../notion-template.md)). The
+  bucket names are the template's fixed values, so name your pages to match.
 - Admin rights on the caller repository (environments, secrets, rulesets).
 
 For local runs, export the tokens in your shell. The tool reads `LINEAR_API_TOKEN`
 (`sync-inbound`, `deploy`, `check`, `restore`) and `NOTION_API_TOKEN` (`ingest`).
+`deploy` needs the Linear token even as a dry run, and so does `check`; both exit 2
+without it. `ignore` and `ingest --only linear-found` need no token but need a state
+mirror, so run `sync-inbound` before them.
 
 ## Stage 1: Linear tokens
 
@@ -65,13 +80,15 @@ them.
 3. Repository permissions: **Contents** read and write, **Pull requests** read and
    write. Leave **Workflows** at no access, so the App cannot edit `.github/`.
 4. Installable on: **Only on this account**. Create the App.
-5. Note the **App ID**. Generate a private key; a `.pem` file downloads once.
+5. Note the **App ID**. Generate a private key; a `.pem` file downloads once. The App ID
+   becomes the `REGISTRY_SYNC_APP_ID` secret and the `.pem` text becomes
+   `REGISTRY_SYNC_APP_PRIVATE_KEY`; Stage 4 stores both.
 6. Install the App on the caller repository only (Only select repositories).
 
 ## Stage 3: SSH key for the private git dependencies
 
-The caller's lock installs two private git repositories: the tool repository and its
-engine, [`gitops-engine`](https://github.com/markddavidoff/gitops-engine). The
+The caller's lock installs two git repositories, both private today: the tool repository
+and its engine, [`gitops-engine`](https://github.com/markddavidoff/gitops-engine). The
 workflow's jobs read them over SSH with the key in the `REGISTRY_SYNC_SSH_KEY` secret.
 
 - The key must have read access to both repositories. A deploy key is tied to one
@@ -109,9 +126,13 @@ Rules for where they live:
 
 - Store the App id as a **secret**, not a variable. The reusable workflow reads it from
   `secrets`, and a repository or environment variable does not reach it.
-- A secret of the same name stored in a job's environment takes precedence over the
-  one the caller passes. Keep the Linear tokens as environment secrets, behind the
-  approval gate, and the caller's passed values stay empty or unused for them.
+- If a secret with the same name exists both in the caller's passed values and in the
+  environment a job runs in, the job uses the environment's value. The deploy job runs in
+  the deploy environment and the refresh job in the read-only environment, so each job
+  gets its Linear token from its own environment. Store the two Linear tokens only as
+  environment secrets, which keeps them behind the approval gate. The caller still lists
+  `LINEAR_API_TOKEN` and `LINEAR_READONLY_TOKEN` in its `secrets:` block; those two
+  references resolve to nothing and the environment values replace them.
 - `secrets: inherit` passes nothing to a workflow owned by another account, so the
   caller maps each name explicitly (the example does).
 - The workflow hands the Linear tokens only to the steps that call Linear.
@@ -133,9 +154,7 @@ gh secret set REGISTRY_SYNC_SSH_KEY -R $R < <path to the SSH private key>
 ```
 
 The caller passes the repository secrets `REGISTRY_SYNC_APP_ID`,
-`REGISTRY_SYNC_APP_PRIVATE_KEY` and `REGISTRY_SYNC_SSH_KEY` through. The two Linear
-tokens come from the environments, so the caller's `LINEAR_API_TOKEN` and
-`LINEAR_READONLY_TOKEN` references resolve to nothing, which is fine. Check the names:
+`REGISTRY_SYNC_APP_PRIVATE_KEY` and `REGISTRY_SYNC_SSH_KEY` through. Check the names:
 
 ```
 gh secret list -R $R; gh secret list -R $R --env <deploy environment>; gh secret list -R $R --env <read-only environment>
@@ -145,7 +164,7 @@ Delete the `.pem` once the secret holds it.
 
 ## Stage 5: The caller repository
 
-The caller needs four things in the repository that holds the registry.
+The caller needs five things in the repository that holds the registry.
 
 **A uv project that depends on the tool, with a committed `uv.lock`.** The reusable
 workflow runs `uv sync --locked` in the directory named by its `project_dir` input
@@ -161,13 +180,14 @@ requires-python = ">=3.12"
 dependencies = ["customer-registry-sync", "gitops-engine"]
 
 [tool.uv.sources]
-customer-registry-sync = { git = "ssh://git@github.com/markddavidoff/customer-registry-sync.git", tag = "<release tag>" }
+customer-registry-sync = { git = "ssh://git@github.com/markddavidoff/customer-registry-sync.git", rev = "<sha>" }
 gitops-engine = { git = "ssh://git@github.com/markddavidoff/gitops-engine.git", tag = "v0.1.0" }
 ```
 
-Run `uv lock`, then commit `pyproject.toml` and `uv.lock`. Pin a release tag or a
-commit in real use. Upgrading the tool means changing the tag and committing the new
-lock.
+No release tag of the tool exists yet, so pin a commit: put the full commit sha in
+`rev`. Switch to `tag = "<release tag>"` once one is published. Run `uv lock`, then
+commit `pyproject.toml` and `uv.lock`. Upgrading the tool means changing the sha and
+committing the new lock.
 
 **`registry-sync.yaml`**, copied from
 [`examples/registry-sync.example.yaml`](../../examples/registry-sync.example.yaml): your
@@ -190,19 +210,34 @@ Only these two keys exist under `workflow:`. The CLI works without them; the wor
 (change the time if you like) and manual dispatch, and passes the five secrets by name.
 Two points about `uses:`:
 
-- The example says `@main` so it works before a release tag exists. Pin a release tag or
-  a commit in real use, so a change to the tool repository cannot change your deploys.
+- The example says `@main` and carries a comment telling you to pin a sha. No release tag
+  exists yet, so change it to `@<sha>` (the full commit sha, the same commit as the
+  `rev` in your `pyproject.toml`), so a change to the tool repository cannot change your
+  deploys. Use a tag once one is published.
 - GitHub can call a reusable workflow only when the tool repository is public, or has
   the same owner as the caller and allows access from it (tool repository, Settings,
-  Actions, General, Access). Otherwise the call fails before any job starts.
+  Actions, General, Access). The tool repository is private today, so a caller in a
+  different owner cannot call it until it is made public. Otherwise the call fails
+  before any job starts.
 
 There is no `paths:` filter. Every push starts a run, and its `plan` job ends the run
 (`changed --since`) when no deploy input changed. The state mirror and the snapshots
 are not deploy inputs, so a state PR never starts a deploy.
 
+**`<data_dir>/datasets.yaml`**, copied from
+[`examples/datasets.example.yaml`](../../examples/datasets.example.yaml). It lists
+`notion` and `linear-found`. Do this before the first refresh: the scheduled refresh runs
+`ingest --only linear-found`, which creates `<data_dir>/datasets/linear-found/`, and
+`check` fails with `datasets.yaml: directory datasets/linear-found is not listed` for a
+dataset directory the file does not name (`datasets_errors` in
+`src/customer_registry_sync/datasets.py`). Without `datasets.yaml` only `notion` is
+listed, so `check` fails once the refresh has run and every deploy blocks.
+
 **The registry data.** Put your curated files in `<data_dir>` first; samples of each
 are in [`examples/`](../../examples/). Then build the registry once locally and commit
-it:
+it. `ingest` reads Notion, so it needs `NOTION_API_TOKEN`, and you run it by hand; the
+workflow never does. `ingest --only linear-found` needs the mirror that `sync-inbound`
+writes, so it comes after it:
 
 ```
 customer-registry-sync ingest
@@ -216,19 +251,22 @@ customer-registry-sync generate
 Add one ruleset on the default branch:
 
 - require a pull request (zero approvals is fine for a solo maintainer)
-- require the status check that runs `check` on pull requests (see below)
-- merge queue, if you want the check re-run on the queue's merge commit
+- require the PR check, only if you have added one (see below; none ships)
 - block force pushes and deletion
 - admin bypass in "pull request" mode only, so a broken check cannot lock the repository
 
 After this, every change reaches the default branch through a PR, including the state
 and refresh PRs.
 
-This repository ships no PR-check workflow yet. To gate pull requests on `check`, add
-your own workflow that runs on `pull_request` (and `merge_group`), installs the tool the
-same way, runs `customer-registry-sync check` with a read-only `LINEAR_API_TOKEN`, and
-skips fork PRs so they never receive the token. Make its job the required status check.
-Without it, the deploy job's own `check` step still blocks a bad apply.
+This repository ships no PR-check workflow yet, so there is no status check to require
+when you first set up the ruleset. In its place, run `customer-registry-sync check` from
+a checkout of your PR branch before you merge (it needs `LINEAR_API_TOKEN`), and rely on
+the deploy job: its own `check` step runs before every apply and blocks a bad one.
+To gate pull requests on `check` automatically, add your own workflow that runs on
+`pull_request` (and `merge_group`), installs the tool the same way, runs
+`customer-registry-sync check` with a read-only `LINEAR_API_TOKEN`, and skips fork PRs so
+they never receive the token. Then add its job to the ruleset as a required status
+check, and add a merge queue if you want the check re-run on the queue's merge commit.
 
 ## Stage 7: Verify before the first write
 
@@ -242,8 +280,9 @@ Run these once, before anything writes to Linear:
    Expect exit 0, `IN SYNC`, `drift changed=0 added=0 deleted=0`, and `orphans=0` and
    `destructive=0` in the `DeployPlan` line. Read every `+` (create) and `~` (update) line of the
    plan, because each one is a write the first deploy makes.
-2. **The live end-to-end tests (optional).** They touch only throwaway `zzz-gitops-test-`
-   customers and clean up after themselves. In GitHub, dispatch the workflow with
+2. **The live end-to-end tests (optional).** They touch only throwaway test customers,
+   which the sync always ignores (see [`../customer-registry.md`](../customer-registry.md#a-change-from-linears-side)),
+   and clean up after themselves. In GitHub, dispatch the workflow with
    `mode: e2e`; it runs the tests from the exact tool commit your lock installed, and
    uses that tool's own lockfile for the test dependencies. From a checkout of the tool:
    ```

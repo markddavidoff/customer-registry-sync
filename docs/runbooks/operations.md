@@ -8,7 +8,13 @@ This file covers day-to-day operation and recovery. First-time setup is in
 run from the repository that holds the registry as `customer-registry-sync <command>`
 (or `uv run customer-registry-sync <command>`), with `--config <path>` before the command
 when the config is not `registry-sync.yaml` in the working directory. Secrets come from
-the environment: `LINEAR_API_TOKEN`, and `NOTION_API_TOKEN` for `ingest`.
+the environment: `LINEAR_API_TOKEN`, and `NOTION_API_TOKEN` for `ingest`. `check` and
+`deploy` need `LINEAR_API_TOKEN` even for a dry run, and exit 2 without it. `config-get
+data_dir` prints the absolute path of `<data_dir>`.
+
+Notion ingest is manual: run `ingest` on your machine, run `generate`, and open a PR. The
+workflow never reads Notion. `ignore` and `ingest --only linear-found` read the state
+mirror, so run `sync-inbound` before either.
 
 - `check`: drift, plan, orphans (a Linear customer in no dataset), identity and
   ignore-list conflicts, stale retire entries, hand-edited or out-of-date generated

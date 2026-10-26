@@ -21,7 +21,7 @@ file).
 
 | Term | Meaning |
 |---|---|
-| **Dataset** | A directory of customer records under `<data_dir>/datasets/<name>/`, one YAML file per company. There are two: `notion` and `linear-found`. |
+| **Dataset** | A directory of customer records under `<data_dir>/datasets/<name>/`, one YAML file per company. There are two: `notion` and `linear-found`. List both in `<data_dir>/datasets.yaml` once you run the refresh; `check` fails on a dataset directory the file does not name. |
 | **Stub** | A record in the `linear-found` dataset: a Linear customer that Notion does not know. Linear owns its fields. |
 | **Identity** | One entry in `<data_dir>/identities.yaml`: a company's canonical id plus every name, domain and source id it is known by. |
 | **Canonical id** | The key of an identity. The sync writes it into Linear as the customer's external id, and it never changes. |
@@ -61,7 +61,7 @@ datasets/notion/                linear-state/  (state mirror)
               deploy --apply (approved) ---------------+
 ```
 
-**Notion to `datasets/notion/`.** `ingest` walks the six bucket pages (Customers,
+**Notion to `datasets/notion/`.** This step is manual: you run `ingest` on your machine with `NOTION_API_TOKEN`, run `generate`, and open a PR. The GitHub workflow never reads Notion. `ingest` walks the six bucket pages (Customers,
 Churned Customers, Archive, POCs, Prospects, Partner & Supporting Accounts) through the
 Notion API. It parses each customer page's `Label: value` bullets and the Partner &
 Supporting Accounts bucket's table rows. The parse is deterministic, with no LLM; the
@@ -346,14 +346,19 @@ someone creates customer X in Linear
   lists each ignored customer with its reason, and fails when a desired record resolves
   to the same identity as an ignored customer. The exception is the `linear-found` stub
   of that same Linear id: `check` only reports it, and the next refresh drops it. The
-  prefix `zzz-gitops-test-` is always ignored on unscoped runs; it marks the live e2e
-  tests' throwaway records.
+  prefix `zzz-gitops-test-` is built in (`BUILTIN_PREFIX` in `ignore.py`). The live e2e
+  tests (`tests/test_e2e_gitops.py`) create their throwaway customers in a real Linear
+  workspace under names that start with it, so the sync ignores any customer with that
+  prefix and never stubs, writes or reports it as an orphan. The built-in entry is
+  always present, so you do not list it, and `check` shows it as an `IGNORED PREFIX`
+  line. A run whose `--scope` starts with the prefix lifts the exemption for itself,
+  which is how the e2e tests write their own records.
 
 ## Files in `<data_dir>`
 
 | Path | Kind | Written by | Content |
 |---|---|---|---|
-| `datasets/notion/<slug>.yaml` | Generated | `ingest` | One record per Notion company (the slug is also its `notion` source id): domains, buckets, classification, deployment, ARR, tier, status, contact, CRM id, sources, notes. |
+| `datasets/notion/<slug>.yaml` | Generated | `ingest` | One record per Notion company (the slug is also its `notion` source id): domains, buckets, classification, deployment, ARR, tier, status, contact, `hubspot_id`, sources, notes. Every field is listed in [`notion-template.md`](notion-template.md#what-ingest-writes-the-dataset-record). |
 | `datasets/linear-found/<canonical id>.yaml` | Generated | `ingest` | One stub per Linear-only customer, with `linear_customer_id` and a `linear:<id>` source. |
 | `linear/<canonical id>.yaml` | Generated | `generate` | Desired rows: name, domains, revenue, tier, status, external ids, and `linear_owned` on a stub. No sync state. |
 | `linear-state/<canonical id>.yaml` | Generated | `sync-inbound`, and `deploy --apply` for the rows it wrote | State mirror: each live customer plus `linear_synced`. |
@@ -376,15 +381,15 @@ sample of each curated file.
 
 | Command | What it does | Linear | Exit codes |
 |---|---|---|---|
-| `ingest [--only notion\|linear-found]` | Builds `datasets/notion/` from Notion (needs `NOTION_API_TOKEN`), then `datasets/linear-found/` from the mirror; appends to `identities.yaml`. | none | 0 written or dry run; 2 refused or error |
+| `ingest [--only notion\|linear-found]` | Builds `datasets/notion/` from Notion (needs `NOTION_API_TOKEN`), then `datasets/linear-found/` from the mirror; appends to `identities.yaml`. `--only linear-found` needs a state mirror from an earlier `sync-inbound` and exits 2 without one; a plain `ingest` skips the `linear-found` step and says so. | none | 0 written or dry run; 2 refused or error |
 | `generate` | Merges the datasets into `linear/` and both CSVs. | none | 0; 2 refused (hand edits) |
 | `sync-inbound [--scope P]` | Rewrites `linear-state/` from live Linear. | read | 0; 2 no token or refused; 1 with a traceback on a Linear API error |
-| `check [--scope P]` | Drift, plan and every offline check; prints the plan. | read | 0 in sync; 2 no token, invalid curated file, or a Linear read error; 3 something to fix |
-| `deploy [--apply --prod [--break-glass]] [--scope P]` | Prints the plan; with `--apply`, writes it. | read; write with `--apply` | 0 done; 2 no token, invalid curated file, guard refused, or apply refused before any write; 3 refused plan, aborted rows or a failed create/update; 1 with a traceback on a Linear API error while reading customers or the status and tier maps |
+| `check [--scope P]` | Drift, plan and every offline check; prints the plan. Needs `LINEAR_API_TOKEN`. | read | 0 in sync; 2 no token, invalid curated file, or a Linear read error; 3 something to fix |
+| `deploy [--apply --prod [--break-glass]] [--scope P]` | Prints the plan; with `--apply`, writes it. Needs `LINEAR_API_TOKEN` even as a dry run. | read; write with `--apply` | 0 done; 2 no token, invalid curated file, guard refused, or apply refused before any write; 3 refused plan, aborted rows or a failed create/update; 1 with a traceback on a Linear API error while reading customers or the status and tier maps |
 | `restore --from <snapshot> [--rows ID...] --prod [--break-glass]` | Writes snapshot values back with check-and-set. | write | 0 all restored; 2 no token, guard refused, unreadable snapshot, or a write error that stopped it; 3 some rows skipped; 1 with a traceback on a Linear API error while reading the status and tier maps |
-| `ignore --linear-id ID --reason TEXT` | Appends a mirrored Linear customer to `linear-ignore.yaml`. | none | 0 appended; 4 already listed; 2 refused |
+| `ignore --linear-id ID --reason TEXT` | Appends a mirrored Linear customer to `linear-ignore.yaml`. The id must be in the state mirror, so run `sync-inbound` first. | none | 0 appended; 4 already listed; 2 refused |
 | `changed --since SHA` | Prints `changed` or `unchanged`: did a deploy input change between SHA and HEAD? Any doubt (unknown sha, first push, force-push, git failure) prints `changed`. Run it inside the git repository. | none | 0 always |
-| `config-get KEY` | Prints one config value by dotted key, such as `data_dir` or `workflow.deploy_environment`. | none | 0; 2 unknown or missing key, named on stderr |
+| `config-get KEY` | Prints one config value by dotted key, such as `data_dir` (the absolute path, a relative `data_dir` resolved against the config file's directory) or `workflow.deploy_environment`. | none | 0; 2 unknown or missing key, named on stderr |
 | `tool-source` | Prints where the installed tool came from: `git <commit> <url>` or `dir - <path>`. | none | 0; 2 when the install source cannot be recovered |
 
 Every command takes the global `--config <path>`. The commands that read or write
@@ -426,7 +431,19 @@ path filter. Its jobs:
 | `refresh` | the daily schedule, or a dispatch with `mode: refresh` | `workflow.readonly_environment` (no approval, read-only token) | `sync-inbound`, `ingest --only linear-found`, `generate`, then a refresh PR. It never runs `check` and never writes to Linear. |
 
 - The `deploy` and `refresh` jobs use separate concurrency groups, so a daily refresh
-  never cancels a deploy that waits for approval.
+  never cancels a deploy that waits for approval. Each group name ends with the
+  workflow's `config` input, so two registries in one repository (two config files)
+  do not share a group.
+- The refresh creates `<data_dir>/datasets/linear-found/`. List `linear-found` in
+  `<data_dir>/datasets.yaml` before the first refresh (copy
+  [`examples/datasets.example.yaml`](../examples/datasets.example.yaml)), or `check`
+  fails and every deploy blocks.
+- The workflow never reads Notion. Notion ingest stays manual: run `ingest` locally,
+  run `generate`, and open a PR.
+- This repository and the engine are private today. A caller in a different owner can
+  call the reusable workflow only if this repository is public (an owner decision
+  still pending), and no release tag exists, so pin a commit sha in the caller's
+  `uses:` line and in the `uv` source.
 - A failing `check` in the `deploy` job stops the job before the apply, so no state PR
   opens; a refresh PR is the way out.
 - A failed apply still uploads its snapshot and opens the state PR, then marks the run

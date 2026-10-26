@@ -16,7 +16,7 @@ Some items defer to the engine's roadmap: [`gitops-engine/ROADMAP.md`](https://g
   - [x] Live end-to-end harness against throwaway records. Four scenarios passed against a real workspace (2026-10-16). A probe confirmed that a domain under the reserved `.invalid` top-level domain is accepted, that the content hash and `updatedAt` change on edit, and that deletes are hard deletes.
   - [x] Status-suffixed display names so Linear search shows status, for example `Example Corp [Active]`.
 - [x] **Runs on `gitops-engine` (2026-10-21).** Drift detection and the `check` exit codes come from `gitops-engine`, driven through a `LinearCustomersAdapter`. Planning and apply later moved back into this repository; see the engine seams below.
-- [x] **Ported the defensive apply, identity table and reusable workflow (2026-10-25).** This brought the repository to behavior parity with the upstream deployment it was extracted from.
+- [x] **Ported the defensive apply, identity table and reusable workflow (2026-10-25).** What landed:
   - [x] Identity table (`identities.yaml`) and one `resolve` for "same company", by source id, then domain, then name. `ingest` appends to it and never rewrites a value.
   - [x] Ordered datasets under `datasets/<name>/` (`notion`, `linear-found`) listed in `datasets.yaml`, with a hard break from the old single `dataset/` directory. `ingest --only linear-found` builds stubs for Linear-only customers from the mirror, offline.
   - [x] Field-level planner with ownership rules. Unset optional fields (revenue, tier) keep the live value and are reported as untracked; Linear-only domains are kept. Known duplicates are reported and never written.
@@ -40,11 +40,12 @@ Some items defer to the engine's roadmap: [`gitops-engine/ROADMAP.md`](https://g
 - [ ] **Require all six Notion bucket ids only for `ingest`.** The Linear-only commands (`deploy`, `check`, `generate`, `sync-inbound`) currently need a config with every Notion bucket id. Relax the config loader so only `ingest` needs them.
 - [ ] **Deployment enrichment from a self-managed environments database (config key removed until implemented).** Read deployment details from a Notion database of self-managed installs during `ingest`. The `self_managed_environments_data_source` config key was parsed but never used, so it was removed; add it back with the feature.
 - [ ] **Revisit the narrowed ruff rule set.** The repo lints with E4, E7, E9 and F only. Widen it when the code is refactored onto the engine.
-- [ ] **Pin a release tag.** Tag a release so callers can pin `uses:` and the `uv` dependency to it. The example caller points at `@main` until one exists.
+- [ ] **Publish a release tag.** No tag exists, so callers pin a commit sha in `uses:` and in the `uv` source (`rev`). Tag a release so they can pin a tag instead. The example caller keeps `@main` as a placeholder, with a comment telling adopters to pin a sha.
+- [ ] **Decide tool repository visibility.** The tool and engine repositories are private. A caller in a different owner can call the reusable workflow only if the tool repository is public. The decision is pending.
 
-## Project 3: the registry owns every written field (proposal, owner's design)
+## Project 3: the registry owns every written field (proposal)
 
-Not built. This replaces the rule that revenue and tier are owned only when set, and the ignore list. The points below are recorded as the owner stated them.
+Not built. This replaces the rule that revenue and tier are owned only when set, and the ignore list. The points below are the proposal as recorded.
 
 - Every written field, including revenue and tier, lives in the registry, generated from the upstream dataset. The owned-when-set rule goes away.
 - A Linear edit to an upstream-derived field fails `check`; the refresh absorbs it, and a PR resolves it one of two ways: an **override** entry that pins the value regardless of upstream, or **upstream wins** (the next apply overwrites it). Later: a tool or reconcile app that pushes overrides back upstream.

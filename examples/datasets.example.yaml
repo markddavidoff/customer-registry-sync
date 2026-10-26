@@ -1,5 +1,8 @@
 # Dataset priority and the Linear status table. Both keys are optional; without
-# this file the sync uses `notion` alone and the default table below.
+# this file the sync uses `notion` alone and the default table below. List
+# `linear-found` (as below) once you use the refresh: the refresh creates
+# <data_dir>/datasets/linear-found/, and `check` fails on a dataset directory
+# this file does not name.
 #
 # datasets: dataset directories under <data_dir>/datasets/, highest priority
 #   first. When two datasets hold the same company, the earlier one wins whole.

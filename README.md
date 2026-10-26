@@ -1,12 +1,12 @@
 # customer-registry-sync
 
-Build a customer registry from Notion pages, keep it as YAML files in git, and sync it to Linear customers. Notion is read-only input. Linear customers become code: you change a file, review the diff, and a reviewed deploy applies it.
+Build a customer registry from Notion pages, keep it as YAML files in git, and sync it to Linear customers. Notion is read-only input, and reading it is a manual step: you run `ingest` on your machine, run `generate`, and open a pull request. The GitHub workflow never reads Notion and has no Notion token. Linear customers become code: you change a file, review the diff, and a reviewed deploy applies it.
 
 The flow has two layers. Layer 1 is the dataset built from Notion and from Linear-only customers; Layer 2 is its Linear projection (the desired customers plus a mirror of live Linear). The [files table](#files-under-data_dir) defines both.
 
 ```
 Notion hub pages
-  -> ingest        reads the pages, merges hand-curated inputs, writes the notion dataset (Layer 1)
+  -> ingest        (run by hand) reads the pages, merges hand-curated inputs, writes the notion dataset (Layer 1)
   -> generate      merges the datasets by identity into desired Linear customers (Layer 2)
   -> deploy        applies Layer 2 to Linear, one customer at a time, with a check-and-set
   <- sync-inbound  mirrors live Linear back into the repo (the "state" files)
@@ -26,9 +26,10 @@ Prerequisites:
 ## Requirements
 
 - Python 3.12+ and [uv](https://docs.astral.sh/uv/).
-- The library [`gitops-engine`](https://github.com/markddavidoff/gitops-engine), which supplies drift detection and the `check` exit codes. `uv sync` installs it from git (tag `v0.1.0`) over SSH, so your SSH key needs read access to that repository.
-- `NOTION_API_TOKEN` for `ingest`: a Notion integration token with the bucket pages shared with it.
-- `LINEAR_API_TOKEN` for `sync-inbound`, `deploy`, `restore` and `check`. `deploy --apply` and `restore` need write scope.
+- The library [`gitops-engine`](https://github.com/markddavidoff/gitops-engine), which supplies drift detection and the `check` exit codes. `uv sync` installs it from git (tag `v0.1.0`) over SSH.
+- SSH read access to two repositories. This tool's repository and `gitops-engine` are both private today, so installing the tool needs an SSH key that can read both.
+- `NOTION_API_TOKEN` for `ingest`: a Notion integration token with the bucket pages shared with it. Only your own machine needs it; the workflow never reads Notion.
+- `LINEAR_API_TOKEN` for `sync-inbound`, `deploy`, `restore` and `check`. `deploy --apply` and `restore` need write scope. `deploy` needs the token even as a dry run, because it reads live Linear to build the plan.
 
 ## Configure
 
@@ -49,7 +50,9 @@ workflow:                                     # optional; read by the reusable w
   readonly_environment: <GitHub environment for the scheduled refresh>
 ```
 
-Every command takes the global `--config <path>` (default `registry-sync.yaml` in the working directory). A missing file, or a missing required key, prints one line to stderr and exits 2. `data_dir` is where the registry files live; a relative path resolves against the config file's directory, and `--out-dir` overrides it per run. The `workflow:` section holds only the two environment names; the tool runs without it, and `config-get` fails naming a missing key.
+The six bucket names are fixed by the Notion template: the config accepts exactly these names, requires all six, and each name decides a customer's classification (see [`docs/notion-template.md`](docs/notion-template.md)). You cannot rename or add buckets in the config.
+
+Every command takes the global `--config <path>` (default `registry-sync.yaml` in the working directory). A missing file, or a missing required key, prints one line to stderr and exits 2. `data_dir` is where the registry files live; a relative path resolves against the config file's directory, and `--out-dir` overrides it per run. `config-get data_dir` prints the absolute path after that resolution. The `workflow:` section holds only the two environment names; the tool runs without it, and `config-get` fails naming a missing key.
 
 ## Use
 
@@ -72,8 +75,14 @@ customer-registry-sync ignore --linear-id <id> --reason "<why>"   # never touch 
 From a checkout, run it with `uv run customer-registry-sync ...`. Three more commands exist for the reusable workflow:
 
 - `changed --since <sha>` prints `changed` or `unchanged`: whether a deploy input differs between that commit and HEAD. Any doubt (unknown sha, first push, force-push) prints `changed`. It always exits 0.
-- `config-get <key>` prints one config value by dotted key, such as `data_dir` or `workflow.deploy_environment`. It exits 2, naming the key, when the key is unknown or missing.
+- `config-get <key>` prints one config value by dotted key, such as `data_dir` (an absolute path) or `workflow.deploy_environment`. It exits 2, naming the key, when the key is unknown or missing.
 - `tool-source` prints where the installed tool came from, as `git <commit> <url>` or `dir - <path>`. It exits 2 when the install source cannot be recovered.
+
+Order matters for three commands:
+
+- `ignore` and `ingest --only linear-found` read the state mirror, so run `sync-inbound` first. Without a mirror, `ignore` exits 2 and `ingest --only linear-found` exits 2 with nothing written; a plain `ingest` skips the `linear-found` step and says so.
+- `check` and `deploy` need `LINEAR_API_TOKEN`, and `deploy` needs it even without `--apply`. Both exit 2 when it is unset.
+- `ingest` (the Notion part) is manual. Run it on your machine with `NOTION_API_TOKEN`, run `generate`, and open a PR with the result. The scheduled refresh runs only `sync-inbound`, `ingest --only linear-found` and `generate`.
 
 Behavior to know:
 
@@ -108,7 +117,7 @@ An unexpected API error outside `check` (for example a Linear or Notion failure 
 | `linear-snapshots/<UTC>.yaml` | `deploy --apply` | Pre-apply copy of each updated row, for `restore` |
 | `*/.manifest.yaml` | each generator | File hashes; `check` fails on a hand edit |
 | `identities.yaml` | `ingest` appends; you edit | The identity table: which names, domains and ids are one company |
-| `datasets.yaml` | you | Dataset priority order and the Linear status to classification table |
+| `datasets.yaml` | you | Dataset priority order and the Linear status to classification table. List `linear-found` here once you use the refresh |
 | `linear-ignore.yaml` | `ignore` appends; you edit | Linear customers the sync never touches, each with a reason |
 | `linear-retire.yaml` | you | Values the next apply removes from Linear |
 | `self-managed-customers.yaml` | you | On-prem and hybrid deployment registry; merged, never overwritten |
@@ -118,14 +127,14 @@ An unexpected API error outside `check` (for example a Linear or Notion failure 
 
 ## Run it in GitHub Actions
 
-The repository ships a reusable workflow, [`.github/workflows/registry-sync.yml`](.github/workflows/registry-sync.yml), and a caller to copy, [`examples/workflows/registry-sync.yml`](examples/workflows/registry-sync.yml). The workflow applies the registry behind a reviewer's approval, opens a state PR with the refreshed mirror and snapshot, and runs a daily read-only refresh that opens a PR when Linear changed. The caller passes five named secrets; the data directory and both environment names come from `registry-sync.yaml`. The tool repository must be public, or have the same owner as the caller, to be callable. Setup steps: [`docs/runbooks/setup.md`](docs/runbooks/setup.md). Day-to-day operation and recovery: [`docs/runbooks/operations.md`](docs/runbooks/operations.md).
+The repository ships a reusable workflow, [`.github/workflows/registry-sync.yml`](.github/workflows/registry-sync.yml), and a caller to copy, [`examples/workflows/registry-sync.yml`](examples/workflows/registry-sync.yml). The workflow applies the registry behind a reviewer's approval, opens a state PR with the refreshed mirror and snapshot, and runs a daily read-only refresh that opens a PR when Linear changed. The caller passes five named secrets; the data directory and both environment names come from `registry-sync.yaml`. This tool's repository and the engine's are private today. A caller in the same owner account can call the workflow once Actions access is granted; a caller in a different owner can call it only if the tool repository is public, which is an owner decision still pending. No release tag exists yet, so pin a commit sha in the caller's `uses:` line and in the `uv` source until one is published. Setup steps: [`docs/runbooks/setup.md`](docs/runbooks/setup.md). Day-to-day operation and recovery: [`docs/runbooks/operations.md`](docs/runbooks/operations.md).
 
 ## Documentation
 
 - [`docs/customer-registry.md`](docs/customer-registry.md): how the registry, identity resolution, the planner and the safety model work.
 - [`docs/runbooks/setup.md`](docs/runbooks/setup.md): tokens, GitHub App, SSH key, environments, caller workflow, rollout.
 - [`docs/runbooks/operations.md`](docs/runbooks/operations.md): applying, recovering from a failing `check`, retiring values, restoring snapshots.
-- [`docs/notion-template.md`](docs/notion-template.md): the Notion page layout `ingest` reads, so you can build compatible pages.
+- [`docs/notion-template.md`](docs/notion-template.md): the Notion page layout `ingest` reads, so you can build compatible pages, and the fields of the dataset record it writes (sample: [`examples/dataset-record.example.yaml`](examples/dataset-record.example.yaml)).
 - [`docs/linear-api-notes.md`](docs/linear-api-notes.md): Linear schema, concurrency and rate limits.
 - [`ROADMAP.md`](ROADMAP.md): what is built and what is open.
 
@@ -146,7 +155,7 @@ To work on `gitops-engine` at the same time, clone it next to this repo and poin
 
 Test fixtures are synthetic. `tests/fixtures/generate_fixtures.py` writes them from invented companies and `example.test` domains, following the block shape the Notion API returns and the field list in `linear_client.py`. A test fails if the committed JSON drifts from the generator.
 
-The live end-to-end tests (`tests/test_e2e_gitops.py`) create and delete throwaway `zzz-gitops-test-*` customers, with `.invalid` domains, in a real Linear workspace. They are skipped unless you pass `--run-live` and set `LINEAR_API_TOKEN`.
+The live end-to-end tests (`tests/test_e2e_gitops.py`) create and delete throwaway customers, with `.invalid` domains, in a real Linear workspace. The sync always ignores customers with the test prefix; [`docs/customer-registry.md`](docs/customer-registry.md#a-change-from-linears-side) explains it. The tests are skipped unless you pass `--run-live` and set `LINEAR_API_TOKEN`.
 
 ## License
 
