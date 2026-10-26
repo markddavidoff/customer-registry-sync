@@ -71,3 +71,15 @@ def test_content_hash_order_insensitive_for_lists():
     a = sample(domains=["a.com", "b.com"], external_ids=["x", "y"])
     b = sample(domains=["b.com", "a.com"], external_ids=["y", "x"])
     assert content_hash_of(a) == content_hash_of(b)
+
+
+def test_linear_owned_serialized_only_when_true():
+    assert "linear_owned" not in sample().to_dict()
+    owned = sample(linear_owned=True)
+    assert owned.to_dict()["linear_owned"] is True
+    assert LinearCustomer.from_dict(owned.to_dict()) == owned
+    assert LinearCustomer.from_dict(sample().to_dict()).linear_owned is False
+
+
+def test_content_hash_ignores_linear_owned():
+    assert content_hash_of(sample(linear_owned=True)) == content_hash_of(sample())

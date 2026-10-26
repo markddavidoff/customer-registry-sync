@@ -37,18 +37,22 @@ class LinearCustomer:
     domains: list[str] = field(default_factory=list)
     revenue: int | None = None
     tier: str | None = None
-    status: LinearStatus = "Active"
+    # None only on a state-mirror row whose Linear customer has no status;
+    # `generate` always emits one.
+    status: LinearStatus | None = "Active"
     external_ids: list[str] = field(default_factory=list)
     linear_synced: LinearSynced | None = None
+    # A `linear-found` stub's desired row: Linear owns its fields.
+    linear_owned: bool = False
 
     def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("name is required")
-        if not self.status:
-            raise ValueError("status is required")
+        if self.status is not None and not self.status:
+            raise ValueError("status is required (None for a Linear customer with no status)")
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "name": self.name,
             "domains": self.domains,
             "revenue": self.revenue,
@@ -57,6 +61,9 @@ class LinearCustomer:
             "external_ids": self.external_ids,
             "linear_synced": self.linear_synced.to_dict() if self.linear_synced else None,
         }
+        if self.linear_owned:
+            d["linear_owned"] = True
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> LinearCustomer:
@@ -73,11 +80,13 @@ class LinearCustomer:
             status=data.get("status", "Active"),
             external_ids=list(data.get("external_ids") or []),
             linear_synced=LinearSynced(**ls) if ls else None,
+            linear_owned=bool(data.get("linear_owned", False)),
         )
 
 
 def content_hash_of(rec: LinearCustomer) -> str:
-    """sha256 over the deployable fields only (order-insensitive for lists)."""
+    """sha256 over the deployable fields only (order-insensitive for lists);
+    `linear_synced` and `linear_owned` are bookkeeping and never hashed."""
     payload = {
         "name": rec.name,
         "domains": sorted(rec.domains),

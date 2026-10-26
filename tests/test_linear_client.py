@@ -3,7 +3,14 @@ import json
 import urllib.error
 from pathlib import Path
 
-from customer_registry_sync.linear_client import LinearClient, LiveCustomer, parse_customer_node
+import pytest
+
+from customer_registry_sync.linear_client import (
+    LinearClient,
+    LinearError,
+    LiveCustomer,
+    parse_customer_node,
+)
 
 FIX = Path(__file__).parent / "fixtures"
 
@@ -103,7 +110,6 @@ def test_create_customer_parses_result():
         domains=["n.com"],
         external_ids=["new"],
         status_id="act",
-        tier_id=None,
         revenue=1000,
     )
     assert live.id == "new-id" and live.name == "New"
@@ -129,6 +135,52 @@ def test_update_customer_maps_python_fields_to_linear_input():
     inp = captured["vars"]["input"]
     assert inp["statusId"] == "act" and inp["tierId"] == "t1"
     assert inp["externalIds"] == ["x"] and inp["revenue"] == 5
+
+
+def _recording_gql():
+    calls = []
+
+    def gql(query, variables=None):
+        calls.append(variables)
+        return {"data": {"customerUpdate": {"success": True, "customer": _node("X", id="x")}}}
+
+    gql.calls = calls
+    return gql
+
+
+def test_update_refuses_null_without_retire():
+    gql = _recording_gql()
+    with pytest.raises(LinearError, match="refusing to send empty revenue"):
+        LinearClient(gql=gql).update_customer("c1", revenue=None)
+    assert gql.calls == []
+
+
+def test_update_refuses_empty_list_without_retire():
+    gql = _recording_gql()
+    with pytest.raises(LinearError, match="refusing to send empty domains"):
+        LinearClient(gql=gql).update_customer("c1", domains=[])
+    assert gql.calls == []
+
+
+def test_update_allows_null_with_retire():
+    gql = _recording_gql()
+    LinearClient(gql=gql).update_customer("c1", retire=True, revenue=None)
+    assert len(gql.calls) == 1
+    assert gql.calls[0]["input"] == {"revenue": None}
+
+
+def test_create_refuses_null():
+    gql = _recording_gql()
+    with pytest.raises(LinearError, match="refusing to send empty tier_id"):
+        LinearClient(gql=gql).create_customer(name="x", tier_id=None)
+    assert gql.calls == []
+
+
+def test_create_rejects_retire():
+    gql = _recording_gql()
+    with pytest.raises(TypeError, match="retire"):
+        LinearClient(gql=gql).create_customer(name="x", retire=True)
+    assert gql.calls == []
 
 
 def test_delete_customer():
