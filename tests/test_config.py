@@ -4,7 +4,13 @@ import pytest
 import yaml
 
 from customer_registry_sync import cli
-from customer_registry_sync.config import ConfigError, RegistryConfig, load_config
+from customer_registry_sync.config import (
+    ConfigError,
+    RegistryConfig,
+    WorkflowConfig,
+    config_value,
+    load_config,
+)
 
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "registry-sync.example.yaml"
 
@@ -147,3 +153,80 @@ def test_non_mapping_config_is_rejected(tmp_path):
 def test_example_config_loads():
     cfg = load_config(EXAMPLE)
     assert set(cfg.buckets) == set(BUCKET_NAMES)
+    # The example carries the workflow settings the reusable workflow reads.
+    assert cfg.workflow is not None
+    assert cfg.workflow.deploy_environment
+
+
+def _workflow() -> dict:
+    return {
+        "deploy_environment": "registry-deploy",
+        "readonly_environment": "registry-readonly",
+        "app_id_secret": "REGISTRY_APP_ID",
+        "app_key_secret": "REGISTRY_APP_PRIVATE_KEY",
+    }
+
+
+def test_workflow_settings_load(tmp_path):
+    data = _valid()
+    data["workflow"] = _workflow()
+    cfg = load_config(_write(tmp_path / "registry-sync.yaml", data))
+    assert cfg.workflow == WorkflowConfig(
+        deploy_environment="registry-deploy",
+        readonly_environment="registry-readonly",
+        app_id_secret="REGISTRY_APP_ID",
+        app_key_secret="REGISTRY_APP_PRIVATE_KEY",
+    )
+    # The Linear token secret names default to the names the tool reads.
+    assert cfg.workflow.linear_token_secret == "LINEAR_API_TOKEN"
+    assert cfg.workflow.readonly_token_secret == "LINEAR_READONLY_TOKEN"
+
+
+def test_config_without_workflow_still_loads(tmp_path):
+    cfg = load_config(_write(tmp_path / "registry-sync.yaml", _valid()))
+    assert cfg.workflow is None
+    with pytest.raises(ConfigError, match=r"'workflow\.app_id_secret'"):
+        config_value(cfg, "workflow.app_id_secret")
+
+
+def test_partial_workflow_loads_and_names_the_missing_key(tmp_path):
+    data = _valid()
+    data["workflow"] = {k: v for k, v in _workflow().items() if k != "readonly_environment"}
+    cfg = load_config(_write(tmp_path / "registry-sync.yaml", data))
+    assert cfg.workflow is None
+    assert config_value(cfg, "workflow.deploy_environment") == "registry-deploy"
+    with pytest.raises(ConfigError, match=r"'workflow\.readonly_environment'"):
+        config_value(cfg, "workflow.readonly_environment")
+
+
+@pytest.mark.parametrize("bad", ["a string", ["a", "list"], 3])
+def test_non_mapping_workflow_names_the_key_only_when_read(tmp_path, bad):
+    data = _valid()
+    data["workflow"] = bad
+    cfg = load_config(_write(tmp_path / "registry-sync.yaml", data))
+    assert cfg.workflow is None
+    with pytest.raises(ConfigError, match=r"'workflow\.deploy_environment'"):
+        config_value(cfg, "workflow.deploy_environment")
+
+
+def test_config_value_reads_top_level_and_defaults(tmp_path):
+    data = _valid()
+    data["workflow"] = _workflow()
+    cfg = load_config(_write(tmp_path / "registry-sync.yaml", data))
+    assert config_value(cfg, "data_dir") == str(tmp_path / "registry-data")
+    assert config_value(cfg, "hub_page_id") == "11111111-1111-4111-8111-111111111111"
+    assert config_value(cfg, "workflow.linear_token_secret") == "LINEAR_API_TOKEN"
+    with pytest.raises(ConfigError, match=r"unknown config key 'workflow\.nope'"):
+        config_value(cfg, "workflow.nope")
+    with pytest.raises(ConfigError, match=r"unknown config key 'nope'"):
+        config_value(cfg, "nope")
+
+
+def test_cli_config_get(tmp_path, capsys):
+    data = _valid()
+    data["workflow"] = _workflow()
+    path = _write(tmp_path / "registry-sync.yaml", data)
+    assert cli.main(["--config", str(path), "config-get", "workflow.app_key_secret"]) == 0
+    assert capsys.readouterr().out == "REGISTRY_APP_PRIVATE_KEY\n"
+    assert cli.main(["--config", str(path), "config-get", "nope"]) == 2
+    assert "nope" in capsys.readouterr().err

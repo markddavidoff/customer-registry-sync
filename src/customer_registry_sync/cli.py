@@ -38,9 +38,11 @@ from pathlib import Path
 
 from .assemble import assemble_dataset
 from .check import EXIT_DRIFT, EXIT_OPERROR, offline_errors, orphan_lines, run_check
-from .config import DEFAULT_CONFIG_NAME, ConfigError, load_config
+from .changed import changed_since
+from .config import DEFAULT_CONFIG_NAME, ConfigError, config_value, load_config
 from .curated import RETIRE_FILE, load_curated
 from .datasets import (
+    DATASETS_SUBDIR,
     LINEAR_FOUND,
     NOTION,
     dataset_dir,
@@ -230,7 +232,7 @@ def _cmd_generate(args) -> int:
     recs = generated.rows
     if not generated.winners:
         print(
-            f"WARNING: no dataset records under {out_dir}/datasets/ (missing or empty); "
+            f"WARNING: no dataset records under {out_dir}/{DATASETS_SUBDIR}/ (missing or empty); "
             "run `ingest` first.",
             file=sys.stderr,
         )
@@ -658,6 +660,23 @@ def _cmd_check(args) -> int:
     return code
 
 
+def _cmd_changed(args) -> int:
+    """Print `changed` or `unchanged` for the deploy inputs since a sha; always exit 0."""
+    changed = changed_since(Path.cwd(), args.since, args.registry)
+    print("changed" if changed else "unchanged")
+    return 0
+
+
+def _cmd_config_get(args) -> int:
+    """Print one config value (dotted key); exit 2 naming a missing or unknown key."""
+    try:
+        print(config_value(args.registry, args.key))
+    except ConfigError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def _out_dir_arg(p) -> None:
     p.add_argument(
         "--out-dir",
@@ -765,6 +784,19 @@ def main(argv: list[str] | None = None) -> int:
     _out_dir_arg(chk)
     chk.add_argument("--scope", default=None, help="only rows whose name starts with this prefix")
     handlers["check"] = _cmd_check
+
+    chg = sub.add_parser(
+        "changed",
+        help="print changed/unchanged: did any deploy input change since <sha>? (exit 0)",
+    )
+    chg.add_argument("--since", required=True, help="the commit to compare HEAD against")
+    handlers["changed"] = _cmd_changed
+
+    cfg_get = sub.add_parser(
+        "config-get", help="print one config value, e.g. data_dir or workflow.deploy_environment"
+    )
+    cfg_get.add_argument("key", help="dotted key, e.g. workflow.app_key_secret")
+    handlers["config-get"] = _cmd_config_get
 
     args = parser.parse_args(argv)
     try:

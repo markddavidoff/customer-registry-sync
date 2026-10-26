@@ -20,3 +20,21 @@ buckets:
 # Optional: directory that holds the dataset, relative to this file.
 # Default: customers
 data_dir: customers
+
+# Settings for the reusable registry-sync GitHub workflow (see
+# examples/workflows/registry-sync.yml). The tool runs without them; the
+# workflow reads them with `customer-registry-sync config-get` and fails naming
+# any key that is missing.
+workflow:
+  # Environment that holds the required-reviewer approval and the write token.
+  deploy_environment: REPLACE-WITH-DEPLOY-ENVIRONMENT
+  # Environment for the scheduled refresh: read-only token, no approval.
+  readonly_environment: REPLACE-WITH-READONLY-ENVIRONMENT
+  # Names of the secrets (or variables, for the App id) holding the GitHub App
+  # that opens the state and refresh PRs.
+  app_id_secret: REPLACE-WITH-APP-ID-SECRET-NAME
+  app_key_secret: REPLACE-WITH-APP-PRIVATE-KEY-SECRET-NAME
+  # Optional: names of the Linear token secrets.
+  # Defaults: LINEAR_API_TOKEN (deploy environment), LINEAR_READONLY_TOKEN (read-only).
+  linear_token_secret: LINEAR_API_TOKEN
+  readonly_token_secret: LINEAR_READONLY_TOKEN

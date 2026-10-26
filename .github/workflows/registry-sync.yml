@@ -1,0 +1,500 @@
+name: registry-sync
+
+# Reusable workflow: applies a reviewed customer registry to Linear behind an
+# approval gate, and refreshes the Linear-derived files. A repository adopts it with
+# the short caller in examples/workflows/registry-sync.yml (push to main, dispatch,
+# daily schedule) and `secrets: inherit`.
+#
+# - Settings come from the registry config file (input `config`): the data
+#   directory, both environment names, and the names of the App and Linear token
+#   secrets. The `plan` job reads them with `customer-registry-sync config-get`,
+#   which fails naming any missing `workflow.*` key.
+# - Install: the caller's repository declares customer-registry-sync as a
+#   dependency of a uv project (input `project_dir`, with a committed uv.lock).
+#   Each job runs `uv sync --locked` there, so the caller's lock pins the version.
+#   When a git dependency is private, the secret named by input `ssh_key_secret`
+#   holds an SSH key with read access to every git dependency.
+# - Modes: on a push, `plan` runs `changed --since <before>` and ends the run when
+#   no deploy input changed (this replaces a hard-coded `on.push.paths` list, which
+#   GitHub cannot read from a file); a push that changed one runs `deploy`. The
+#   schedule runs `refresh`. A dispatch runs its `mode` input: `deploy`, `restore`
+#   (put values back from a snapshot), `e2e` (the live GitOps test, no state PR) or
+#   `refresh`.
+# - `refresh` reads Linear with the read-only token, runs `sync-inbound`,
+#   `ingest --only linear-found` and `generate`, and opens one PR with the result
+#   as the GitHub App. It runs in the read-only environment, so the scheduled run
+#   waits for no approval, and it never runs `check` or writes to Linear. Merging
+#   its PR changes the desired rows, so the merge push runs `deploy` behind its gate.
+# - `deploy` and `refresh` use separate concurrency groups (set on each job, not on
+#   the workflow). GitHub keeps one running and one pending run per group, and a
+#   newer pending run cancels the older one even with `cancel-in-progress: false`.
+#   In one shared group the daily refresh would cancel a push-triggered deploy that
+#   waits for approval. Neither job writes to the base branch (each opens its own PR
+#   branch) and `check` re-reads live Linear, so they can overlap safely.
+# - The deploy environment holds the required-reviewer approval and the write
+#   token. Linear tokens are passed only to the steps that call Linear, never at job
+#   level, so checkout, upload and the PR steps never see them.
+# - Secret names come from config, so secrets are read by name with
+#   `secrets[<name>]`; the caller passes `secrets: inherit`, and environment
+#   secrets reach the job through its environment. The App id may be a variable
+#   or a secret under the configured name.
+# - The job token is read-only. The state and refresh PRs are pushed and opened
+#   with a GitHub App token so their CI runs (a PR opened with GITHUB_TOKEN
+#   triggers no checks).
+# - Inputs, outputs and secrets reach scripts through `env:`, never as `${{ }}`
+#   inside `run:`, so a crafted input cannot inject commands.
+# - The state PR commit touches only the state mirror and the snapshots, which are
+#   not deploy inputs, so merging it ends at `plan`. After a retire apply, the
+#   reviewer pushes the deletion of the applied retire entry onto the state PR
+#   branch; that is a deploy input, so the merge runs `deploy`, which plans a
+#   no-op apply the reviewer may approve or reject.
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: "deploy, restore, e2e or refresh. Empty: refresh on a schedule, deploy otherwise."
+        type: string
+        required: false
+        default: ""
+      snapshot:
+        description: "restore only: snapshot file under <data_dir>/linear-snapshots/, relative to the repository root; it must already be merged via a state PR"
+        type: string
+        required: false
+        default: ""
+      rows:
+        description: "restore only: space-separated external ids to restore (empty restores every row)"
+        type: string
+        required: false
+        default: ""
+      config:
+        description: "registry config file, relative to the repository root"
+        type: string
+        required: false
+        default: registry-sync.yaml
+      project_dir:
+        description: "uv project (pyproject.toml + uv.lock) that depends on customer-registry-sync"
+        type: string
+        required: false
+        default: "."
+      ssh_key_secret:
+        description: "name of the secret holding an SSH key for private git dependencies (unset: no key)"
+        type: string
+        required: false
+        default: REGISTRY_SYNC_SSH_KEY
+      base_branch:
+        description: "branch the state and refresh PRs target"
+        type: string
+        required: false
+        default: main
+      tool_repository:
+        description: "e2e only: repository holding the customer-registry-sync tests"
+        type: string
+        required: false
+        default: markddavidoff/customer-registry-sync
+      tool_ref:
+        description: "e2e only: ref of tool_repository to test"
+        type: string
+        required: false
+        default: main
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+      mode: ${{ steps.decide.outputs.mode }}
+      deploy_environment: ${{ steps.settings.outputs.deploy_environment }}
+      readonly_environment: ${{ steps.settings.outputs.readonly_environment }}
+      app_id_secret: ${{ steps.settings.outputs.app_id_secret }}
+      app_key_secret: ${{ steps.settings.outputs.app_key_secret }}
+      linear_token_secret: ${{ steps.settings.outputs.linear_token_secret }}
+      readonly_token_secret: ${{ steps.settings.outputs.readonly_token_secret }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # `changed --since` diffs against the push's `before` commit.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+
+      - name: SSH key for git dependencies
+        env:
+          SSH_KEY: ${{ secrets[inputs.ssh_key_secret] }}
+        run: &ssh-agent |
+          set -euo pipefail
+          if [ -z "${SSH_KEY:-}" ]; then
+            echo "No SSH key secret set; git dependencies must be reachable without one."
+            exit 0
+          fi
+          eval "$(ssh-agent -s)" > /dev/null
+          printf '%s\n' "$SSH_KEY" | ssh-add - 2> /dev/null
+          mkdir -p ~/.ssh
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2> /dev/null
+          {
+            echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
+            echo "SSH_AGENT_PID=$SSH_AGENT_PID"
+          } >> "$GITHUB_ENV"
+
+      - name: Install customer-registry-sync
+        env:
+          PROJECT_DIR: ${{ inputs.project_dir }}
+          CONFIG: ${{ inputs.config }}
+        run: &install |
+          set -euo pipefail
+          case "$PROJECT_DIR$CONFIG" in
+            *$'\n'*) echo "project_dir and config must be single-line paths" >&2; exit 2 ;;
+          esac
+          uv sync --locked --project "$PROJECT_DIR"
+          mkdir -p "$RUNNER_TEMP/bin"
+          cat > "$RUNNER_TEMP/bin/crs" <<'SH'
+          #!/bin/sh
+          exec uv run --frozen --project "$CRS_PROJECT" customer-registry-sync --config "$CRS_CONFIG" "$@"
+          SH
+          chmod +x "$RUNNER_TEMP/bin/crs"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          {
+            echo "CRS_PROJECT=$PROJECT_DIR"
+            echo "CRS_CONFIG=$CONFIG"
+          } >> "$GITHUB_ENV"
+
+      - name: Decide the mode and whether to run
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          MODE_INPUT: ${{ inputs.mode }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "schedule" ]; then
+            mode=refresh
+          else
+            mode="${MODE_INPUT:-deploy}"
+          fi
+          case "$mode" in
+            deploy|restore|e2e|refresh) ;;
+            *) echo "unknown mode '$mode' (deploy, restore, e2e or refresh)" >&2; exit 2 ;;
+          esac
+          run=true
+          if [ "$EVENT" = "push" ]; then
+            # An unknown or unreachable sha (first push, force-push) reports `changed`.
+            result="$(crs changed --since "${BEFORE:-}")"
+            echo "Deploy inputs since ${BEFORE:-<none>}: $result"
+            if [ "$result" != "changed" ]; then
+              run=false
+              echo "### registry-sync: no deploy input changed; nothing to do" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          {
+            echo "mode=$mode"
+            echo "run=$run"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Read the workflow settings
+        id: settings
+        if: steps.decide.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          # Plain assignments, so a missing key (exit 2, naming it) fails the step.
+          deploy_environment="$(crs config-get workflow.deploy_environment)"
+          readonly_environment="$(crs config-get workflow.readonly_environment)"
+          app_id_secret="$(crs config-get workflow.app_id_secret)"
+          app_key_secret="$(crs config-get workflow.app_key_secret)"
+          linear_token_secret="$(crs config-get workflow.linear_token_secret)"
+          readonly_token_secret="$(crs config-get workflow.readonly_token_secret)"
+          {
+            echo "deploy_environment=$deploy_environment"
+            echo "readonly_environment=$readonly_environment"
+            echo "app_id_secret=$app_id_secret"
+            echo "app_key_secret=$app_key_secret"
+            echo "linear_token_secret=$linear_token_secret"
+            echo "readonly_token_secret=$readonly_token_secret"
+          } >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: plan
+    if: needs.plan.outputs.run == 'true' && needs.plan.outputs.mode != 'refresh'
+    concurrency:
+      group: registry-sync-deploy
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    environment: ${{ needs.plan.outputs.deploy_environment }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+
+      - name: SSH key for git dependencies
+        env:
+          SSH_KEY: ${{ secrets[inputs.ssh_key_secret] }}
+        run: *ssh-agent
+
+      - name: Install customer-registry-sync
+        env:
+          PROJECT_DIR: ${{ inputs.project_dir }}
+          CONFIG: ${{ inputs.config }}
+        run: *install
+
+      - name: Locate the data directory
+        id: paths
+        run: &locate |
+          set -euo pipefail
+          data_dir="$(crs config-get data_dir)"
+          rel="$(realpath -m --relative-to="$GITHUB_WORKSPACE" "$data_dir")"
+          case "$rel" in
+            ..|../*) echo "data_dir $data_dir is outside the repository" >&2; exit 2 ;;
+          esac
+          echo "data_dir=$rel" >> "$GITHUB_OUTPUT"
+
+      - name: check (drift + plan)
+        if: needs.plan.outputs.mode == 'deploy'
+        env:
+          LINEAR_API_TOKEN: ${{ secrets[needs.plan.outputs.linear_token_secret] }}
+        run: crs check
+
+      # continue-on-error: a failed or aborted apply still has to upload its
+      # snapshot, refresh the state and open the PR before the job goes red.
+      - name: apply
+        id: apply
+        if: needs.plan.outputs.mode != 'e2e'
+        continue-on-error: true
+        env:
+          LINEAR_API_TOKEN: ${{ secrets[needs.plan.outputs.linear_token_secret] }}
+          MODE: ${{ needs.plan.outputs.mode }}
+          SNAPSHOT: ${{ inputs.snapshot }}
+          ROWS: ${{ inputs.rows }}
+        run: |
+          set -o pipefail
+          {
+            if [ "$MODE" = "restore" ]; then
+              if [ -z "$SNAPSHOT" ]; then
+                echo "restore needs the snapshot input" >&2
+                exit 2
+              fi
+              # Steps run at the repository root, so a relative snapshot path works as given.
+              args=(restore --from "$SNAPSHOT")
+              if [ -n "$ROWS" ]; then
+                read -r -a row_ids <<< "$ROWS"
+                args+=(--rows "${row_ids[@]}")
+              fi
+              args+=(--prod --no-input)
+              crs "${args[@]}"
+            else
+              crs deploy --apply --prod --no-input
+            fi
+          } 2>&1 | tee "$RUNNER_TEMP/apply.txt"
+
+      - name: Check out the tool's tests
+        if: needs.plan.outputs.mode == 'e2e'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ${{ inputs.tool_repository }}
+          ref: ${{ inputs.tool_ref }}
+          path: .registry-sync-tool
+          persist-credentials: false
+          ssh-key: ${{ secrets[inputs.ssh_key_secret] }}
+
+      - name: e2e (live GitOps test)
+        if: needs.plan.outputs.mode == 'e2e'
+        working-directory: .registry-sync-tool
+        env:
+          LINEAR_API_TOKEN: ${{ secrets[needs.plan.outputs.linear_token_secret] }}
+        run: uv run pytest tests/test_e2e_gitops.py --run-live -q
+
+      - name: Upload the snapshots
+        if: always() && steps.apply.outcome != 'skipped'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linear-snapshots-${{ github.run_id }}
+          path: ${{ steps.paths.outputs.data_dir }}/linear-snapshots/
+          if-no-files-found: warn
+
+      - name: Refresh the inbound state
+        if: always() && steps.apply.outcome != 'skipped'
+        env:
+          LINEAR_API_TOKEN: ${{ secrets[needs.plan.outputs.linear_token_secret] }}
+        run: crs sync-inbound --no-input
+
+      - name: Summarize the apply
+        if: always() && steps.apply.outcome != 'skipped'
+        env:
+          OUTCOME: ${{ steps.apply.outcome }}
+        run: |
+          {
+            echo "### registry-sync: apply ${OUTCOME}"
+            echo '```'
+            cat "$RUNNER_TEMP/apply.txt" 2>/dev/null || echo "(the apply step wrote no output)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: App token for the state PR
+        id: app-token
+        if: always() && steps.apply.outcome != 'skipped'
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ vars[needs.plan.outputs.app_id_secret] || secrets[needs.plan.outputs.app_id_secret] }}
+          private-key: ${{ secrets[needs.plan.outputs.app_key_secret] }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Open the state PR
+        if: always() && steps.apply.outcome != 'skipped' && steps.app-token.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          OUTCOME: ${{ steps.apply.outcome }}
+          MODE: ${{ needs.plan.outputs.mode }}
+          DATA_DIR: ${{ steps.paths.outputs.data_dir }}
+          BASE: ${{ inputs.base_branch }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          bot="${APP_SLUG}[bot]"
+          user_id="$(gh api "/users/${bot}" -q .id)"
+          git config user.name "$bot"
+          git config user.email "${user_id}+${bot}@users.noreply.github.com"
+
+          branch="linear-state/${RUN_ID}-${RUN_ATTEMPT}"
+          git checkout -b "$branch"
+          for dir in "$DATA_DIR/linear-state" "$DATA_DIR/linear-snapshots"; do
+            if [ -e "$dir" ]; then
+              git add --all -- "$dir"
+            fi
+          done
+          if git diff --cached --quiet; then
+            echo "No state or snapshot changes; no PR to open."
+            exit 0
+          fi
+          git commit -m "chore(customer-registry): linear state after ${MODE} (run ${RUN_ID})"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/${branch}"
+
+          {
+            echo "Post-${MODE} state from [run ${RUN_ID}](${RUN_URL}): apply outcome \`${OUTCOME}\`."
+            echo
+            echo '```'
+            if [ -f "$RUNNER_TEMP/apply.txt" ]; then
+              head -c 60000 "$RUNNER_TEMP/apply.txt"
+            else
+              echo "(the apply step wrote no output)"
+            fi
+            echo '```'
+          } > "$RUNNER_TEMP/pr-body.md"
+          gh pr create \
+            --repo "$REPO" \
+            --base "$BASE" \
+            --head "$branch" \
+            --title "chore(customer-registry): linear state after ${MODE} (run ${RUN_ID})" \
+            --body-file "$RUNNER_TEMP/pr-body.md"
+
+      # The apply step is continue-on-error so the steps above always run; this
+      # step turns its failure back into a red job.
+      - name: Fail if the apply failed
+        if: always() && steps.apply.outcome == 'failure'
+        run: |
+          echo "The apply step failed; see the apply step and the state PR." >&2
+          exit 1
+
+  refresh:
+    needs: plan
+    if: needs.plan.outputs.run == 'true' && needs.plan.outputs.mode == 'refresh'
+    concurrency:
+      group: registry-sync-refresh
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    environment: ${{ needs.plan.outputs.readonly_environment }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+
+      - name: SSH key for git dependencies
+        env:
+          SSH_KEY: ${{ secrets[inputs.ssh_key_secret] }}
+        run: *ssh-agent
+
+      - name: Install customer-registry-sync
+        env:
+          PROJECT_DIR: ${{ inputs.project_dir }}
+          CONFIG: ${{ inputs.config }}
+        run: *install
+
+      - name: Locate the data directory
+        id: paths
+        run: *locate
+
+      - name: Refresh the inbound state
+        env:
+          LINEAR_API_TOKEN: ${{ secrets[needs.plan.outputs.readonly_token_secret] }}
+        run: crs sync-inbound --no-input
+
+      - name: Ingest the linear-found dataset
+        run: crs ingest --only linear-found --no-input
+
+      - name: Generate the registry files
+        run: crs generate --no-input
+
+      - name: App token for the refresh PR
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ vars[needs.plan.outputs.app_id_secret] || secrets[needs.plan.outputs.app_id_secret] }}
+          private-key: ${{ secrets[needs.plan.outputs.app_key_secret] }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Open the refresh PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          DATA_DIR: ${{ steps.paths.outputs.data_dir }}
+          BASE: ${{ inputs.base_branch }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          bot="${APP_SLUG}[bot]"
+          user_id="$(gh api "/users/${bot}" -q .id)"
+          git config user.name "$bot"
+          git config user.email "${user_id}+${bot}@users.noreply.github.com"
+
+          branch="linear-refresh/${RUN_ID}-${RUN_ATTEMPT}"
+          git checkout -b "$branch"
+          for path in linear-state datasets/linear-found identities.yaml linear registry.csv real-customers.csv; do
+            if [ -e "$DATA_DIR/$path" ]; then
+              git add --all -- "$DATA_DIR/$path"
+            fi
+          done
+          if git diff --cached --quiet; then
+            echo "No refreshed files changed; no PR to open."
+            exit 0
+          fi
+          git commit -m "chore(customer-registry): refresh linear-found (run ${RUN_ID})"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/${branch}"
+
+          {
+            echo "Refresh from [run ${RUN_ID}](${RUN_URL}): \`sync-inbound\`, \`ingest --only linear-found\` and \`generate\`."
+            echo
+            echo "Review the diff, then merge. The merge changes deploy inputs, so it runs \`deploy\` behind its approval gate."
+          } > "$RUNNER_TEMP/pr-body.md"
+          gh pr create \
+            --repo "$REPO" \
+            --base "$BASE" \
+            --head "$branch" \
+            --title "chore(customer-registry): refresh linear-found (run ${RUN_ID})" \
+            --body-file "$RUNNER_TEMP/pr-body.md"
