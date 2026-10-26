@@ -1,0 +1,16 @@
+# Linear customers the sync never touches: it does not stub, identify, write or
+# report them as orphans. `customer-registry-sync ignore --linear-id <id>
+# --reason "<why>"` appends to `customers`. Every entry needs a reason.
+#
+# The prefix "zzz-gitops-test-" (the live e2e tests' throwaway records) is always
+# ignored; you do not need to list it.
+customers:
+  - linear_id: 00000000-0000-4000-8000-0000000000aa
+    name: Example Internal Org
+    reason: our own organization, not a customer
+
+# A name prefix ignores every customer whose Linear name starts with it. A
+# prefix must be at least four characters.
+name_prefixes:
+  - prefix: "Sandbox-"
+    reason: manual test records

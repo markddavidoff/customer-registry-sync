@@ -1,4 +1,4 @@
-"""Field-level planner: ownership rules (spec §1) and the destructive guard (§2)."""
+"""Field-level planner: ownership rules and the destructive guard."""
 
 import itertools
 

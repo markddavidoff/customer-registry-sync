@@ -122,7 +122,7 @@ def _desired_acme(**kw):
 
 
 def test_check_reports_untracked_and_passes():
-    # spec §6 moved untracked values from fail to report (D4)
+    # untracked values are reported, not failed
     lv = _live("lin_1", "Acme")  # live carries acme.example.test; the registry row has no domains
     res = run_check([_desired_acme(domains=[])], [_state_from(lv)], [lv])
     assert res.code == EXIT_OK and not res.drift.any() and not res.plan.aborts
@@ -382,7 +382,7 @@ def test_record_resolving_to_two_identities_fails(tmp_path):
 
 
 def test_check_exits_3_on_plan_errors(tmp_path):
-    # two live customers on one identity, neither stamped nor recorded (R7)
+    # two live customers on one identity, neither stamped nor recorded
     table = _store(tmp_path, ("acme", ["Acme"], ["acme.example.test"], {}))
     a, b = (replace(_live(lid, "Acme"), external_ids=[]) for lid in ("lin_a", "lin_b"))
     res = run_check([_desired_acme()], [_state_from(a), _state_from(b)], [a, b], table)
@@ -402,7 +402,7 @@ def test_identity_offline_errors_include_table_errors(tmp_path):
     ]
 
 
-# ---- the one managed/ignored partition (spec §4a) ----
+# ---- the one managed/ignored partition ----
 
 _IGNORE_OWN = (
     "customers:\n  - linear_id: lin_own\n    name: Pied Piper\n    reason: our own company\n"
@@ -556,7 +556,7 @@ def test_linear_edit_to_stub_is_not_drift(tmp_path):
 
 
 def test_unmapped_status_fails_naming_customer_and_status(tmp_path, run_cli):
-    """R12: a stub whose Linear status is not in the table is written with
+    """A stub whose Linear status is not in the table is written with
     `classification: null`, and `check` fails naming the customer and the status."""
     (tmp_path / "datasets.yaml").write_text(
         "datasets: [notion, linear-found]\n"
@@ -579,7 +579,7 @@ def test_unmapped_status_fails_naming_customer_and_status(tmp_path, run_cli):
     ) in offline_errors(tmp_path)
 
 
-# ---- orphans, failure lines and reports (spec §6, D4, D6) ----
+# ---- orphans, failure lines and reports ----
 
 _ORPHAN_HOOLI = [
     "orphan: Linear customer 'Hooli' (lin_hooli) is in no dataset.",
@@ -631,7 +631,7 @@ def test_orphan_is_a_live_customer_on_an_identity_with_no_record(tmp_path):
 
 
 def test_record_with_no_identity_makes_its_live_customer_no_orphan(tmp_path):
-    # R3: a record that resolves to nothing gets an implicit identity
+    # A record that resolves to nothing gets an implicit identity
     entries = _notion_entries(tmp_path, _acme_rec())
     acme = _node("lin_1", "Acme [Active]", domains=["acme.example.test"], xids=["acme"])
     assert orphans([acme], load_identities(tmp_path / IDENTITIES_FILE), entries) == []

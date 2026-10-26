@@ -581,7 +581,7 @@ def test_verification_catches_planned_change_that_did_not_land(tmp_path, recordi
     assert res.failure == "Acme Robotics: revenue expected 5 got 1"
 
 
-# ---- pairing by identity (spec §3) ----
+# ---- pairing by identity ----
 
 PRIORITY = [NOTION, LINEAR_FOUND]
 
@@ -858,7 +858,7 @@ def test_merge_by_hand_restamps_one_row(tmp_path):
     assert not plan.creates and not plan.orphans and not plan.errors
 
 
-# ---- ignore list at write time; apply guards (spec §4a) ----
+# ---- ignore list at write time; apply guards ----
 
 
 def _ignore_list(tmp_path, text):

@@ -401,7 +401,7 @@ def test_restore_stops_on_linear_error_and_reports_partial(
     assert [c[1] for c in fake2.updates()] == ["lin_1", "lin_2"]
 
 
-# ---- the ignore list in check and deploy (spec §4a) ----
+# ---- the ignore list in check and deploy ----
 
 _IGNORE_OWN = (
     "customers:\n  - linear_id: lin_own\n    name: Pied Piper\n    reason: our own company\n"

@@ -1,0 +1,23 @@
+# The identity table: one entry per company, keyed by its permanent canonical id.
+# The sync writes the canonical id into Linear as the customer's external id, so
+# never rename a key. `ingest` appends new identities and fills in missing values;
+# you edit this file by hand to merge two identities (move the duplicate's names,
+# domains and sources into the survivor, then delete the duplicate's key).
+#
+# names:   every name the company is known by (matched ignoring case, spaces,
+#          punctuation and a trailing " [Active]"-style status suffix)
+# domains: every domain the company uses (matched ignoring case)
+# sources: the id in each source system. The only keys are `notion` (the dataset
+#          file name) and `linear` (the Linear customer id).
+acme-robotics:
+  names: [Acme Robotics]
+  domains: [acme-robotics.example.test]
+  sources:
+    notion: acme-robotics
+    linear: 00000000-0000-4000-8000-000000000001
+
+globex-labs:
+  names: [Globex Labs, Globex Laboratories]
+  domains: [globex-labs.example.test, globex.example.test]
+  sources:
+    notion: globex-labs

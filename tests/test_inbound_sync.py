@@ -154,7 +154,7 @@ def test_mirror_row_takes_every_field_from_live_only():
 
 
 def test_empty_linear_status_is_not_mirrored_as_active(tmp_path, run_cli):
-    """D9/R12: a Linear customer with no status is mirrored with no status, its stub
+    """A Linear customer with no status is mirrored with no status, its stub
     gets `classification: null`, `check` fails naming it, and the mirror is not drift."""
     lv = _node("lin_n", "Nostatus Co", domains=["nostatus.example.org"], status=None)
     assert lv.status == ""
