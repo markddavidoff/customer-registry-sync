@@ -19,6 +19,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.constructor import DuplicateKeyError
 from ruamel.yaml.error import YAMLError
 
+from .datasets import LINEAR_FOUND, NOTION
 from .linear_schema import LinearCustomer
 from .schema import CustomerRecord
 
@@ -156,9 +157,9 @@ class ItemKeys:
 def keys_for_record(rec: CustomerRecord, *, dataset: str, source_id: str) -> ItemKeys:
     """Keys for a dataset record; `source_id` is its file stem."""
     label, domains, names = rec.canonical_name, tuple(rec.domains), (rec.canonical_name,)
-    if dataset == "notion":
+    if dataset == NOTION:
         return ItemKeys(label=label, notion=source_id, domains=domains, names=names)
-    if dataset == "linear-found":
+    if dataset == LINEAR_FOUND:
         return ItemKeys(
             label=label,
             ids=(source_id,),

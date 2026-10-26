@@ -701,7 +701,11 @@ def _no_input_arg(p, help_text="never prompt; refuse to overwrite hand-edited fi
     p.add_argument("--no-input", action="store_true", help=help_text)
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> tuple[argparse.ArgumentParser, dict]:
+    """The argument parser and the handler for each subcommand.
+
+    Split out of `main` so tests can check the invocations in the workflow against it.
+    """
     parser = argparse.ArgumentParser(prog="customer-registry-sync")
     parser.add_argument(
         "--config",
@@ -814,7 +818,11 @@ def main(argv: list[str] | None = None) -> int:
         help="print the installed tool's source: 'git <commit> <url>' or 'dir - <path>'",
     )
     handlers["tool-source"] = _cmd_tool_source
+    return parser, handlers
 
+
+def main(argv: list[str] | None = None) -> int:
+    parser, handlers = build_parser()
     args = parser.parse_args(argv)
     try:
         args.registry = load_config(args.config)

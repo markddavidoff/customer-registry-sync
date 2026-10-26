@@ -8,6 +8,7 @@ decision and the SSH-key guard) are run locally under bash with stub commands.
 
 import os
 import re
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -15,6 +16,7 @@ import pytest
 import yaml
 
 from customer_registry_sync.check import orphan_lines
+from customer_registry_sync.cli import build_parser
 from customer_registry_sync.linear_client import LiveCustomer
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -135,11 +137,65 @@ def test_deploy_and_refresh_use_separate_job_level_concurrency_groups():
     jobs = wf["jobs"]
     deploy, refresh = jobs["deploy"]["concurrency"], jobs["refresh"]["concurrency"]
     assert deploy["group"] != refresh["group"]
+    # Each group carries the config input, so two registries in one repo do not share one.
+    assert deploy["group"] == "registry-sync-deploy-${{ inputs.config }}"
+    assert refresh["group"] == "registry-sync-refresh-${{ inputs.config }}"
     assert deploy["cancel-in-progress"] is False
     assert refresh["cancel-in-progress"] is False
     assert "concurrency" not in jobs["plan"]
     # The caller must not reintroduce a shared workflow-level group.
     assert "concurrency" not in _load(CALLER)
+
+
+def _crs_invocations(job: dict) -> list[list[str]]:
+    """Every `crs ...` argument list written in a job's run scripts.
+
+    Handles one-line calls (also inside `$(...)`) and the `args=(...)` / `args+=(...)`
+    array the apply step builds before `crs "${args[@]}"`. Values stay as written
+    (`$SNAPSHOT`, `${BEFORE:-}`); only the shape is checked.
+    """
+    calls: list[list[str]] = []
+    array: list[str] = []
+    for line in _runs(job).splitlines():
+        line = line.strip()
+        if line.startswith(("#", "echo")):
+            continue
+        built = re.fullmatch(r"args\+?=\((.*)\)", line)
+        if built:
+            array += shlex.split(built.group(1))
+            continue
+        for found in re.finditer(r"\bcrs ([a-z][a-z-]*[^\n)|;&]*)", line):
+            calls.append(shlex.split(found.group(1)))
+    if array:
+        calls.append(array)
+    return calls
+
+
+def test_workflow_invocations_match_the_cli_parser():
+    """Every subcommand and flag the workflow passes to `crs` exists in the real parser."""
+    parser, _ = build_parser()
+    seen: set[str] = set()
+    for name, job in _load(REUSABLE)["jobs"].items():
+        for argv in _crs_invocations(job):
+            try:
+                parser.parse_args(argv)
+            except SystemExit as e:  # argparse exits with 2 on an unknown command or flag
+                raise AssertionError(
+                    f"{name}: `crs {' '.join(argv)}` is not a valid CLI call"
+                ) from e
+            seen.add(argv[0])
+    # Guards the scan itself: it must find the calls the workflow is known to make.
+    assert seen == {
+        "changed",
+        "config-get",
+        "check",
+        "restore",
+        "deploy",
+        "tool-source",
+        "sync-inbound",
+        "ingest",
+        "generate",
+    }
 
 
 def test_linear_tokens_reach_only_the_steps_that_use_them():

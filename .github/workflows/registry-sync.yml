@@ -31,11 +31,13 @@ name: registry-sync
 #   waits for no approval, and it never runs `check` or writes to Linear. Merging
 #   its PR changes the desired rows, so the merge push runs `deploy` behind its gate.
 # - `deploy` and `refresh` use separate concurrency groups (set on each job, not on
-#   the workflow). GitHub keeps one running and one pending run per group, and a
-#   newer pending run cancels the older one even with `cancel-in-progress: false`.
-#   In one shared group the daily refresh would cancel a push-triggered deploy that
-#   waits for approval. Neither job writes to the base branch (each opens its own PR
-#   branch) and `check` re-reads live Linear, so they can overlap safely.
+#   the workflow), each suffixed with the `config` input so two registries in one
+#   repository (two config files) never queue behind each other. GitHub keeps one
+#   running and one pending run per group, and a newer pending run cancels the
+#   older one even with `cancel-in-progress: false`. In one shared group the
+#   daily refresh would cancel a push-triggered deploy that waits for approval.
+#   Neither job writes to the base branch (each opens its own PR branch) and
+#   `check` re-reads live Linear, so they can overlap safely.
 # - The deploy environment holds the required-reviewer approval and the write
 #   token. Linear tokens are passed only to the steps that call Linear, never at job
 #   level, so checkout, upload and the PR steps never see them.
@@ -222,7 +224,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.run == 'true' && needs.plan.outputs.mode != 'refresh'
     concurrency:
-      group: registry-sync-deploy
+      group: registry-sync-deploy-${{ inputs.config }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: ${{ needs.plan.outputs.deploy_environment }}
@@ -422,7 +424,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.run == 'true' && needs.plan.outputs.mode == 'refresh'
     concurrency:
-      group: registry-sync-refresh
+      group: registry-sync-refresh-${{ inputs.config }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: ${{ needs.plan.outputs.readonly_environment }}
