@@ -23,19 +23,18 @@ def _live(name, lid, **kw):
     )
 
 
-def test_sync_inbound_writes_state_dir_only(tmp_path, monkeypatch, make_config):
+def test_sync_inbound_writes_state_dir_only(tmp_path, monkeypatch, run_cli):
     monkeypatch.setattr(
         cli,
         "_linear_client",
         lambda: FakeClient([_live("Acme", "lin_1", domains=["acme.example.test"])]),
     )
-    argv = ["--config", str(make_config()), "sync-inbound", "--out-dir", str(tmp_path)]
-    assert cli.main(argv) == 0
+    assert run_cli(["sync-inbound", "--out-dir", str(tmp_path)]) == 0
     assert (tmp_path / "linear-state" / "acme.yaml").exists()
     assert not (tmp_path / "linear").exists()
 
 
-def test_sync_inbound_scope_preserves_out_of_scope_state(tmp_path, monkeypatch, make_config):
+def test_sync_inbound_scope_preserves_out_of_scope_state(tmp_path, monkeypatch, run_cli):
     from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced
     from customer_registry_sync.writers import load_state, write_state
 
@@ -51,15 +50,6 @@ def test_sync_inbound_scope_preserves_out_of_scope_state(tmp_path, monkeypatch, 
         _live("zzz-t-new", "lin_new", external_ids=["zzz-t-new"]),
     ]
     monkeypatch.setattr(cli, "_linear_client", lambda: FakeClient(live))
-    argv = [
-        "--config",
-        str(make_config()),
-        "sync-inbound",
-        "--out-dir",
-        str(tmp_path),
-        "--scope",
-        "zzz-t-",
-    ]
-    assert cli.main(argv) == 0
+    assert run_cli(["sync-inbound", "--out-dir", str(tmp_path), "--scope", "zzz-t-"]) == 0
     names = sorted(s.name for s in load_state(tmp_path))
     assert names == ["Acme", "zzz-t-new"]  # Acme untouched, zzz-t-old dropped, zzz-t-new added

@@ -1,0 +1,23 @@
+# One record of the `notion` dataset: <data_dir>/datasets/notion/<slug>.yaml.
+# `ingest` writes these files; they are generated, so do not edit them by hand
+# (`check` fails on a hand edit). This sample shows the shape for reference. Only
+# `canonical_name` is required; every other key is optional and defaults to an
+# empty list or null. An unknown key, a `deployment` outside saas, on-prem and hybrid,
+# or a `classification` outside real, prospect, churned, partner and internal
+# fails to load. docs/notion-template.md lists each field and where it comes from.
+canonical_name: Acme Robotics
+domains:
+  - acme-robotics.example.test
+buckets:
+  - Customers
+classification: real
+deployment: hybrid
+arr: 250000.0
+tier: Tier 1
+status: Active customer
+contact: robin@acme-robotics.example.test
+hubspot_id: "48201937465"   # optional: the digits of the page's `HubSpot ID:` line
+# prod_org_id: null         # optional: no page label fills it today
+# owner: null               # optional: no page label fills it today
+sources:
+  - notion:Customers

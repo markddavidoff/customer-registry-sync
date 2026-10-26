@@ -1,6 +1,7 @@
 import os
 import uuid
 from datetime import UTC, datetime
+from typing import ClassVar
 
 import pytest
 import yaml
@@ -37,6 +38,26 @@ def make_config(tmp_path_factory):
         return path
 
     return _make
+
+
+@pytest.fixture
+def run_cli(make_config):
+    """Call `cli.main` under a synthetic config: ``run_cli(argv, data_dir=None)``.
+
+    ``data_dir`` is the configured data directory, the one `--prod` guards (the
+    default is a fresh directory the test never uses, so `--out-dir` is not prod).
+    One config is written per distinct ``data_dir``."""
+    from customer_registry_sync import cli
+
+    configs = {}
+
+    def _run(argv, *, data_dir=None):
+        key = str(data_dir)
+        if key not in configs:
+            configs[key] = make_config(data_dir=data_dir)
+        return cli.main(["--config", str(configs[key]), *argv])
+
+    return _run
 
 
 def pytest_addoption(parser):
@@ -119,3 +140,123 @@ def _live_teardown(request, run_prefix):
         yield
     finally:
         _sweep(client, run_prefix)
+
+
+class RecordingLinear:
+    """In-memory Linear for apply/restore tests. Rows are built with the real
+    `parse_customer_node`; writes apply the sent fields to the stored row, honour
+    the client's never-null rule, and log each call. When `snapshot_dir` is
+    given, each write records which snapshot files existed at that moment."""
+
+    STATUSES: ClassVar[dict[str, str]] = {"Active": "st_a", "Prospect": "st_p", "Churned": "st_c"}
+    TIERS: ClassVar[dict[str, str]] = {"Tier 1": "t1", "Tier 2": "t2"}
+
+    def __init__(self, rows, snapshot_dir=None):
+        self.rows = {r.id: r for r in rows}
+        self.snapshot_dir = snapshot_dir
+        self.calls: list[tuple] = []
+        self.tamper: dict[str, dict] = {}  # id -> fields Linear "changes" on write
+        self.fail: dict[str, Exception] = {}  # id -> error raised by update_customer
+        self._tick = 0
+
+    @staticmethod
+    def node(
+        lid,
+        name,
+        *,
+        domains=(),
+        revenue=None,
+        tier=None,
+        status="Active",
+        xids=(),
+        updated="2026-10-01T00:00:00.000Z",
+    ):
+        from customer_registry_sync.linear_client import parse_customer_node
+
+        return parse_customer_node(
+            {
+                "id": lid,
+                "name": name,
+                "domains": list(domains),
+                "revenue": revenue,
+                "externalIds": list(xids),
+                "updatedAt": updated,
+                "status": {"id": "s", "name": status} if status else None,
+                "tier": {"id": "t", "name": tier} if tier else None,
+            }
+        )
+
+    def _now(self):
+        self._tick += 1
+        return f"2026-11-01T00:00:{self._tick:02d}.000Z"
+
+    def _snapshots(self):
+        if self.snapshot_dir is None or not self.snapshot_dir.is_dir():
+            return []
+        return sorted(p.name for p in self.snapshot_dir.glob("*.yaml"))
+
+    def updates(self):
+        return [c for c in self.calls if c[0] == "update"]
+
+    def list_customers(self):
+        return list(self.rows.values())
+
+    def status_ids(self):
+        return dict(self.STATUSES)
+
+    def tier_ids(self):
+        return dict(self.TIERS)
+
+    def get_customer(self, cid):
+        self.calls.append(("get", cid))
+        return self.rows.get(cid)
+
+    def _apply(self, row, fields):
+        from dataclasses import replace
+
+        from customer_registry_sync.linear_client import LinearError
+
+        names = {
+            "status_id": {v: k for k, v in self.STATUSES.items()},
+            "tier_id": {v: k for k, v in self.TIERS.items()},
+        }
+        attr = {"status_id": "status", "tier_id": "tier"}
+        out = {}
+        for k, v in fields.items():
+            if k in names and v is not None:
+                if v not in names[k]:
+                    raise LinearError(f"unknown {k} {v}")
+                v = names[k][v]
+            out[attr.get(k, k)] = list(v) if isinstance(v, list) else v
+        return replace(row, **out, updated_at=self._now())
+
+    def update_customer(self, cid, *, retire=False, **fields):
+        from dataclasses import replace
+
+        from customer_registry_sync.linear_client import LinearError
+
+        for k, v in fields.items():
+            if (v is None or v == []) and not retire:
+                raise LinearError(f"refusing to send empty {k} without retire")
+        self.calls.append(("update", cid, dict(fields), retire, self._snapshots()))
+        if cid in self.fail:
+            raise self.fail[cid]
+        new = self._apply(self.rows[cid], fields)
+        if cid in self.tamper:
+            new = replace(new, **self.tamper[cid])
+        self.rows[cid] = new
+        return new
+
+    def create_customer(self, **fields):
+        if "retire" in fields:
+            raise TypeError("create_customer takes no retire")
+        self.calls.append(("create", dict(fields), self._snapshots()))
+        lid = f"lin_new{len(self.rows)}"
+        new = self._apply(self.node(lid, fields["name"]), fields)
+        self.rows[lid] = new
+        return new
+
+
+@pytest.fixture
+def recording_linear():
+    return RecordingLinear

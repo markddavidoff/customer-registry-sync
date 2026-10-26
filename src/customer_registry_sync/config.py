@@ -11,11 +11,17 @@ Keys:
   ingest knows must be present (see ``notion_ingest.BUCKET_CLASSIFICATION``).
 - ``data_dir`` (optional, default ``customers``) — where the dataset lives. A
   relative path resolves against the directory that holds the config file.
+- ``workflow`` (optional) — settings the reusable ``registry-sync`` GitHub
+  workflow reads through ``config-get``: ``deploy_environment`` and
+  ``readonly_environment``, the names of the two GitHub environments. Secrets are
+  not named here: the caller passes them to the workflow explicitly. A config
+  without these keys still loads; only ``config-get`` of a missing key fails,
+  naming it. Unknown keys under ``workflow:`` are ignored.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
@@ -31,11 +37,69 @@ class ConfigError(Exception):
     """The config file is missing, unreadable, or lacks a required key."""
 
 
+@dataclass(frozen=True)
+class WorkflowConfig:
+    """The GitHub environments the reusable workflow binds its jobs to."""
+
+    deploy_environment: str
+    readonly_environment: str
+
+
+WORKFLOW_KEYS: tuple[str, ...] = tuple(f.name for f in fields(WorkflowConfig))
+
+
 @dataclass
 class RegistryConfig:
     hub_page_id: str
     buckets: dict[str, str] = field(default_factory=dict)
     data_dir: Path = Path(DEFAULT_DATA_DIR)
+    # Complete `workflow:` settings, or None. `workflow_raw` keeps a partial mapping so
+    # `config_value` can name the one key that is missing.
+    workflow: WorkflowConfig | None = None
+    workflow_raw: dict[str, str] = field(default_factory=dict)
+    # The file this config was loaded from; `changed` treats it as a deploy input.
+    config_path: Path | None = None
+
+
+def _workflow_raw(data: dict[str, Any]) -> dict[str, str]:
+    raw = data.get("workflow")
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        str(k): str(v).strip()
+        for k, v in raw.items()
+        if isinstance(v, str | int) and not isinstance(v, bool) and str(v).strip()
+    }
+
+
+def _workflow(raw: dict[str, str]) -> WorkflowConfig | None:
+    values = {k: v for k, v in raw.items() if k in WORKFLOW_KEYS}
+    if any(k not in values for k in WORKFLOW_KEYS):
+        return None
+    return WorkflowConfig(**values)
+
+
+def config_value(cfg: RegistryConfig, key: str) -> str:
+    """One config value by dotted key (``data_dir``, ``workflow.deploy_environment``).
+
+    Raises ``ConfigError`` naming the key when it is unknown or missing.
+    """
+    if key == "data_dir":
+        return str(cfg.data_dir)
+    if key == "hub_page_id":
+        return cfg.hub_page_id
+    if key.startswith("buckets."):
+        name = key.removeprefix("buckets.")
+        if name in cfg.buckets:
+            return cfg.buckets[name]
+    if key.startswith("workflow."):
+        name = key.removeprefix("workflow.")
+        if name in WORKFLOW_KEYS:
+            value = cfg.workflow_raw.get(name)
+            if not value:
+                raise ConfigError(f"config is missing required key '{key}'")
+            return value
+    raise ConfigError(f"unknown config key '{key}'")
 
 
 def _require_str(data: dict[str, Any], key: str, label: str) -> str:
@@ -75,8 +139,12 @@ def load_config(path: Path) -> RegistryConfig:
     data_dir = Path(str(data.get("data_dir") or DEFAULT_DATA_DIR))
     if not data_dir.is_absolute():
         data_dir = path.absolute().parent / data_dir
+    workflow_raw = _workflow_raw(data)
     return RegistryConfig(
         hub_page_id=hub_page_id,
         buckets=buckets,
         data_dir=data_dir,
+        workflow=_workflow(workflow_raw),
+        workflow_raw=workflow_raw,
+        config_path=path.absolute(),
     )

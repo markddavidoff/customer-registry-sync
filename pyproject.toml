@@ -10,6 +10,7 @@ dependencies = [
     "gitops-engine",
     "notion-client>=2.2",
     "pyyaml>=6.0",
+    "ruamel-yaml>=0.18",
 ]
 
 [project.scripts]

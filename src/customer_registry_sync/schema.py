@@ -1,8 +1,9 @@
 """Shared record types for the customer registry.
 
 `RawCustomer` is what the Notion extractor emits per customer page/row
-(one bucket, un-merged). `CustomerRecord` is the assembled dataset row
-after cross-bucket merge + enrichment. Unknown values stay ``None`` /
+(one bucket, un-merged). `CustomerRecord` is a dataset row: the assembled
+Notion record after the cross-bucket merge, or a `linear-found` stub. Unknown
+values stay ``None`` /
 empty — never invented.
 """
 

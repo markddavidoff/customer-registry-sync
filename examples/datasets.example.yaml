@@ -1,0 +1,20 @@
+# Dataset priority and the Linear status table. Both keys are optional; without
+# this file the sync uses `notion` alone and the default table below. List
+# `linear-found` (as below) once you use the refresh: the refresh creates
+# <data_dir>/datasets/linear-found/, and `check` fails on a dataset directory
+# this file does not name.
+#
+# datasets: dataset directories under <data_dir>/datasets/, highest priority
+#   first. When two datasets hold the same company, the earlier one wins whole.
+# linear_status_classification: the classification a `linear-found` stub gets
+#   from its Linear status (real, prospect, churned, partner or internal). A
+#   Linear status missing here yields a stub with no classification, and `check`
+#   fails until you map it or ignore the customer.
+datasets:
+  - notion
+  - linear-found
+
+linear_status_classification:
+  Active: real
+  Prospect: prospect
+  Churned: churned

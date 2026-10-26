@@ -1,0 +1,10 @@
+# Values the next apply removes from Linear. This is the only way the sync ever
+# removes a value. Each key is a customer's canonical id (the first external id
+# in linear/<file>.yaml). List only the fields to remove, each with its exact
+# current Linear value. After the apply, delete the entry on the state PR branch.
+#
+# Example entry (uncomment and edit):
+#   acme-robotics:
+#     domains: [old.acme-robotics.example.test]
+#     revenue: 300000
+#     tier: Tier 2

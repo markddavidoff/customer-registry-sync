@@ -22,6 +22,10 @@ hub page                      hub_page_id in the config (kept for reference)
 
 - The config's `buckets` map names each bucket page's id. All six names are required.
   The **bucket decides the classification**; a page's own Status line never does.
+- The six bucket names and their classifications are this template's fixed values
+  (`BUCKET_CLASSIFICATION` in `src/customer_registry_sync/notion_ingest.py`). The config
+  loader rejects any other bucket name (`src/customer_registry_sync/config.py`), so name
+  your Notion pages to match; the config cannot rename or add buckets.
 - The ingest lists the **direct children** of each bucket page (100 per request,
   following pagination). It does not recurse into sub-pages other than the customer
   pages themselves.
@@ -90,7 +94,7 @@ the authoritative line before any later line that reuses the label (for example 
 | `Domain` | `domains` | Split on commas, whitespace and semicolons; lowercased; kept when it contains a `.` |
 | `ARR` | `arr` | First money amount in the value; `K`, `M`, `B` suffixes multiply by 1e3, 1e6, 1e9 (`$250,000.00/yr` gives 250000.0). Only the `ARR` label counts. |
 | `Deployment` | `deployment` | Contains `self-managed`, `on-prem` or `air-gap` gives on-prem; contains `saas` gives saas; both, or `hybrid`, gives hybrid; otherwise null |
-| `Tier` | `tier` | Text before the first `\|`, trimmed; `None`, `N/A` or empty gives null |
+| `Tier` | `tier` | Text before the first `\|`, trimmed; `None`, `N/A` or empty gives null. The tier names (such as `Tier 1`) are the template's own values, copied as written; each one must match a customer tier name in your Linear workspace, or `deploy --apply` refuses before any write |
 | `Status` | `status` | Raw value |
 | `HubSpot ID` | `hubspot_id` | First run of four or more digits in the value |
 | `Annual Revenue`, `Industry`, `Slack Channel`, `Parent Company` | `extra` | Raw value. `Annual Revenue` is the company's revenue and is never used as `arr`. |
@@ -132,6 +136,41 @@ bulleted    Robin - Primary technical lead (robin@acmerobotics.example.test)
 This page parses to: domains `["acmerobotics.example.test"]`, arr 250000.0, deployment
 `hybrid`, tier `Tier 1`, status `Active customer`, hubspot_id `48201937465`, contact
 `robin@acmerobotics.example.test`.
+
+## What `ingest` writes: the dataset record
+
+`ingest` merges the pages into one record per company and writes it to
+`<data_dir>/datasets/notion/<slug>.yaml`. The slug is the first label of the record's
+first domain (`acme-robotics.example.test` gives `acme-robotics`), else a slug of the
+name, with `-2`, `-3` appended on a clash (`slug_for` in
+`src/customer_registry_sync/writers.py`). The file is a `CustomerRecord`
+(`src/customer_registry_sync/schema.py`). A sample that loads is
+[`examples/dataset-record.example.yaml`](../examples/dataset-record.example.yaml). The files are generated; do not edit them
+by hand.
+
+| Field | Type | Where it comes from |
+|---|---|---|
+| `canonical_name` | string, **required** | The page title (the `Account` cell for a partner-table row) |
+| `domains` | list of strings, default empty | `Domain` label, unioned across the pages of one company |
+| `buckets` | list of strings, default empty | The bucket page each source page sat under |
+| `classification` | `real`, `prospect`, `churned`, `partner`, `internal` or null | The bucket (highest rank when a company sits in several), then `classification-overrides.yaml` |
+| `deployment` | `saas`, `on-prem`, `hybrid` or null | `Deployment` label; a curated `self-managed-customers.yaml` entry wins |
+| `arr` | number or null | `ARR` label only |
+| `tier` | string or null | `Tier` label, text before the first `\|` |
+| `status` | string or null | `Status` label, raw |
+| `owner` | string or null | Optional. No page label fills it today, so `ingest` leaves it null |
+| `contact` | string or null | First usable line in the contacts section |
+| `prod_org_id` | string or null | Optional. No page label fills it today, so `ingest` leaves it null; the schema, the merge and `registry.csv` carry it if a source sets it |
+| `hubspot_id` | string or null | Optional. `HubSpot ID` label: the first run of four or more digits |
+| `linear_customer_id` | string or null | Null in the `notion` dataset; set on `linear-found` stubs |
+| `sources` | list of strings, default empty | `notion:<bucket>` for each page, plus `self-managed-customers.yaml` when a curated entry contributed |
+| `notes` | string or null | The `notes` of a curated `self-managed-customers.yaml` entry, plus an `override: classification=...` line when `classification-overrides.yaml` applied; joined with `; ` |
+
+Every key except `canonical_name` may be omitted. The loader rejects an unknown key, a
+`deployment` outside the three values, and a `classification` outside the five
+(`CustomerRecord.from_dict` and `__post_init__`). `hubspot_id` and `prod_org_id` are
+identifiers a CRM sync might put on a page; the tool never calls the CRM and reads no
+field of it except the page's own `HubSpot ID` line.
 
 ## Test fixtures
 

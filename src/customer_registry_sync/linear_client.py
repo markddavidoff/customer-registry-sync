@@ -138,16 +138,23 @@ class LinearClient:
 
     # ---- writes ----
     @staticmethod
-    def _input(fields: dict[str, Any]) -> dict[str, Any]:
+    def _input(fields: dict[str, Any], *, retire: bool = False) -> dict[str, Any]:
+        """Map python field names to Linear input keys.
+
+        Refuses a null or empty-list value unless ``retire`` is set, so a sync
+        can never erase a value in Linear by accident.
+        """
         key = {"status_id": "statusId", "tier_id": "tierId", "external_ids": "externalIds"}
         out: dict[str, Any] = {}
         for k, v in fields.items():
-            if v is None and k in ("tier_id",):
-                continue  # don't send a null tier
+            if (v is None or v == []) and not retire:
+                raise LinearError(f"refusing to send empty {k} without retire")
             out[key.get(k, k)] = v
         return out
 
     def create_customer(self, **fields: Any) -> LiveCustomer:
+        if "retire" in fields:
+            raise TypeError("create_customer() takes no retire: a create never clears a value")
         q = (
             "mutation($i: CustomerCreateInput!){ customerCreate(input: $i){ "
             "success customer { %s } } }" % _CUSTOMER_FIELDS
@@ -155,12 +162,14 @@ class LinearClient:
         d = self._data(q, {"i": self._input(fields)})
         return parse_customer_node(d["customerCreate"]["customer"])
 
-    def update_customer(self, customer_id: str, **fields: Any) -> LiveCustomer:
+    def update_customer(
+        self, customer_id: str, *, retire: bool = False, **fields: Any
+    ) -> LiveCustomer:
         q = (
             "mutation($id: String!, $input: CustomerUpdateInput!){ "
             "customerUpdate(id: $id, input: $input){ success customer { %s } } }" % _CUSTOMER_FIELDS
         )
-        d = self._data(q, {"id": customer_id, "input": self._input(fields)})
+        d = self._data(q, {"id": customer_id, "input": self._input(fields, retire=retire)})
         return parse_customer_node(d["customerUpdate"]["customer"])
 
     def delete_customer(self, customer_id: str) -> bool:
