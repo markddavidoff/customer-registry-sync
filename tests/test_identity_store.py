@@ -25,17 +25,15 @@ def write(tmp_path: Path, text: str) -> Path:
 def test_missing_file_starts_with_the_header(tmp_path):
     store = IdentityStore(tmp_path / IDENTITIES_FILE)
     assert store.table.entries == {}
-    assert store.save() is False                       # nothing added: nothing written
+    assert store.save() is False  # nothing added: nothing written
     assert not (tmp_path / IDENTITIES_FILE).exists()
-    store.add_identity("acme", names=["Acme"], domains=["acme.com"],
-                       sources={"notion": "acme"})
+    store.add_identity("acme", names=["Acme"], domains=["acme.com"], sources={"notion": "acme"})
     assert store.save() is True
     text = (tmp_path / IDENTITIES_FILE).read_text()
     assert text.startswith(IDENTITIES_HEADER)
     assert text.startswith("# One entry per company.")
     assert text == (
-        IDENTITIES_HEADER
-        + "acme:\n"
+        IDENTITIES_HEADER + "acme:\n"
         "  names: [Acme]\n"
         "  domains: [acme.com]\n"
         "  sources:\n"
@@ -45,10 +43,13 @@ def test_missing_file_starts_with_the_header(tmp_path):
 
 
 def test_add_identity_takes_next_suffix_on_collision(tmp_path):
-    p = write(tmp_path, """
+    p = write(
+        tmp_path,
+        """
         acme:
           names: [Acme]
-    """)
+    """,
+    )
     store = IdentityStore(p)
     assert store.add_identity("acme", names=["Acme Two"], domains=[], sources={}) == "acme-2"
     assert store.add_identity("acme", names=["Acme Three"], domains=[], sources={}) == "acme-3"
@@ -72,8 +73,12 @@ def test_add_values_appends_missing_only_and_keeps_hand_edit(tmp_path):
     p = tmp_path / IDENTITIES_FILE
     p.write_text(before)
     store = IdentityStore(p)
-    store.add_values("acme", names=["ACME", "Acme Labs"], domains=["ACME.com", "new.com"],
-                     sources={"notion": "acme", "linear": "lin-1"})
+    store.add_values(
+        "acme",
+        names=["ACME", "Acme Labs"],
+        domains=["ACME.com", "new.com"],
+        sources={"notion": "acme", "linear": "lin-1"},
+    )
     assert store.reports == []
     assert store.save() is True
     after = p.read_text()
@@ -99,12 +104,15 @@ def test_add_values_appends_missing_only_and_keeps_hand_edit(tmp_path):
 
 
 def test_add_values_creates_missing_keys_and_extends_flow_lists(tmp_path):
-    p = write(tmp_path, """
+    p = write(
+        tmp_path,
+        """
         acme: {names: [Acme]}
         beta:
           names: [Beta]
           domains: [beta.io]
-    """)
+    """,
+    )
     store = IdentityStore(p)
     store.add_values("acme", domains=["acme.com"], sources={"linear": "lin-1"})
     store.add_values("beta", names=["Beta Co"])
@@ -117,14 +125,17 @@ def test_add_values_creates_missing_keys_and_extends_flow_lists(tmp_path):
 
 
 def test_never_appends_value_held_by_another_identity(tmp_path):
-    p = write(tmp_path, """
+    p = write(
+        tmp_path,
+        """
         acme:
           names: [Acme]
           domains: [acme.com]
         beta:
           names: [Beta Co]
           domains: [beta.io]
-    """)
+    """,
+    )
     original = p.read_text()
     store = IdentityStore(p)
     store.add_values("acme", names=["beta co."], domains=["BETA.io"])
@@ -138,11 +149,14 @@ def test_never_appends_value_held_by_another_identity(tmp_path):
 
 
 def test_source_value_never_overwritten(tmp_path):
-    p = write(tmp_path, """
+    p = write(
+        tmp_path,
+        """
         acme:
           sources:
             linear: lin-old
-    """)
+    """,
+    )
     original = p.read_text()
     store = IdentityStore(p)
     store.add_values("acme", sources={"linear": "lin-new"})
@@ -155,7 +169,9 @@ def test_source_value_never_overwritten(tmp_path):
 
 
 def test_comments_and_order_survive_a_save(tmp_path):
-    p = write(tmp_path, """
+    p = write(
+        tmp_path,
+        """
         # Curated by hand: keep the order.
         zeta:
           names: [Zeta]
@@ -167,7 +183,8 @@ def test_comments_and_order_survive_a_save(tmp_path):
         # trailing note about beta
         beta:
           names: [Beta]
-    """)
+    """,
+    )
     store = IdentityStore(p)
     store.add_values("acme", domains=["acme.io"])
     store.add_identity("gamma", names=["Gamma"], domains=[], sources={})
@@ -182,15 +199,18 @@ def test_comments_and_order_survive_a_save(tmp_path):
 
 
 def test_save_without_changes_writes_nothing(tmp_path):
-    p = write(tmp_path, """
+    p = write(
+        tmp_path,
+        """
         acme:
           names: [Acme]
           domains: [acme.com]
-    """)
+    """,
+    )
     os.utime(p, (1_000_000_000, 1_000_000_000))
     before = p.stat().st_mtime_ns
     store = IdentityStore(p)
-    store.add_values("acme", names=["acme"], domains=["ACME.COM"])   # already present
+    store.add_values("acme", names=["acme"], domains=["ACME.COM"])  # already present
     assert store.save() is False
     assert p.stat().st_mtime_ns == before
 
@@ -212,14 +232,17 @@ def test_comment_only_file_keeps_its_comments(tmp_path):
 
 
 def test_duplicate_canonical_id_is_rejected(tmp_path):
-    p = write(tmp_path, """
+    p = write(
+        tmp_path,
+        """
         acme:
           names: [Acme]
         beta:
           names: [Beta]
         acme:
           domains: [acme.com]
-    """)
+    """,
+    )
     with pytest.raises(ValueError, match="duplicate key 'acme'"):
         IdentityStore(p)
     with pytest.raises(ValueError, match="duplicate key 'acme'"):
@@ -227,10 +250,13 @@ def test_duplicate_canonical_id_is_rejected(tmp_path):
 
 
 def test_malformed_file_is_a_value_error(tmp_path):
-    p = write(tmp_path, """
+    p = write(
+        tmp_path,
+        """
         acme:
           aliases: [ACME]
-    """)
+    """,
+    )
     with pytest.raises(ValueError, match="aliases"):
         IdentityStore(p)
     p.write_text("acme: [unclosed\n")
@@ -268,17 +294,18 @@ def test_identity_sources_use_notion_key(tmp_path):
 
 def test_hand_quoted_values_survive_append(tmp_path):
     p = tmp_path / IDENTITIES_FILE
-    p.write_text(textwrap.dedent("""\
+    p.write_text(
+        textwrap.dedent("""\
         acme:
           names: ["ACME, Inc.", 'Acme: Two', Plain]
           domains:
             - a.com
-    """))
+    """)
+    )
     store = IdentityStore(p)
     store.add_values("acme", names=["Fresh"], domains=["c.com"])
     assert store.save() is True
     text = p.read_text()
-    assert 'names: ["ACME, Inc.", \'Acme: Two\', Plain, Fresh]' in text
+    assert "names: [\"ACME, Inc.\", 'Acme: Two', Plain, Fresh]" in text
     assert "- c.com" in text
-    assert load_identities(p).entries["acme"].names == [
-        "ACME, Inc.", "Acme: Two", "Plain", "Fresh"]
+    assert load_identities(p).entries["acme"].names == ["ACME, Inc.", "Acme: Two", "Plain", "Fresh"]

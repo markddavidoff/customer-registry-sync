@@ -59,7 +59,9 @@ def test_errors_unlisted_dir_missing_dir_duplicate_and_empty(tmp_path):
     (tmp_path / DATASETS_FILE).write_text(
         "datasets: [notion, intercom]\nlinear_status_classification:\n  Active: gold\n"
     )
-    assert datasets_errors(tmp_path) == ["datasets.yaml: status Active maps to invalid classification gold"]
+    assert datasets_errors(tmp_path) == [
+        "datasets.yaml: status Active maps to invalid classification gold"
+    ]
 
 
 def test_load_datasets_priority_order(tmp_path):
@@ -73,7 +75,10 @@ def test_load_datasets_priority_order(tmp_path):
     # the config's order, not the alphabet or the directory listing, decides
     loaded = load_datasets(tmp_path, load_datasets_config(tmp_path))
     assert [(d.dataset, d.source_id) for d in loaded] == [
-        (LINEAR_FOUND, "aaa"), (LINEAR_FOUND, "zed"), (NOTION, "acme"), (NOTION, "beta"),
+        (LINEAR_FOUND, "aaa"),
+        (LINEAR_FOUND, "zed"),
+        (NOTION, "acme"),
+        (NOTION, "beta"),
     ]
 
     (tmp_path / DATASETS_FILE).write_text("datasets: [notion, linear-found]\n")
@@ -94,7 +99,8 @@ def test_no_old_dataset_path_remains():
         str(path)
         for root in roots
         for path in root.rglob("*")
-        if path.is_file() and path.suffix in {".py", ".yml", ".yaml"}
+        if path.is_file()
+        and path.suffix in {".py", ".yml", ".yaml"}
         and any(needle in path.read_text() for needle in (old_dir, old_join))
     ]
     assert offenders == []

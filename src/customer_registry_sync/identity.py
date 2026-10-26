@@ -120,15 +120,16 @@ def load_text(text: str, name: str, *, round_trip: bool = False) -> Any:
     without a word. Any parse failure is a `ValueError` naming the file."""
     yml = YAML(typ="rt" if round_trip else "safe", pure=True)
     if round_trip:
-        yml.preserve_quotes = True # keep hand-written quote styles through a save
+        yml.preserve_quotes = True  # keep hand-written quote styles through a save
     try:
         return yml.load(text)
     except DuplicateKeyError as e:
         m = re.search(r'found duplicate key "([^"]*)"', str(e))
         key = m.group(1) if m else "?"
         line = f" (line {e.problem_mark.line + 1})" if e.problem_mark else ""
-        raise ValueError(f"{name}: duplicate key {key!r}{line}; "
-                         "each canonical id may appear once") from e
+        raise ValueError(
+            f"{name}: duplicate key {key!r}{line}; each canonical id may appear once"
+        ) from e
     except YAMLError as e:
         raise ValueError(f"{name}: not valid YAML: {e}") from e
 
@@ -158,21 +159,33 @@ def keys_for_record(rec: CustomerRecord, *, dataset: str, source_id: str) -> Ite
     if dataset == "notion":
         return ItemKeys(label=label, notion=source_id, domains=domains, names=names)
     if dataset == "linear-found":
-        return ItemKeys(label=label, ids=(source_id,), linear_id=rec.linear_customer_id,
-                        domains=domains, names=names)
+        return ItemKeys(
+            label=label,
+            ids=(source_id,),
+            linear_id=rec.linear_customer_id,
+            domains=domains,
+            names=names,
+        )
     raise ValueError(f"unknown dataset {dataset!r}")
 
 
 def keys_for_live(lv: LiveCustomer) -> ItemKeys:
-    return ItemKeys(label=lv.name, ids=tuple(lv.external_ids), linear_id=lv.id,
-                    domains=tuple(lv.domains), names=(lv.name,))
+    return ItemKeys(
+        label=lv.name,
+        ids=tuple(lv.external_ids),
+        linear_id=lv.id,
+        domains=tuple(lv.domains),
+        names=(lv.name,),
+    )
 
 
 def keys_for_row(row: LinearCustomer) -> ItemKeys:
     return ItemKeys(
-        label=row.name, ids=tuple(row.external_ids),
+        label=row.name,
+        ids=tuple(row.external_ids),
         linear_id=row.linear_synced.linear_id if row.linear_synced else None,
-        domains=tuple(row.domains), names=(row.name,),
+        domains=tuple(row.domains),
+        names=(row.name,),
     )
 
 
@@ -194,18 +207,27 @@ def _hits(item: ItemKeys, table: IdentityTable) -> list[Hit]:
             out.append(Hit(xid, "source id", xid))
     for src, value in ((SOURCE_NOTION, item.notion), (SOURCE_LINEAR, item.linear_id)):
         if value:
-            out.extend(Hit(i.canonical_id, "source id", value)
-                       for i in table.entries.values() if i.sources.get(src) == value)
+            out.extend(
+                Hit(i.canonical_id, "source id", value)
+                for i in table.entries.values()
+                if i.sources.get(src) == value
+            )
     for d in item.domains:
         dl = d.lower()
-        out.extend(Hit(i.canonical_id, "domain", d)
-                   for i in table.entries.values() if dl in {x.lower() for x in i.domains})
+        out.extend(
+            Hit(i.canonical_id, "domain", d)
+            for i in table.entries.values()
+            if dl in {x.lower() for x in i.domains}
+        )
     for n in item.names:
         nn = norm_name(n)
         if not nn:
             continue
-        out.extend(Hit(i.canonical_id, "name", n)
-                   for i in table.entries.values() if nn in {norm_name(x) for x in i.names})
+        out.extend(
+            Hit(i.canonical_id, "name", n)
+            for i in table.entries.values()
+            if nn in {norm_name(x) for x in i.names}
+        )
     return out
 
 
@@ -232,8 +254,10 @@ def conflict(item: ItemKeys, table: IdentityTable) -> str | None:
     if len(hits) < 2:
         return None
     a, b = hits[0], hits[1]
-    return (f"{item.label} resolves to two identities: "
-            f"{a.canonical_id} ({a.key} '{a.value}') and {b.canonical_id} ({b.key} '{b.value}')")
+    return (
+        f"{item.label} resolves to two identities: "
+        f"{a.canonical_id} ({a.key} '{a.value}') and {b.canonical_id} ({b.key} '{b.value}')"
+    )
 
 
 def _dupes(what: str, pairs: list[tuple[str, str, str]]) -> list[str]:
@@ -245,19 +269,25 @@ def _dupes(what: str, pairs: list[tuple[str, str, str]]) -> list[str]:
         ids = owners.setdefault(k, [])
         if cid not in ids:
             ids.append(cid)
-    return [f"{what} '{shown[k]}' is on two identities: {', '.join(ids)}"
-            for k, ids in owners.items() if len(ids) > 1]
+    return [
+        f"{what} '{shown[k]}' is on two identities: {', '.join(ids)}"
+        for k, ids in owners.items()
+        if len(ids) > 1
+    ]
 
 
 def table_errors(table: IdentityTable) -> list[str]:
     """A domain, name or source id listed on two identities."""
     ents = list(table.entries.values())
     errors = _dupes("domain", [(d.lower(), d, i.canonical_id) for i in ents for d in i.domains])
-    errors += _dupes("name", [(norm_name(n), n, i.canonical_id)
-                              for i in ents for n in i.names if norm_name(n)])
+    errors += _dupes(
+        "name", [(norm_name(n), n, i.canonical_id) for i in ents for n in i.names if norm_name(n)]
+    )
     for src in SOURCE_KEYS:
-        errors += _dupes(f"source {src}", [(i.sources[src], i.sources[src], i.canonical_id)
-                                           for i in ents if src in i.sources])
+        errors += _dupes(
+            f"source {src}",
+            [(i.sources[src], i.sources[src], i.canonical_id) for i in ents if src in i.sources],
+        )
     return errors
 
 
@@ -287,7 +317,9 @@ def with_implicit(table: IdentityTable, rows: list[LinearCustomer]) -> IdentityT
         cid = _implicit_id(row, out.entries)
         sources = {SOURCE_LINEAR: row.linear_synced.linear_id} if row.linear_synced else {}
         out.entries[cid] = Identity(
-            canonical_id=cid, names=[strip_status_suffix(row.name)],
-            domains=list(row.domains), sources=sources,
+            canonical_id=cid,
+            names=[strip_status_suffix(row.name)],
+            domains=list(row.domains),
+            sources=sources,
         )
     return out

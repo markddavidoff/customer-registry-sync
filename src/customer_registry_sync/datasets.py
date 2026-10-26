@@ -26,13 +26,15 @@ DEFAULT_STATUS_TABLE = {"Active": "real", "Prospect": "prospect", "Churned": "ch
 @dataclass(frozen=True)
 class DatasetConfig:
     names: list[str] = field(default_factory=lambda: [NOTION])
-    status_classification: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_STATUS_TABLE))
+    status_classification: dict[str, str] = field(
+        default_factory=lambda: dict(DEFAULT_STATUS_TABLE)
+    )
 
 
 @dataclass(frozen=True)
 class DatasetRecord:
     dataset: str
-    source_id: str   # the file stem inside the dataset directory
+    source_id: str  # the file stem inside the dataset directory
     record: CustomerRecord
 
 

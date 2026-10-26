@@ -132,9 +132,7 @@ def build_linear_found(
     for e in entries:
         if e.dataset != NOTION:
             continue
-        hit = resolve(
-            keys_for_record(e.record, dataset=NOTION, source_id=e.source_id), store.table
-        )
+        hit = resolve(keys_for_record(e.record, dataset=NOTION, source_id=e.source_id), store.table)
         if hit is not None:
             with_record.add(hit.canonical_id)
 

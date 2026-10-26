@@ -168,9 +168,7 @@ def test_conflict_message_exact(tmp_path):
     )
     desired = merge_datasets(entries, IdentityTable(), PRIORITY).rows
     own = _node("lin_own", "Pied Piper", domains=["piedpiper.example.test"])
-    failures, reports = ignore_conflicts(
-        [own], ign, entries, desired, IdentityTable(), scope=None
-    )
+    failures, reports = ignore_conflicts([own], ign, entries, desired, IdentityTable(), scope=None)
     assert failures == [
         (
             "desired record 'Pied Piper Consulting' shares domain 'piedpiper.example.test' with "
@@ -214,7 +212,9 @@ def test_ignoring_a_stubbed_customer_is_not_a_conflict(tmp_path):
     entries = _entries((LINEAR_FOUND, "umbrella", stub))
     desired = merge_datasets(entries, table, PRIORITY).rows
     assert [d.linear_owned for d in desired] == [True]
-    umb = _node("lin_umb", "Umbrella Analytics", domains=["umbrella.example.test"], xids=["umbrella"])
+    umb = _node(
+        "lin_umb", "Umbrella Analytics", domains=["umbrella.example.test"], xids=["umbrella"]
+    )
     _, ignored = partition_live([umb], ign, scope=None)
     failures, reports = ignore_conflicts(ignored, ign, entries, desired, table, scope=None)
     assert failures == []

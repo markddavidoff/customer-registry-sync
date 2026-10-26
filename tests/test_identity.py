@@ -27,17 +27,27 @@ from customer_registry_sync.schema import CustomerRecord
 
 
 def ds(**kw) -> CustomerRecord:
-    base = {"canonical_name": "Acmeco", "domains": ["acmeco.example.test"], "classification": "real",
-            "arr": 250000.0, "tier": "Tier 1"}
+    base = {
+        "canonical_name": "Acmeco",
+        "domains": ["acmeco.example.test"],
+        "classification": "real",
+        "arr": 250000.0,
+        "tier": "Tier 1",
+    }
     base.update(kw)
     return CustomerRecord(**base)
 
 
 def node(**kw) -> dict:
     base = {
-        "id": "lin-1", "name": "Acmeco", "domains": ["acmeco.example.test"], "revenue": 300000,
-        "externalIds": [], "updatedAt": "2026-10-07T00:00:00.000Z",
-        "status": {"id": "s", "name": "Active"}, "tier": None,
+        "id": "lin-1",
+        "name": "Acmeco",
+        "domains": ["acmeco.example.test"],
+        "revenue": 300000,
+        "externalIds": [],
+        "updatedAt": "2026-10-07T00:00:00.000Z",
+        "status": {"id": "s", "name": "Active"},
+        "tier": None,
     }
     base.update(kw)
     return base
@@ -47,8 +57,12 @@ def table(tmp_path: Path, **identities: dict) -> IdentityTable:
     """A table built the way ingest builds one: through `IdentityStore.add_identity`."""
     store = IdentityStore(tmp_path / IDENTITIES_FILE)
     for cid, spec in identities.items():
-        got = store.add_identity(cid, names=spec.get("names", []), domains=spec.get("domains", []),
-                                 sources=spec.get("sources", {}))
+        got = store.add_identity(
+            cid,
+            names=spec.get("names", []),
+            domains=spec.get("domains", []),
+            sources=spec.get("sources", {}),
+        )
         assert got == cid
     return store.table
 
@@ -66,11 +80,14 @@ def test_missing_file_is_an_empty_table(tmp_path):
 
 def test_unknown_field_raises_naming_the_key(tmp_path):
     with pytest.raises(ValueError, match="aliases"):
-        table_from_file(tmp_path, """
+        table_from_file(
+            tmp_path,
+            """
             acme:
               names: [Acme]
               aliases: [ACME]
-        """)
+        """,
+        )
 
 
 def test_file_order_is_kept(tmp_path):
@@ -84,19 +101,26 @@ def test_norm_name_strips_suffix_then_case_and_punctuation():
 
 def test_resolves_by_canonical_id(tmp_path):
     t = table(tmp_path, acmeco={"names": ["Something Else"]})
-    [row] = generate_linear([ds(domains=[])])   # external id = slug "acmeco"
+    [row] = generate_linear([ds(domains=[])])  # external id = slug "acmeco"
     hit = resolve(keys_for_row(row), t)
     assert hit is not None and (hit.canonical_id, hit.key, hit.value) == (
-        "acmeco", "source id", "acmeco")
+        "acmeco",
+        "source id",
+        "acmeco",
+    )
 
 
 def test_resolves_by_notion_slug(tmp_path):
     t = table(tmp_path, air={"sources": {"notion": "acmeco-2"}})
-    item = keys_for_record(ds(domains=[], canonical_name="Other"),
-                           dataset="notion", source_id="acmeco-2")
+    item = keys_for_record(
+        ds(domains=[], canonical_name="Other"), dataset="notion", source_id="acmeco-2"
+    )
     hit = resolve(item, t)
     assert hit is not None and (hit.canonical_id, hit.key, hit.value) == (
-        "air", "source id", "acmeco-2")
+        "air",
+        "source id",
+        "acmeco-2",
+    )
 
 
 def test_resolves_by_linear_id(tmp_path):
@@ -104,7 +128,10 @@ def test_resolves_by_linear_id(tmp_path):
     lv = parse_customer_node(node(name="Renamed", domains=[]))
     hit = resolve(keys_for_live(lv), t)
     assert hit is not None and (hit.canonical_id, hit.key, hit.value) == (
-        "air", "source id", "lin-1")
+        "air",
+        "source id",
+        "lin-1",
+    )
     # a linear-found record resolves by its recorded Linear id too
     rec = ds(canonical_name="Renamed", domains=[], linear_customer_id="lin-1")
     hit = resolve(keys_for_record(rec, dataset="linear-found", source_id="renamed"), t)
@@ -149,8 +176,9 @@ def test_conflict_names_both_ids_and_keys(tmp_path):
     hits = resolve_all(keys_for_live(lv), t)
     assert [(h.canonical_id, h.key) for h in hits] == [("a", "source id"), ("b", "domain")]
     msg = conflict(keys_for_live(lv), t)
-    assert msg == ("Acmeco resolves to two identities: a (source id 'a') "
-                   "and b (domain 'acmeco.example.test')")
+    assert msg == (
+        "Acmeco resolves to two identities: a (source id 'a') and b (domain 'acmeco.example.test')"
+    )
 
 
 def test_no_conflict_when_every_key_agrees(tmp_path):
@@ -171,10 +199,16 @@ def test_table_errors_duplicate_domain_name_and_source(tmp_path):
     # the store refuses nothing at add time; `table_errors` is what flags the clash
     t = table(
         tmp_path,
-        a={"names": ["Acme Inc"], "domains": ["acme.com"],
-           "sources": {"notion": "acme", "linear": "lin-1"}},
-        b={"names": ["ACME, inc."], "domains": ["ACME.com"],
-           "sources": {"notion": "acme", "linear": "lin-1"}},
+        a={
+            "names": ["Acme Inc"],
+            "domains": ["acme.com"],
+            "sources": {"notion": "acme", "linear": "lin-1"},
+        },
+        b={
+            "names": ["ACME, inc."],
+            "domains": ["ACME.com"],
+            "sources": {"notion": "acme", "linear": "lin-1"},
+        },
         c={"names": ["Clean"]},
     )
     assert table_errors(t) == [
@@ -186,23 +220,26 @@ def test_table_errors_duplicate_domain_name_and_source(tmp_path):
 
 
 def test_table_errors_empty_for_a_clean_table(tmp_path):
-    t = table(tmp_path, a={"names": ["A"], "domains": ["a.com"]},
-              b={"names": ["B"], "domains": ["b.com"]})
+    t = table(
+        tmp_path, a={"names": ["A"], "domains": ["a.com"]}, b={"names": ["B"], "domains": ["b.com"]}
+    )
     assert table_errors(t) == []
 
 
 def test_with_implicit_adds_only_unresolved_rows(tmp_path):
     t = table(tmp_path, acmeco={"names": ["Acmeco"]})
-    rows = generate_linear([
-        ds(),                                                     # resolves: kept
-        ds(canonical_name="Beta Co", domains=["beta.io"]),        # unresolved
-        ds(canonical_name="Gamma", domains=[]),                   # unresolved, no domain
-    ])
+    rows = generate_linear(
+        [
+            ds(),  # resolves: kept
+            ds(canonical_name="Beta Co", domains=["beta.io"]),  # unresolved
+            ds(canonical_name="Gamma", domains=[]),  # unresolved, no domain
+        ]
+    )
     out = with_implicit(t, rows)
     assert list(out.entries) == ["acmeco", "beta", "gamma"]
     assert out.entries["beta"].names == ["Beta Co"]
     assert out.entries["beta"].domains == ["beta.io"]
     assert out.entries["gamma"].names == ["Gamma"]
-    assert list(t.entries) == ["acmeco"]                          # input untouched
+    assert list(t.entries) == ["acmeco"]  # input untouched
     for row in rows:
         assert resolve(keys_for_row(row), out) is not None

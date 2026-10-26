@@ -138,9 +138,7 @@ def write_dataset(
     else:
         if len(stems) != len(records):
             raise ValueError(f"stems has {len(stems)} entries for {len(records)} records")
-        files = sorted(
-            zip(stems, records, strict=True), key=lambda p: p[1].canonical_name.lower()
-        )
+        files = sorted(zip(stems, records, strict=True), key=lambda p: p[1].canonical_name.lower())
 
     # remove stale generated yamls (never touches curated inputs outside the dataset directory)
     wanted = {f"{stem}.yaml" for stem, _ in files}

@@ -39,7 +39,7 @@ IDENTITIES_HEADER = (
 def _yaml() -> YAML:
     yml = YAML(typ="rt")
     yml.indent(mapping=2, sequence=4, offset=2)
-    yml.width = 4096          # never wrap a long name or domain list
+    yml.width = 4096  # never wrap a long name or domain list
     return yml
 
 
@@ -56,7 +56,7 @@ class IdentityStore:
         self.path = path
         self.reports: list[str] = []
         self._dirty = False
-        self._prefix = ""         # comment-only file content, kept ahead of the first entry
+        self._prefix = ""  # comment-only file content, kept ahead of the first entry
         self._data: CommentedMap
         if path.exists():
             text = path.read_text()
@@ -87,8 +87,9 @@ class IdentityStore:
 
     # --- appends ---------------------------------------------------------------
 
-    def add_identity(self, base_id: str, *, names: list[str], domains: list[str],
-                     sources: dict[str, str]) -> str:
+    def add_identity(
+        self, base_id: str, *, names: list[str], domains: list[str], sources: dict[str, str]
+    ) -> str:
         """Append a new identity and return its id: `base_id`, else `base_id-2`, `-3`, ..."""
         if not base_id:
             raise ValueError("identities: canonical id must be a non-empty string")
@@ -109,13 +110,19 @@ class IdentityStore:
             entry = _empty_map()
         self._data[cid] = entry
         self.table.entries[cid] = Identity(
-            canonical_id=cid, names=list(names), domains=list(domains), sources=dict(sources))
+            canonical_id=cid, names=list(names), domains=list(domains), sources=dict(sources)
+        )
         self._dirty = True
         return cid
 
-    def add_values(self, canonical_id: str, *, names: list[str] = (),   # type: ignore[assignment]
-                   domains: list[str] = (),                              # type: ignore[assignment]
-                   sources: dict[str, str] | None = None) -> None:
+    def add_values(
+        self,
+        canonical_id: str,
+        *,
+        names: list[str] = (),  # type: ignore[assignment]
+        domains: list[str] = (),  # type: ignore[assignment]
+        sources: dict[str, str] | None = None,
+    ) -> None:
         """Append the values the identity lacks. Never changes or removes one."""
         ident = self.table.entries.get(canonical_id)
         if ident is None:
@@ -137,11 +144,18 @@ class IdentityStore:
                 self._dirty = True
             elif old != value:
                 self.reports.append(
-                    f"identities: '{canonical_id}' keeps source {key}='{old}'; "
-                    f"ingest saw '{value}'")
+                    f"identities: '{canonical_id}' keeps source {key}='{old}'; ingest saw '{value}'"
+                )
 
-    def _append(self, entry: CommentedMap, ident: Identity, key: str, kind: str,
-                values: list[str], norm: Any) -> None:
+    def _append(
+        self,
+        entry: CommentedMap,
+        ident: Identity,
+        key: str,
+        kind: str,
+        values: list[str],
+        norm: Any,
+    ) -> None:
         have: list[str] = getattr(ident, key)
         for value in values:
             if norm(value) == "" or norm(value) in {norm(h) for h in have}:
@@ -150,7 +164,8 @@ class IdentityStore:
             if holder is not None:
                 self.reports.append(
                     f"identities: not adding {kind} '{value}' to '{ident.canonical_id}': "
-                    f"already on '{holder}'")
+                    f"already on '{holder}'"
+                )
                 continue
             if key not in entry or entry[key] is None:
                 entry[key] = _flow_list([])
