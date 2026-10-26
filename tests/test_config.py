@@ -50,6 +50,35 @@ def test_data_dir_defaults_to_customers(tmp_path):
     assert cfg.data_dir == tmp_path / "customers"
 
 
+def test_paths_resolve_under_data_dir(tmp_path, monkeypatch):
+    """A relative data_dir anchors to the config file, not to the cwd the command runs from."""
+    from customer_registry_sync.datasets import NOTION, dataset_dir
+    from customer_registry_sync.identity import IDENTITIES_FILE
+    from customer_registry_sync.identity_store import IdentityStore
+    from customer_registry_sync.schema import CustomerRecord
+    from customer_registry_sync.writers import write_dataset
+
+    cfg_dir = tmp_path / "repo"
+    cfg_dir.mkdir()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    cfg = load_config(_write(cfg_dir / "registry-sync.yaml", _valid()))
+    monkeypatch.chdir(elsewhere)
+
+    data_dir = cfg_dir / "registry-data"
+    assert cfg.data_dir == data_dir
+    assert dataset_dir(cfg.data_dir, NOTION) == data_dir / "datasets" / "notion"
+    assert (cfg.data_dir / IDENTITIES_FILE).parent == data_dir
+
+    write_dataset([CustomerRecord(canonical_name="Acme", classification="real")], cfg.data_dir)
+    store = IdentityStore(cfg.data_dir / IDENTITIES_FILE)
+    store.add_identity("acme", names=["Acme"], domains=[], sources={})
+    assert store.save() is True
+    assert (data_dir / "datasets" / "notion" / "acme.yaml").is_file()
+    assert (data_dir / IDENTITIES_FILE).is_file()
+    assert list(elsewhere.iterdir()) == []  # nothing leaked into the cwd
+
+
 def test_absolute_data_dir_is_kept(tmp_path):
     data = _valid()
     data["data_dir"] = str(tmp_path / "elsewhere")

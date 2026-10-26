@@ -10,7 +10,7 @@ Phase B:  ``generate``      — Layer-1 dataset → Layer-2 ``<data_dir>/linear/
                               DRY-RUN by default; ``--apply`` performs live writes.
 Phase C:  ``check``         — read-only gate: drift (state vs live) + plan; exit 0/2/3.
 
-Layer 1 is the dataset (``<data_dir>/dataset/``); Layer 2 is the Linear projection:
+Layer 1 is the datasets (``<data_dir>/datasets/<name>/``); Layer 2 is the Linear projection:
 desired customers (``linear/``) and the state mirror of live Linear (``linear-state/``).
 
 Secrets come from the environment: ``NOTION_API_TOKEN`` (ingest), ``LINEAR_API_TOKEN`` (Phase B).
@@ -27,6 +27,7 @@ from pathlib import Path
 from .assemble import assemble_dataset
 from .check import EXIT_OPERROR, run_check
 from .config import DEFAULT_CONFIG_NAME, ConfigError, load_config
+from .datasets import NOTION, dataset_dir
 from .deploy import apply_deploy, plan_deploy
 from .generate import generate_linear
 from .inbound_sync import reconcile_inbound
@@ -79,10 +80,10 @@ def _cmd_ingest(args) -> int:
     records = assemble_dataset(raw, self_managed, overrides)
     print(_dataset_summary(records))
     if args.dry_run:
-        print(f"DRY RUN — would write {len(records)} dataset files + CSVs under {out_dir}/.")
+        print(f"DRY RUN — would write {len(records)} dataset files under {out_dir}/datasets/{NOTION}/.")
         return 0
     write_dataset(records, out_dir)
-    print(f"wrote {out_dir}/dataset/*.yaml + registry.csv + real-customers.csv")
+    print(f"wrote {dataset_dir(out_dir, NOTION)}/*.yaml")
     return 0
 
 
@@ -91,7 +92,7 @@ def _cmd_generate(args) -> int:
     dataset = load_dataset(out_dir)
     if not dataset:
         print(
-            f"WARNING: no dataset records under {out_dir / 'dataset'} (missing or empty); "
+            f"WARNING: no dataset records under {dataset_dir(out_dir, NOTION)} (missing or empty); "
             "run `ingest` first.",
             file=sys.stderr,
         )

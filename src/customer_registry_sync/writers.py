@@ -1,21 +1,28 @@
-"""Deterministic writers: one YAML per customer + two CSV rollups.
+"""Deterministic writers: one YAML per dataset record + two CSV rollups.
 
 Output is stable across re-runs (sorted records, fixed key order, no
 timestamps) so an unchanged upstream produces a zero-diff re-run. Only the
 generated artifacts are written — curated inputs (self-managed-customers.yaml,
-classification-overrides.yaml) are never touched.
+classification-overrides.yaml) are never touched. `write_dataset` (ingest)
+writes dataset YAML only; the CSVs come from `generate` via `write_csvs`.
 """
 
 from __future__ import annotations
 
 import csv
+import io
 import re
 from pathlib import Path
 
 import yaml
 
+from .datasets import NOTION, DatasetRecord, dataset_dir
 from .linear_schema import LinearCustomer
+from .manifest import MANIFEST
 from .schema import CustomerRecord
+
+REGISTRY_CSV = "registry.csv"
+REAL_CUSTOMERS_CSV = "real-customers.csv"
 
 REAL_CLASSIFICATIONS = frozenset({"real", "partner"})
 
@@ -35,6 +42,7 @@ CSV_COLUMNS = [
     "linear_customer_id",
     "sources",
     "notes",
+    "dataset",
 ]
 
 
@@ -62,8 +70,9 @@ def _unique_slugs(records: list[CustomerRecord]) -> dict[int, str]:
     return out
 
 
-def _csv_row(rec: CustomerRecord) -> dict[str, str]:
-    d = rec.to_dict()
+def _csv_row(entry: DatasetRecord) -> dict[str, str]:
+    d = entry.record.to_dict()
+    d["dataset"] = entry.dataset
     row: dict[str, str] = {}
     for col in CSV_COLUMNS:
         val = d.get(col)
@@ -76,38 +85,74 @@ def _csv_row(rec: CustomerRecord) -> dict[str, str]:
     return row
 
 
-def _write_csv(path: Path, records: list[CustomerRecord]) -> None:
-    with path.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
-        w.writeheader()
-        for rec in records:
-            w.writerow(_csv_row(rec))
+def csv_text(entries: list[DatasetRecord]) -> str:
+    """One CSV rollup of `entries`, sorted by lower-cased name; the exact file text."""
+    buf = io.StringIO(newline="")
+    w = csv.DictWriter(buf, fieldnames=CSV_COLUMNS)
+    w.writeheader()
+    for entry in sorted(entries, key=lambda e: e.record.canonical_name.lower()):
+        w.writerow(_csv_row(entry))
+    return buf.getvalue()
 
 
-def write_dataset(records: list[CustomerRecord], out_dir: str | Path) -> None:
+def real_entries(entries: list[DatasetRecord]) -> list[DatasetRecord]:
+    """The `real-customers.csv` subset: stubs included, by their Linear-status classification."""
+    return [e for e in entries if e.record.classification in REAL_CLASSIFICATIONS]
+
+
+def write_csvs(entries: list[DatasetRecord], out_dir: str | Path) -> None:
+    """`registry.csv` (every entry) and `real-customers.csv` (real + partner).
+
+    `generate` passes its merged winners; nothing else writes these files."""
     out = Path(out_dir)
-    dataset = out / "dataset"
-    dataset.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / REGISTRY_CSV).write_bytes(csv_text(entries).encode("utf-8"))
+    (out / REAL_CUSTOMERS_CSV).write_bytes(csv_text(real_entries(entries)).encode("utf-8"))
 
-    records = sorted(records, key=lambda r: r.canonical_name.lower())
-    slugs = _unique_slugs(records)
 
-    # remove stale generated yamls (never touches curated inputs outside dataset/)
-    wanted = {f"{slugs[id(r)]}.yaml" for r in records}
-    for existing in dataset.glob("*.yaml"):
-        if existing.name not in wanted:
+def dataset_files(records: list[CustomerRecord]) -> list[tuple[str, CustomerRecord]]:
+    """(file stem, record) in write order: sorted by name, slugs made unique."""
+    ordered = sorted(records, key=lambda r: r.canonical_name.lower())
+    slugs = _unique_slugs(ordered)
+    return [(slugs[id(r)], r) for r in ordered]
+
+
+def write_dataset(
+    records: list[CustomerRecord],
+    out_dir: str | Path,
+    *,
+    dataset: str = NOTION,
+    stems: list[str] | None = None,
+) -> None:
+    """Write one dataset's YAML files to ``<out_dir>/datasets/<dataset>/``.
+
+    ``stems`` (parallel to ``records``) names the files; the default is `dataset_files`.
+    The CSVs are not written here: they come from `generate`'s merged result (`write_csvs`).
+    """
+    out = Path(out_dir)
+    directory = dataset_dir(out, dataset)
+    directory.mkdir(parents=True, exist_ok=True)
+
+    if stems is None:
+        files = dataset_files(records)
+    else:
+        if len(stems) != len(records):
+            raise ValueError(f"stems has {len(stems)} entries for {len(records)} records")
+        files = sorted(
+            zip(stems, records, strict=True), key=lambda p: p[1].canonical_name.lower()
+        )
+
+    # remove stale generated yamls (never touches curated inputs outside the dataset directory)
+    wanted = {f"{stem}.yaml" for stem, _ in files}
+    for existing in directory.glob("*.yaml"):
+        if existing.name not in wanted and existing.name != MANIFEST:
             existing.unlink()
 
-    for rec in records:
-        path = dataset / f"{slugs[id(rec)]}.yaml"
+    for stem, rec in files:
         text = yaml.safe_dump(
             rec.to_dict(), sort_keys=False, default_flow_style=False, allow_unicode=True
         )
-        path.write_text(text)
-
-    _write_csv(out / "registry.csv", records)
-    real = [r for r in records if r.classification in REAL_CLASSIFICATIONS]
-    _write_csv(out / "real-customers.csv", real)
+        (directory / f"{stem}.yaml").write_text(text)
 
 
 # ---- Layer-1 dataset reader + Layer-2 desired/state read/write ----
@@ -116,11 +161,13 @@ DESIRED_SUBDIR = "linear"  # desired config (generate) — no linear_synced
 STATE_SUBDIR = "linear-state"  # mirror of live Linear (sync-inbound) — with linear_synced
 
 
-def load_dataset(customers_dir: str | Path) -> list[CustomerRecord]:
-    """Read the Layer-1 dataset (customers/dataset/*.yaml) back into records."""
-    ds = Path(customers_dir) / "dataset"
+def load_dataset(data_dir: str | Path, dataset: str = NOTION) -> list[CustomerRecord]:
+    """Read one dataset (<data_dir>/datasets/<name>/*.yaml) back into records."""
+    ds = dataset_dir(Path(data_dir), dataset)
     out: list[CustomerRecord] = []
     for path in sorted(ds.glob("*.yaml")):
+        if path.name == MANIFEST:
+            continue
         out.append(CustomerRecord.from_dict(yaml.safe_load(path.read_text())))
     return out
 
@@ -134,6 +181,8 @@ def _layer2_slug(rec: LinearCustomer) -> str:
 def _load_layer2_dir(path: Path) -> list[LinearCustomer]:
     out: list[LinearCustomer] = []
     for p in sorted(path.glob("*.yaml")):
+        if p.name == MANIFEST:
+            continue
         out.append(LinearCustomer.from_dict(yaml.safe_load(p.read_text())))
     return out
 
@@ -155,7 +204,7 @@ def _write_layer2_dir(records: list[LinearCustomer], path: Path, *, strip_synced
         slugs[id(rec)] = slug
         wanted.add(f"{slug}.yaml")
     for existing in path.glob("*.yaml"):
-        if existing.name not in wanted:
+        if existing.name not in wanted and existing.name != MANIFEST:
             existing.unlink()
     for rec in records:
         d = rec.to_dict()
@@ -165,19 +214,19 @@ def _write_layer2_dir(records: list[LinearCustomer], path: Path, *, strip_synced
         (path / f"{slugs[id(rec)]}.yaml").write_text(text)
 
 
-def load_desired(customers_dir: str | Path) -> list[LinearCustomer]:
-    """customers/linear/*.yaml — the desired config a PR changes."""
-    return _load_layer2_dir(Path(customers_dir) / DESIRED_SUBDIR)
+def load_desired(data_dir: str | Path) -> list[LinearCustomer]:
+    """<data_dir>/linear/*.yaml — the desired config a PR changes."""
+    return _load_layer2_dir(Path(data_dir) / DESIRED_SUBDIR)
 
 
-def write_desired(records: list[LinearCustomer], customers_dir: str | Path) -> None:
-    _write_layer2_dir(records, Path(customers_dir) / DESIRED_SUBDIR, strip_synced=True)
+def write_desired(records: list[LinearCustomer], data_dir: str | Path) -> None:
+    _write_layer2_dir(records, Path(data_dir) / DESIRED_SUBDIR, strip_synced=True)
 
 
-def load_state(customers_dir: str | Path) -> list[LinearCustomer]:
-    """customers/linear-state/*.yaml — the last-synced mirror of live Linear."""
-    return _load_layer2_dir(Path(customers_dir) / STATE_SUBDIR)
+def load_state(data_dir: str | Path) -> list[LinearCustomer]:
+    """<data_dir>/linear-state/*.yaml — the last-synced mirror of live Linear."""
+    return _load_layer2_dir(Path(data_dir) / STATE_SUBDIR)
 
 
-def write_state(records: list[LinearCustomer], customers_dir: str | Path) -> None:
-    _write_layer2_dir(records, Path(customers_dir) / STATE_SUBDIR, strip_synced=False)
+def write_state(records: list[LinearCustomer], data_dir: str | Path) -> None:
+    _write_layer2_dir(records, Path(data_dir) / STATE_SUBDIR, strip_synced=False)

@@ -127,3 +127,32 @@ def test_clean_dir_passes_guard(tmp_path):
     d = _dir_with_files(tmp_path)
     write_manifest(d, "generate")
     assert guard_overwrite(d, "generate", no_input=True) is True
+
+
+def test_writers_and_loaders_leave_the_manifest_alone(tmp_path):
+    from customer_registry_sync.datasets import NOTION, dataset_dir
+    from customer_registry_sync.generate import generate_linear
+    from customer_registry_sync.schema import CustomerRecord
+    from customer_registry_sync.writers import (
+        load_dataset,
+        load_desired,
+        write_dataset,
+        write_desired,
+    )
+
+    recs = [
+        CustomerRecord(
+            canonical_name="Acmeco", domains=["acmeco.example.test"], classification="real"
+        )
+    ]
+    write_dataset(recs, tmp_path)
+    write_manifest(dataset_dir(tmp_path, NOTION), "ingest")
+    write_dataset(recs, tmp_path)  # a rewrite must neither delete nor choke on the manifest
+    assert (dataset_dir(tmp_path, NOTION) / MANIFEST).exists()
+    assert [r.canonical_name for r in load_dataset(tmp_path)] == ["Acmeco"]
+
+    write_desired(generate_linear(recs), tmp_path)
+    write_manifest(tmp_path / "linear", "generate")
+    write_desired(generate_linear(recs), tmp_path)
+    assert (tmp_path / "linear" / MANIFEST).exists()
+    assert [r.name for r in load_desired(tmp_path)] == ["Acmeco [Active]"]

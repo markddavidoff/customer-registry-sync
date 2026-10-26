@@ -3,6 +3,7 @@ import inspect
 import pytest
 
 from customer_registry_sync import cli
+from customer_registry_sync.datasets import NOTION, dataset_dir
 from customer_registry_sync.generate import generate_linear, strip_status_suffix
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.writers import write_dataset
@@ -101,7 +102,7 @@ def test_generate_cli_warns_when_dataset_is_missing_or_empty(
     tmp_path, make_config, capsys, create_empty_dataset_dir
 ):
     if create_empty_dataset_dir:
-        (tmp_path / "dataset").mkdir()
+        dataset_dir(tmp_path, NOTION).mkdir(parents=True)
     cfg = make_config()
     assert cli.main(["--config", str(cfg), "generate", "--out-dir", str(tmp_path)]) == 0
     err = capsys.readouterr().err
