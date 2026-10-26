@@ -162,8 +162,6 @@ def _workflow() -> dict:
     return {
         "deploy_environment": "registry-deploy",
         "readonly_environment": "registry-readonly",
-        "app_id_secret": "REGISTRY_APP_ID",
-        "app_key_secret": "REGISTRY_APP_PRIVATE_KEY",
     }
 
 
@@ -174,19 +172,24 @@ def test_workflow_settings_load(tmp_path):
     assert cfg.workflow == WorkflowConfig(
         deploy_environment="registry-deploy",
         readonly_environment="registry-readonly",
-        app_id_secret="REGISTRY_APP_ID",
-        app_key_secret="REGISTRY_APP_PRIVATE_KEY",
     )
-    # The Linear token secret names default to the names the tool reads.
-    assert cfg.workflow.linear_token_secret == "LINEAR_API_TOKEN"
-    assert cfg.workflow.readonly_token_secret == "LINEAR_READONLY_TOKEN"
+
+
+def test_retired_secret_name_keys_are_ignored(tmp_path):
+    """Secrets are passed by the caller now; old secret-name keys neither fail nor count."""
+    data = _valid()
+    data["workflow"] = {**_workflow(), "app_id_secret": "OLD_NAME"}
+    cfg = load_config(_write(tmp_path / "registry-sync.yaml", data))
+    assert cfg.workflow == WorkflowConfig("registry-deploy", "registry-readonly")
+    with pytest.raises(ConfigError, match=r"unknown config key 'workflow\.app_id_secret'"):
+        config_value(cfg, "workflow.app_id_secret")
 
 
 def test_config_without_workflow_still_loads(tmp_path):
     cfg = load_config(_write(tmp_path / "registry-sync.yaml", _valid()))
     assert cfg.workflow is None
-    with pytest.raises(ConfigError, match=r"'workflow\.app_id_secret'"):
-        config_value(cfg, "workflow.app_id_secret")
+    with pytest.raises(ConfigError, match=r"missing required key 'workflow\.deploy_environment'"):
+        config_value(cfg, "workflow.deploy_environment")
 
 
 def test_partial_workflow_loads_and_names_the_missing_key(tmp_path):
@@ -215,7 +218,7 @@ def test_config_value_reads_top_level_and_defaults(tmp_path):
     cfg = load_config(_write(tmp_path / "registry-sync.yaml", data))
     assert config_value(cfg, "data_dir") == str(tmp_path / "registry-data")
     assert config_value(cfg, "hub_page_id") == "11111111-1111-4111-8111-111111111111"
-    assert config_value(cfg, "workflow.linear_token_secret") == "LINEAR_API_TOKEN"
+    assert config_value(cfg, "workflow.readonly_environment") == "registry-readonly"
     with pytest.raises(ConfigError, match=r"unknown config key 'workflow\.nope'"):
         config_value(cfg, "workflow.nope")
     with pytest.raises(ConfigError, match=r"unknown config key 'nope'"):
@@ -226,7 +229,7 @@ def test_cli_config_get(tmp_path, capsys):
     data = _valid()
     data["workflow"] = _workflow()
     path = _write(tmp_path / "registry-sync.yaml", data)
-    assert cli.main(["--config", str(path), "config-get", "workflow.app_key_secret"]) == 0
-    assert capsys.readouterr().out == "REGISTRY_APP_PRIVATE_KEY\n"
+    assert cli.main(["--config", str(path), "config-get", "workflow.deploy_environment"]) == 0
+    assert capsys.readouterr().out == "registry-deploy\n"
     assert cli.main(["--config", str(path), "config-get", "nope"]) == 2
     assert "nope" in capsys.readouterr().err

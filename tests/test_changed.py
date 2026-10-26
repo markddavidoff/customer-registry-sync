@@ -88,7 +88,17 @@ def test_deploy_inputs_are_repo_relative(repo):
         "registry/linear-ignore.yaml",
         "registry/datasets.yaml",
         "registry/linear-retire.yaml",
+        "registry-sync.yaml",
     ]
+
+
+def test_config_edit_is_changed(repo):
+    """The config file moves data_dir and names the environments: a deploy input."""
+    root, base = repo
+    _edit(root / "registry-sync.yaml")
+    _commit_all(root, "edit config")
+    cfg = load_config(root / "registry-sync.yaml")
+    assert changed_since(root, base, cfg) is True
 
 
 def test_state_only_push_is_unchanged(repo):
@@ -191,12 +201,9 @@ def test_workflow_keys_missing(repo, capsys, monkeypatch):
     assert "workflow.deploy_environment" in err
 
     # A partial mapping names exactly the key that is missing.
-    _write_config(
-        root,
-        {"deploy_environment": "deploy-env", "readonly_environment": "readonly-env"},
-    )
+    _write_config(root, {"deploy_environment": "deploy-env"})
     assert cli.main(["config-get", "workflow.deploy_environment"]) == 0
     assert capsys.readouterr().out.strip() == "deploy-env"
-    assert cli.main(["config-get", "workflow.app_key_secret"]) == 2
-    assert "workflow.app_key_secret" in capsys.readouterr().err
+    assert cli.main(["config-get", "workflow.readonly_environment"]) == 2
+    assert "workflow.readonly_environment" in capsys.readouterr().err
     assert cli.main(["changed", "--since", base]) == 0

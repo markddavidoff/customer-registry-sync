@@ -1,11 +1,19 @@
 # Copy to .github/workflows/registry-sync.yml in the repository that holds the
-# registry. Only the cron time may differ between repositories; every setting
-# (data directory, environments, secret names) lives in registry-sync.yaml under
-# `workflow:`. Pin `uses:` to a release tag or commit of customer-registry-sync.
+# registry. Only the cron time and the caller-side secret names may differ between
+# repositories; the data directory and both environment names live in
+# registry-sync.yaml under `workflow:`.
 #
-# There is no `paths:` filter: GitHub cannot read the deploy inputs from the
-# config, so every push to main starts a run, and its first job ends it in
-# seconds when no deploy input changed.
+# - GitHub can call this reusable workflow only when the customer-registry-sync
+#   repository is public, or has the same owner as this repository (and allows
+#   Actions access from it). Pin `uses:` to a release tag or commit.
+# - Secrets are passed explicitly by name: `secrets: inherit` passes nothing to a
+#   workflow owned by another account. Map the names on the left (fixed by the
+#   reusable workflow) to your own secrets on the right. A secret with the
+#   left-hand name stored in the deploy or read-only environment takes precedence,
+#   so the Linear tokens can live behind the approval gate.
+# - There is no `paths:` filter: GitHub cannot read the deploy inputs from the
+#   config. Every push to main starts a run; its first job installs the tool
+#   (a `uv sync`) and then ends the run when no deploy input changed.
 name: registry-sync
 
 on:
@@ -34,9 +42,12 @@ jobs:
     uses: markddavidoff/customer-registry-sync/.github/workflows/registry-sync.yml@main
     permissions:
       contents: read
-    # Secret names come from registry-sync.yaml, so the reusable workflow reads them
-    # by name; `inherit` makes the repository and organization secrets visible to it.
-    secrets: inherit
+    secrets:
+      LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
+      LINEAR_READONLY_TOKEN: ${{ secrets.LINEAR_READONLY_TOKEN }}
+      REGISTRY_SYNC_APP_ID: ${{ secrets.REGISTRY_SYNC_APP_ID }}
+      REGISTRY_SYNC_APP_PRIVATE_KEY: ${{ secrets.REGISTRY_SYNC_APP_PRIVATE_KEY }}
+      REGISTRY_SYNC_SSH_KEY: ${{ secrets.REGISTRY_SYNC_SSH_KEY }}
     with:
       mode: ${{ inputs.mode }}
       snapshot: ${{ inputs.snapshot }}

@@ -12,11 +12,11 @@ Keys:
 - ``data_dir`` (optional, default ``customers``) — where the dataset lives. A
   relative path resolves against the directory that holds the config file.
 - ``workflow`` (optional) — settings the reusable ``registry-sync`` GitHub
-  workflow reads through ``config-get``: ``deploy_environment``,
-  ``readonly_environment``, ``app_id_secret`` and ``app_key_secret`` (required by
-  the workflow), and ``linear_token_secret`` / ``readonly_token_secret``
-  (defaults ``LINEAR_API_TOKEN`` / ``LINEAR_READONLY_TOKEN``). A config without
-  them still loads; only ``config-get`` of a missing key fails, naming it.
+  workflow reads through ``config-get``: ``deploy_environment`` and
+  ``readonly_environment``, the names of the two GitHub environments. Secrets are
+  not named here: the caller passes them to the workflow explicitly. A config
+  without these keys still loads; only ``config-get`` of a missing key fails,
+  naming it. Unknown keys under ``workflow:`` are ignored.
 """
 
 from __future__ import annotations
@@ -39,20 +39,13 @@ class ConfigError(Exception):
 
 @dataclass(frozen=True)
 class WorkflowConfig:
-    """Names the reusable workflow needs: environments and the secrets they hold."""
+    """The GitHub environments the reusable workflow binds its jobs to."""
 
     deploy_environment: str
     readonly_environment: str
-    app_id_secret: str
-    app_key_secret: str
-    linear_token_secret: str = "LINEAR_API_TOKEN"
-    readonly_token_secret: str = "LINEAR_READONLY_TOKEN"
 
 
 WORKFLOW_KEYS: tuple[str, ...] = tuple(f.name for f in fields(WorkflowConfig))
-_WORKFLOW_DEFAULTS: dict[str, str] = {
-    f.name: f.default for f in fields(WorkflowConfig) if isinstance(f.default, str)
-}
 
 
 @dataclass
@@ -64,6 +57,8 @@ class RegistryConfig:
     # `config_value` can name the one key that is missing.
     workflow: WorkflowConfig | None = None
     workflow_raw: dict[str, str] = field(default_factory=dict)
+    # The file this config was loaded from; `changed` treats it as a deploy input.
+    config_path: Path | None = None
 
 
 def _workflow_raw(data: dict[str, Any]) -> dict[str, str]:
@@ -78,7 +73,7 @@ def _workflow_raw(data: dict[str, Any]) -> dict[str, str]:
 
 
 def _workflow(raw: dict[str, str]) -> WorkflowConfig | None:
-    values = {**_WORKFLOW_DEFAULTS, **{k: v for k, v in raw.items() if k in WORKFLOW_KEYS}}
+    values = {k: v for k, v in raw.items() if k in WORKFLOW_KEYS}
     if any(k not in values for k in WORKFLOW_KEYS):
         return None
     return WorkflowConfig(**values)
@@ -100,7 +95,7 @@ def config_value(cfg: RegistryConfig, key: str) -> str:
     if key.startswith("workflow."):
         name = key.removeprefix("workflow.")
         if name in WORKFLOW_KEYS:
-            value = cfg.workflow_raw.get(name) or _WORKFLOW_DEFAULTS.get(name)
+            value = cfg.workflow_raw.get(name)
             if not value:
                 raise ConfigError(f"config is missing required key '{key}'")
             return value
@@ -151,4 +146,5 @@ def load_config(path: Path) -> RegistryConfig:
         data_dir=data_dir,
         workflow=_workflow(workflow_raw),
         workflow_raw=workflow_raw,
+        config_path=path.absolute(),
     )

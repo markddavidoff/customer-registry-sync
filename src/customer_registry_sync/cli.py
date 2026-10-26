@@ -70,6 +70,7 @@ from .linear_found import append_record_identities, build_linear_found
 from .manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
 from .notion_ingest import extract_customers
 from .snapshot import SNAPSHOT_SUBDIR, restore
+from .tool_source import ToolSourceError, tool_source
 from .writers import (
     DESIRED_SUBDIR,
     REAL_CLASSIFICATIONS,
@@ -677,6 +678,16 @@ def _cmd_config_get(args) -> int:
     return 0
 
 
+def _cmd_tool_source(args) -> int:
+    """Print where the installed tool came from; exit 2 when it cannot be recovered."""
+    try:
+        print(tool_source().line())
+    except ToolSourceError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def _out_dir_arg(p) -> None:
     p.add_argument(
         "--out-dir",
@@ -795,8 +806,14 @@ def main(argv: list[str] | None = None) -> int:
     cfg_get = sub.add_parser(
         "config-get", help="print one config value, e.g. data_dir or workflow.deploy_environment"
     )
-    cfg_get.add_argument("key", help="dotted key, e.g. workflow.app_key_secret")
+    cfg_get.add_argument("key", help="dotted key, e.g. workflow.readonly_environment")
     handlers["config-get"] = _cmd_config_get
+
+    sub.add_parser(
+        "tool-source",
+        help="print the installed tool's source: 'git <commit> <url>' or 'dir - <path>'",
+    )
+    handlers["tool-source"] = _cmd_tool_source
 
     args = parser.parse_args(argv)
     try:

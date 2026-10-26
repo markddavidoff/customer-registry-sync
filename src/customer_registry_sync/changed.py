@@ -4,8 +4,9 @@ The reusable workflow runs this first on a push and ends the run early when noth
 relevant changed. It replaces a hard-coded ``on.push.paths`` list, which GitHub cannot
 read from the config file.
 
-Deploy inputs are the generated desired rows (``<data_dir>/linear/``) and the curated
-files ``generate``, ``check`` and ``deploy`` read (``curated.CURATED_INPUTS``). The state
+Deploy inputs are the generated desired rows (``<data_dir>/linear/``), the curated
+files ``generate``, ``check`` and ``deploy`` read (``curated.CURATED_INPUTS``), and the
+config file itself (it moves ``data_dir`` and names the workflow's environments). The state
 mirror and the snapshots are not inputs: the state PR that a deploy opens touches only
 those, and must not trigger another deploy.
 
@@ -48,19 +49,26 @@ def _toplevel(repo: Path) -> Path:
     return Path(_git(repo, "rev-parse", "--show-toplevel").strip()).resolve()
 
 
-def _data_prefix(cfg: RegistryConfig, top: Path) -> str | None:
-    """``data_dir`` as a repo-relative POSIX path, or None when it is outside the repo."""
-    data_dir = Path(os.path.realpath(cfg.data_dir))
+def _relative(path: Path, top: Path) -> str | None:
+    """``path`` as a repo-relative POSIX path, or None when it is outside the repo."""
     try:
-        rel = data_dir.relative_to(top)
+        return Path(os.path.realpath(path)).relative_to(top).as_posix()
     except ValueError:
         return None
-    return rel.as_posix()
 
 
-def _globs(prefix: str) -> list[str]:
+def _globs(cfg: RegistryConfig, top: Path) -> list[str] | None:
+    """The deploy-input globs, or None when ``data_dir`` is outside the repo."""
+    prefix = _relative(cfg.data_dir, top)
+    if prefix is None:
+        return None
     base = "" if prefix in ("", ".") else f"{prefix}/"
-    return [f"{base}{DESIRED_SUBDIR}/**", *(f"{base}{name}" for name in CURATED_INPUTS)]
+    globs = [f"{base}{DESIRED_SUBDIR}/**", *(f"{base}{name}" for name in CURATED_INPUTS)]
+    if cfg.config_path is not None:
+        config_rel = _relative(cfg.config_path, top)
+        if config_rel is not None:
+            globs.append(config_rel)
+    return globs
 
 
 def deploy_inputs(cfg: RegistryConfig, repo: Path | None = None) -> list[str]:
@@ -73,10 +81,10 @@ def deploy_inputs(cfg: RegistryConfig, repo: Path | None = None) -> list[str]:
         top = _toplevel(Path(repo) if repo is not None else Path.cwd())
     except _Unknown as e:
         raise ValueError(f"not a git repository: {e}") from None
-    prefix = _data_prefix(cfg, top)
-    if prefix is None:
+    globs = _globs(cfg, top)
+    if globs is None:
         raise ValueError(f"data_dir {cfg.data_dir} is outside the repository {top}")
-    return _globs(prefix)
+    return globs
 
 
 def _matches(path: str, globs: list[str]) -> bool:
@@ -93,8 +101,8 @@ def changed_since(repo: Path, sha: str, cfg: RegistryConfig) -> bool:
     """True when a deploy input differs between ``sha`` and HEAD, or when unsure."""
     try:
         top = _toplevel(repo)
-        prefix = _data_prefix(cfg, top)
-        if prefix is None:
+        globs = _globs(cfg, top)
+        if globs is None:
             return True
         # `^{commit}` with --verify refuses anything that is not a commit in this clone,
         # including option-shaped input, before it reaches `git diff`.
@@ -104,5 +112,4 @@ def changed_since(repo: Path, sha: str, cfg: RegistryConfig) -> bool:
         names = _git(top, "diff", "--no-renames", "--name-only", "-z", base, "HEAD")
     except _Unknown:
         return True
-    globs = _globs(prefix)
     return any(_matches(name, globs) for name in names.split("\0") if name)
