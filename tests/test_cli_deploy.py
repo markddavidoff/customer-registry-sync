@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from customer_registry_sync import cli
 from customer_registry_sync.deploy import live_to_linear
 from customer_registry_sync.linear_client import LiveCustomer
@@ -38,18 +40,13 @@ class FakeClient:
         self.live.append(lv)
         return lv
 
-    def update_customer(self, cid, **f):
+    def update_customer(self, cid, *, retire=False, **f):
+        # apply only the fields sent (apply_deploy sends the planned changes only)
         cur = self.get_customer(cid)
-        lv = LiveCustomer(
-            id=cid,
-            name=f["name"],
-            domains=f["domains"],
-            revenue=f.get("revenue"),
-            tier=None,
-            status="Active",
-            external_ids=f["external_ids"],
-            updated_at="2026-10-03T00:00:00.000Z",
-        )
+        sent = {
+            k: v for k, v in f.items() if k in ("name", "domains", "revenue", "external_ids")
+        }
+        lv = replace(cur, **sent, updated_at="2026-10-03T00:00:00.000Z")
         self.live[self.live.index(cur)] = lv
         self.updated.append(lv)
         return lv

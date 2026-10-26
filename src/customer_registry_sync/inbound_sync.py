@@ -53,7 +53,7 @@ def reconcile_inbound(
             domains=list(lc.domains),
             revenue=lc.revenue,
             tier=lc.tier,
-            status=lc.status or "Active",
+            status=lc.status or None,  # an empty Linear status is mirrored as none
             external_ids=external_ids,
         )
         rec.linear_synced = LinearSynced(

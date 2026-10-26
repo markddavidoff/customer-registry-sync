@@ -26,6 +26,7 @@ from gitops_engine import (
     run_check as _engine_run_check,
 )
 
+from .identity import IdentityTable
 from .linear_adapter import LinearCustomersAdapter
 from .linear_client import LiveCustomer
 from .linear_schema import LinearCustomer
@@ -43,7 +44,7 @@ __all__ = [
 def detect_drift(state: list[LinearCustomer], live: list[LiveCustomer]) -> DriftReport:
     """Whether the recorded state mirror still matches live, by content hash.
     Read-only: the adapter's client is never touched."""
-    adapter = LinearCustomersAdapter(client=None, aliases={})
+    adapter = LinearCustomersAdapter()
     return _engine_detect_drift(state, live, adapter)
 
 
@@ -51,9 +52,10 @@ def run_check(
     desired: list[LinearCustomer],
     state: list[LinearCustomer],
     live: list[LiveCustomer],
-    aliases: dict[str, str],
+    table: IdentityTable | None = None,
 ) -> tuple[int, DriftReport, Plan[LinearCustomer, LiveCustomer]]:
     """Report drift and a plan together. EXIT_DRIFT when the state no longer
-    matches live OR the plan would abort; EXIT_OK when everything reconciles."""
-    adapter = LinearCustomersAdapter(client=None, aliases=aliases)
+    matches live OR the plan would abort; EXIT_OK when everything reconciles.
+    Desired rows match live customers through the identity `table`."""
+    adapter = LinearCustomersAdapter(table=table)
     return _engine_run_check(desired, state, live, adapter)

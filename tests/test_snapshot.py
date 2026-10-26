@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 
 import yaml
 
+from customer_registry_sync.deploy import apply_deploy, plan_deploy
+from customer_registry_sync.linear_schema import LinearCustomer
 from customer_registry_sync.snapshot import (
     load_snapshot,
     record_written,
@@ -21,6 +23,18 @@ def _row(rl, **kw):
     }
     base.update(kw)
     return rl.node("lin-1", "Acme", **base)
+
+
+def _desired(**kw):
+    base = {
+        "name": "Acme",
+        "domains": ["acme.com"],
+        "revenue": 5,
+        "status": "Active",
+        "external_ids": ["acme"],
+    }
+    base.update(kw)
+    return LinearCustomer(**base)
 
 
 def test_write_load_and_record_round_trip(tmp_path, recording_linear):
@@ -70,46 +84,43 @@ def test_restore_skips_row_gone(tmp_path, recording_linear):
     assert out.restored == [] and out.skipped == [("lin-1", "gone")]
 
 
-# Stand-ins for the source's apply-driven restore tests (they need `apply_deploy`,
-# ported in Task 5). They build the snapshot with the real writer and
-# `record_written`, which is what `apply_deploy` calls, so the restore path is
-# still covered end to end here.
-def test_restore_writes_snapshot_values_back_and_retires_empty_fields(tmp_path, recording_linear):
-    before = _row(recording_linear)  # tier None: restore must send it as an explicit retire
-    path = write_snapshot([before], tmp_path)
+def test_restore_round_trip(tmp_path, recording_linear):
+    before = _row(recording_linear)  # tier None: restore must clear what apply set
+    plan = plan_deploy([_desired(revenue=5, tier="Tier 1")], [before])
     client = recording_linear([before])
-    changed = client.update_customer("lin-1", revenue=5, tier_id="t1")  # an apply
-    record_written(path, "lin-1", changed.updated_at)
+    res = apply_deploy(plan, client, snapshot_dir=tmp_path)
+    assert res.failure is None
+    assert (client.rows["lin-1"].revenue, client.rows["lin-1"].tier) == (5, "Tier 1")
 
-    out = restore(path, client)
-    assert out.restored == ["lin-1"] and out.skipped == [] and out.failure is None
-    assert replace(client.rows["lin-1"], updated_at=before.updated_at) == before
+    out = restore(res.snapshot, client)
+    assert out.restored == ["lin-1"] and out.skipped == []
+    after = client.rows["lin-1"]
+    assert replace(after, updated_at=before.updated_at) == before
+    # the empty tier went out as an explicit retire, not a silent drop
     *_, (_, _, fields, retire, _) = client.updates()
     assert fields["tier_id"] is None and retire is True
 
 
 def test_restore_filters_rows_by_external_id(tmp_path, recording_linear):
     lv = _row(recording_linear)
-    path = write_snapshot([lv], tmp_path)
+    plan = plan_deploy([_desired()], [lv])
     client = recording_linear([lv])
-    changed = client.update_customer("lin-1", revenue=5)
-    record_written(path, "lin-1", changed.updated_at)
-    out = restore(path, client, rows=["someone-else"])
+    res = apply_deploy(plan, client, snapshot_dir=tmp_path)
+    out = restore(res.snapshot, client, rows=["someone-else"])
     assert out.restored == [] and out.skipped == []
     assert client.rows["lin-1"].revenue == 5
-    out = restore(path, client, rows=["acme"])
+    out = restore(res.snapshot, client, rows=["acme"])
     assert out.restored == ["lin-1"] and client.rows["lin-1"].revenue == 300000
 
 
 def test_restore_skips_row_edited_since_apply(tmp_path, recording_linear):
     lv = _row(recording_linear)
-    path = write_snapshot([lv], tmp_path)
+    plan = plan_deploy([_desired()], [lv])
     client = recording_linear([lv])
-    changed = client.update_customer("lin-1", revenue=5)
-    record_written(path, "lin-1", changed.updated_at)
+    res = apply_deploy(plan, client, snapshot_dir=tmp_path)
     client.update_customer("lin-1", revenue=77)  # someone edits after the apply
     n_writes = len(client.updates())
-    out = restore(path, client)
+    out = restore(res.snapshot, client)
     assert out.restored == []
     [(lid, reason)] = out.skipped
     assert lid == "lin-1" and "edited since" in reason

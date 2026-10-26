@@ -1,76 +1,27 @@
-"""The gitops-engine `Adapter` for Linear Customers.
+"""The gitops-engine `Adapter` for Linear Customers, for drift detection only.
 
-This is the one place that knows how Linear Customers are matched, hashed,
-read, and written. The engine (`gitops_engine`) drives the plan / drift /
-check-and-set logic through this contract; the behavior is exactly what
-`deploy.plan_deploy` / `apply_deploy` and `check.detect_drift` carried before.
+`check` drives `gitops_engine.detect_drift` / `run_check` through this adapter
+and keys its exit codes off the engine's `EXIT_*`. Planning and writes no longer
+go through the engine: `deploy.plan_deploy` / `apply_deploy` are local code
+(field-level changes, pairing by identity, snapshot, post-write verification),
+so this adapter's write methods refuse.
 
-Matching order (unchanged): external ids, then domains, then the normalized
-name (status suffix stripped on both sides), then the curated alias. Writes
-resolve Linear's status/tier ids; `preflight` fails the whole apply before any
-write when a needed status does not resolve.
+Matching goes through the identity table (`identity.resolve`): a desired row and
+a live customer match when they resolve to the same identity. With several live
+customers on one identity, `deploy.pick_primary` chooses; with no choice, there
+is no match (`plan_deploy` reports that case as a planner error).
 """
 
 from __future__ import annotations
 
-import re
-
 from gitops_engine import SyncMark
 
-from .identity import strip_status_suffix
+from .deploy import live_to_linear, pick_primary
+from .identity import IdentityTable, keys_for_live, keys_for_row, resolve, with_implicit
 from .linear_client import LiveCustomer
 from .linear_schema import LinearCustomer, LinearSynced, content_hash_of
 
-
-def _norm(name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "", name.lower())
-
-
-def _match_live(
-    d: LinearCustomer, live: list[LiveCustomer], aliases: dict[str, str] | None = None
-) -> LiveCustomer | None:
-    xids = set(d.external_ids)
-    if xids:
-        for lv in live:
-            if xids & set(lv.external_ids):
-                return lv
-    doms = set(d.domains)
-    if doms:
-        for lv in live:
-            if doms & set(lv.domains):
-                return lv
-    dn = _norm(strip_status_suffix(d.name))
-    for lv in live:
-        if _norm(strip_status_suffix(lv.name)) == dn:
-            return lv
-    # curated identity link: our dataset name -> an existing Linear customer name
-    # aliases are keyed by the dataset canonical_name, i.e. without the status suffix
-    alias_name = (aliases or {}).get(strip_status_suffix(d.name))
-    if alias_name:
-        for lv in live:
-            if strip_status_suffix(lv.name) == alias_name:
-                return lv
-    return None
-
-
-def live_to_linear(lv: LiveCustomer) -> LinearCustomer:
-    return LinearCustomer(
-        name=lv.name,
-        domains=list(lv.domains),
-        revenue=lv.revenue,
-        tier=lv.tier,
-        status=lv.status or "Active",
-        external_ids=list(lv.external_ids),
-    )
-
-
-def _persisted(lv: LiveCustomer) -> LinearCustomer:
-    """The state-mirror row for a row we just wrote: built from what Linear
-    RETURNED (not from desired), so its content_hash agrees with what
-    `check`/`plan_deploy`/`sync-inbound` compute from live."""
-    rec = live_to_linear(lv)
-    rec.linear_synced = LinearSynced(lv.id, lv.updated_at, content_hash_of(rec))
-    return rec
+_WRITES_REFUSED = "writes go through deploy.apply_deploy, not the engine adapter"
 
 
 def _mark_of(ls: LinearSynced) -> SyncMark:
@@ -80,24 +31,34 @@ def _mark_of(ls: LinearSynced) -> SyncMark:
 
 
 class LinearCustomersAdapter:
-    """Drives `gitops_engine` against Linear Customers.
+    """Drives `gitops_engine` drift detection against Linear Customers.
 
-    Reads and identity are pure. Writes (`preflight`, `create`, `update`) go
-    through `client` (a `LinearClient` or a test double exposing the same
-    `status_ids`/`tier_ids`/`get_customer`/`create_customer`/`update_customer`).
-    `client` may be None for read-only uses (`detect_drift`, planning), which
-    never touch it.
+    Reads and identity are pure. `get` reads through `client` (a `LinearClient`
+    or a test double), which may be None for drift detection, which never
+    touches it. `preflight`, `create` and `update` raise: writes go through
+    `deploy.apply_deploy`.
     """
 
-    def __init__(self, client, aliases: dict[str, str]) -> None:
+    def __init__(self, client=None, table: IdentityTable | None = None) -> None:
         self._client = client
-        self._aliases = aliases
-        self._status_ids: dict[str, str] | None = None
-        self._tier_ids: dict[str, str] | None = None
+        self._table = table or IdentityTable()
 
     # --- reads / identity ---
     def match(self, d: LinearCustomer, live: list[LiveCustomer]) -> LiveCustomer | None:
-        return _match_live(d, live, self._aliases)
+        """The live customer on `d`'s identity. A row that resolves to nothing gets
+        an implicit identity, as `deploy.pair_rows` gives it."""
+        table = with_implicit(self._table, [d])
+        hit = resolve(keys_for_row(d), table)
+        assert hit is not None  # with_implicit gives every row an identity
+        group = [
+            lv
+            for lv in live
+            if (h := resolve(keys_for_live(lv), table)) is not None
+            and h.canonical_id == hit.canonical_id
+        ]
+        if len(group) <= 1:
+            return group[0] if group else None
+        return pick_primary(hit.canonical_id, group, table)
 
     def desired_hash(self, d: LinearCustomer) -> str:
         return content_hash_of(d)
@@ -138,48 +99,15 @@ class LinearCustomersAdapter:
             return None  # untracked row (hand-edited/legacy) — not evidence either way
         return _mark_of(s.linear_synced)
 
-    # --- writes ---
-    def _resolve_ids(self) -> tuple[dict[str, str], dict[str, str]]:
-        # Fetched once (as the former apply_deploy did) and cached, so preflight
-        # and every create/update share one read of the workspace statuses/tiers.
-        if self._status_ids is None:
-            self._status_ids = self._client.status_ids()
-            self._tier_ids = self._client.tier_ids()
-        assert self._tier_ids is not None
-        return self._status_ids, self._tier_ids
-
+    # --- writes (refused: see deploy.apply_deploy) ---
     def preflight(self, plan) -> None:
-        """Every status the plan needs must resolve to an id BEFORE any write —
-        otherwise an unresolvable status mid-loop would raise after earlier
-        creates already hit Linear (lossy, and a re-run would duplicate them)."""
-        status_ids, _ = self._resolve_ids()
-        needed = {d.status for d in plan.creates} | {d.status for d, _ in plan.updates}
-        missing = sorted(needed - set(status_ids))
-        if missing:
-            raise ValueError(f"unresolvable Linear status(es), nothing written: {missing}")
+        raise NotImplementedError(_WRITES_REFUSED)
 
     def get(self, live_id: str) -> LiveCustomer | None:
         return self._client.get_customer(live_id)
 
     def create(self, d: LinearCustomer) -> LiveCustomer:
-        status_ids, tier_ids = self._resolve_ids()
-        return self._client.create_customer(
-            name=d.name,
-            domains=d.domains,
-            external_ids=d.external_ids,
-            status_id=status_ids[d.status],
-            tier_id=tier_ids.get(d.tier or ""),
-            revenue=d.revenue,
-        )
+        raise NotImplementedError(_WRITES_REFUSED)
 
     def update(self, live_id: str, d: LinearCustomer) -> LiveCustomer:
-        status_ids, tier_ids = self._resolve_ids()
-        return self._client.update_customer(
-            live_id,
-            name=d.name,
-            domains=d.domains,
-            external_ids=d.external_ids,
-            status_id=status_ids[d.status],
-            tier_id=tier_ids.get(d.tier or ""),
-            revenue=d.revenue,
-        )
+        raise NotImplementedError(_WRITES_REFUSED)

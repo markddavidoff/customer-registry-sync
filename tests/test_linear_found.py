@@ -15,12 +15,14 @@ from customer_registry_sync.datasets import (
     load_datasets,
     load_datasets_config,
 )
+from customer_registry_sync.deploy import plan_deploy
+from customer_registry_sync.fieldplan import state_to_live
 from customer_registry_sync.generate import generate_from_dir
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
 from customer_registry_sync.identity_store import IdentityStore
 from customer_registry_sync.ignore import BUILTIN_PREFIX, IGNORE_FILE, load_ignore, partition_live
 from customer_registry_sync.inbound_sync import reconcile_inbound
-from customer_registry_sync.linear_client import LiveCustomer, parse_customer_node
+from customer_registry_sync.linear_client import parse_customer_node
 from customer_registry_sync.linear_found import (
     STUB_NOTE,
     append_record_identities,
@@ -70,24 +72,9 @@ def _mirror(tmp_path, *nodes):
     write_manifest(tmp_path / STATE_SUBDIR, "sync-inbound")
 
 
-def _live(row) -> LiveCustomer:
-    """A state-mirror row as the live customer it mirrors."""
-    ls = row.linear_synced
-    return LiveCustomer(
-        id=ls.linear_id,
-        name=row.name,
-        domains=list(row.domains),
-        revenue=row.revenue,
-        tier=row.tier,
-        status=row.status or "",
-        external_ids=list(row.external_ids),
-        updated_at=ls.updated_at,
-    )
-
-
 def _managed(tmp_path):
     ignore = load_ignore(tmp_path / IGNORE_FILE)
-    live = [_live(r) for r in load_state(tmp_path) if r.linear_synced is not None]
+    live = [state_to_live(r) for r in load_state(tmp_path) if r.linear_synced is not None]
     return partition_live(live, ignore, scope=None)[0]
 
 
@@ -370,8 +357,8 @@ def test_linear_found_ingest_is_idempotent(tmp_path):
 
 def test_ambiguous_duplicates_record_no_linear_source(tmp_path, capsys):
     """Two unstamped customers on a Notion identity with no recorded Linear id: the build
-    records nothing on the identity and reports it. The planner's error for the same state
-    is asserted with the planner port."""
+    records nothing on the identity, reports it, and the planner's error still fails
+    after the build saves."""
     _tree(
         tmp_path,
         records=[ACME],
@@ -387,11 +374,21 @@ def test_ambiguous_duplicates_record_no_linear_source(tmp_path, capsys):
     assert _stubs(tmp_path) == {}
     out = capsys.readouterr().out
     assert "acme: no customer carries the canonical or recorded Linear id" in out
+    plan = plan_deploy(
+        generate_from_dir(tmp_path).rows,
+        [state_to_live(r) for r in load_state(tmp_path)],
+        load_identities(tmp_path / IDENTITIES_FILE),
+    )
+    assert any(
+        e.startswith("known duplicates for acme with no canonical or recorded Linear id")
+        for e in plan.errors
+    )
 
 
 def test_new_identity_for_two_unstamped_duplicates_records_no_linear_source(tmp_path, capsys):
     """Two unstamped customers that resolve to nothing: the new identity records no
-    Linear id (the lowest id must not settle the pick) and the build reports it."""
+    Linear id (the lowest id must not settle the pick), the build reports it, and the
+    planner's error stands."""
     _tree(
         tmp_path,
         nodes=[
@@ -404,6 +401,15 @@ def test_new_identity_for_two_unstamped_duplicates_records_no_linear_source(tmp_
     assert ident.sources == {}
     out = capsys.readouterr().out
     assert "gamma: no customer carries the canonical or recorded Linear id" in out
+    plan = plan_deploy(
+        generate_from_dir(tmp_path).rows,
+        [state_to_live(r) for r in load_state(tmp_path)],
+        load_identities(tmp_path / IDENTITIES_FILE),
+    )
+    assert any(
+        e.startswith("known duplicates for gamma with no canonical or recorded Linear id")
+        for e in plan.errors
+    )
 
 
 def test_status_errors_name_unmapped_and_unclassified_stubs(tmp_path):

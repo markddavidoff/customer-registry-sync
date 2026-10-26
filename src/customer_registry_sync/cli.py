@@ -30,10 +30,12 @@ from .config import DEFAULT_CONFIG_NAME, ConfigError, load_config
 from .datasets import NOTION, dataset_dir
 from .deploy import apply_deploy, plan_deploy
 from .generate import generate_linear
+from .identity import IDENTITIES_FILE, load_identities
 from .inbound_sync import reconcile_inbound
 from .inputs import load_overrides, load_self_managed_customers
 from .linear_client import LinearError
 from .notion_ingest import extract_customers
+from .snapshot import SNAPSHOT_SUBDIR
 from .writers import (
     REAL_CLASSIFICATIONS,
     load_dataset,
@@ -185,8 +187,16 @@ def _cmd_deploy(args) -> int:
         return 2
     state = _scope_recs(load_state(out_dir), args.scope)
     live = _scope_live(client.list_customers(), args.scope)
-    plan = plan_deploy(desired, live, state=state)
+    plan = plan_deploy(desired, live, load_identities(out_dir / IDENTITIES_FILE), state=state)
     _print_plan(plan)
+    if plan.errors:
+        for msg in plan.errors:
+            print(f"  ERROR: {msg}")
+        print(
+            "REFUSED — planner error(s) above; nothing written. Fix identities.yaml "
+            "or merge the duplicates in Linear, then re-run."
+        )
+        return 3
     if not args.apply:
         print(
             "DRY RUN — no writes. Re-run with --apply to deploy creates+updates "
@@ -197,13 +207,20 @@ def _cmd_deploy(args) -> int:
     if out_dir.resolve() == args.registry.data_dir.resolve() and not args.prod:
         print("ERROR: --apply against the configured data_dir requires --prod.", file=sys.stderr)
         return 2
-    persisted = apply_deploy(plan, client)
-    _refresh_state(persisted, out_dir)
+    try:
+        result = apply_deploy(plan, client, snapshot_dir=out_dir / SNAPSHOT_SUBDIR)
+    except (OSError, ValueError) as e:
+        print(f"ERROR: apply refused before any write: {e}", file=sys.stderr)
+        return 2
+    _refresh_state(result.persisted, out_dir)
+    if result.failure:
+        print(f"  FAILED: {result.failure}")
     print(
-        f"APPLIED: {len(persisted)} writes; {len(plan.aborts)} aborted. "
+        f"APPLIED: {len(result.persisted)} writes; {len(plan.aborts)} aborted. "
         f"Refreshed linear_synced in {out_dir}/linear-state/ (run sync-inbound to fully reconcile)."
     )
-    return 3 if plan.aborts else 0
+    print(f"snapshot: {result.snapshot}")
+    return 3 if result.failure or plan.aborts else 0
 
 
 def _print_drift(drift) -> None:
@@ -227,8 +244,7 @@ def _cmd_check(args) -> int:
     except LinearError as e:
         print(f"ERROR: Linear read failed: {e}", file=sys.stderr)
         return EXIT_OPERROR
-    # No alias file any more; `run_check` loses its `aliases` parameter with the planner port.
-    code, drift, plan = run_check(desired, state, live, {})
+    code, drift, plan = run_check(desired, state, live, load_identities(out_dir / IDENTITIES_FILE))
     print(
         f"check: drift changed={len(drift.changed)} added={len(drift.added)} deleted={len(drift.deleted)}"
     )

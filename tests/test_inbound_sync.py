@@ -1,3 +1,4 @@
+from customer_registry_sync.check import detect_drift
 from customer_registry_sync.inbound_sync import reconcile_inbound
 from customer_registry_sync.linear_client import LiveCustomer
 from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced, content_hash_of
@@ -79,3 +80,12 @@ def test_idempotent_on_rerun():
     out1 = reconcile_inbound(live_list, [])
     out2 = reconcile_inbound(live_list, out1)
     assert out1 == out2
+
+
+def test_empty_linear_status_is_not_mirrored_as_active():
+    """The mirror row hashes the same way deploy and drift detection hash live, so
+    a customer with no status is mirrored with none and is not drift."""
+    lv = live(id="lin_n", name="Nostatus Co", status="")
+    [row] = reconcile_inbound([lv], [])
+    assert row.status is None
+    assert not detect_drift([row], [lv]).any()
