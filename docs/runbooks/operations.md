@@ -77,7 +77,7 @@ customer-registry-sync deploy --apply --prod --break-glass
 4. Merge. The workflow runs after approval (see "Applying"); the write-time
    check-and-set passes and the writes land.
 5. **`sync-inbound` (required, not optional)** refreshes `<data_dir>/linear-state/` so
-   state equals live. `apply_deploy` alone returns only created and updated rows and
+   state equals live. The apply output lists only created and updated rows and
    drops unchanged rows and orphans, so it does not fully reconcile state. The workflow
    does this and opens the state PR.
 

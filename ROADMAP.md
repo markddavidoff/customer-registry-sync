@@ -6,7 +6,7 @@ Some items defer to the engine's roadmap: [`gitops-engine/ROADMAP.md`](https://g
 
 ## Done
 
-- [x] **Phase A: Notion ingest (2026-10-06).** `ingest` is a re-runnable Notion API tool. It reads the bucket pages and merges hand-curated inputs (an on-prem deployment registry, classification overrides). It writes a per-customer dataset plus two CSV summaries, with domains, revenue, deployment and contacts. Notion is the source of truth. Linear Customers is a downstream copy.
+- [x] **Phase A: Notion ingest (2026-10-06).** `ingest` is a re-runnable Notion API tool. It reads the bucket pages and merges hand-curated inputs (an on-prem deployment registry, classification overrides). It writes a per-customer dataset plus two CSV summaries, with domains, revenue, deployment and contacts. Notion is the source of truth for the customers it holds. Linear Customers is a downstream copy, except that `linear-found` stubs (Linear-only customers) are Linear-owned.
 - [x] **Phase B: Linear-as-code plan/apply (2026-10-07).** `sync-inbound` mirrors live Linear into the repo. `generate` projects the dataset into desired customers. `deploy` plans (dry run by default), and `--apply` writes with a per-record check-and-set against the recorded `updatedAt`. Orphans are reported and never deleted.
 - [x] **Phase C: GitOps PR and deploy workflow (2026-10-16).**
   - [x] Desired/state split: `linear/` holds desired config from `generate` and carries no state. `linear-state/` holds the mirror of live Linear from `sync-inbound`.
