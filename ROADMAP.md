@@ -15,7 +15,7 @@ Some items defer to the engine's roadmap: [`gitops-engine/ROADMAP.md`](https://g
   - [x] The Linear client retries HTTP 429 and honors `Retry-After`.
   - [x] Live end-to-end harness against throwaway records. Four scenarios passed against a real workspace (2026-10-16). A probe confirmed that a domain under the reserved `.invalid` top-level domain is accepted, that the content hash and `updatedAt` change on edit, and that deletes are hard deletes.
   - [x] Status-suffixed display names so Linear search shows status, for example `Example Corp [Active]`.
-- [x] **Runs on `gitops-engine` (2026-10-21).** Drift detection and the `check` exit codes come from `gitops-engine`, driven through a `LinearCustomersAdapter`. Planning and apply later moved back into this repository; see the engine seams below.
+- [x] **Runs on `gitops-engine` (2026-10-21).** Drift detection and the `check` exit codes come from `gitops-engine`, driven through a `LinearCustomersAdapter`. Planning and apply later moved back into this repository, and v0.2.0 moved them into the engine for good; see the v0.2.0 entry below.
 - [x] **Ported the defensive apply, identity table and reusable workflow (2026-10-25).** What landed:
   - [x] Identity table (`identities.yaml`) and one `resolve` for "same company", by source id, then domain, then name. `ingest` appends to it and never rewrites a value.
   - [x] Ordered datasets under `datasets/<name>/` (`notion`, `linear-found`) listed in `datasets.yaml`, with a hard break from the old single `dataset/` directory. `ingest --only linear-found` builds stubs for Linear-only customers from the mirror, offline.
@@ -27,6 +27,11 @@ Some items defer to the engine's roadmap: [`gitops-engine/ROADMAP.md`](https://g
   - [x] Reusable, config-driven GitHub workflow (`registry-sync.yml`) with an example caller: approval-gated deploy and restore, a state PR after each apply, a live `e2e` mode, and a daily read-only refresh that opens a PR. Supporting commands: `changed`, `config-get`, `tool-source`.
   - [x] Removed the alias file, the enrichment file and the `absorb` command; identities replace them.
   - [x] Seams where the ported planner bypasses the engine's `Adapter` are recorded on the engine roadmap.
+- [x] **Moved the generic machinery into `gitops-engine` v0.2.0.** Plans, writes, generated and mirrored files, snapshots and exit codes are unchanged for an existing data repository; a golden run on a copy of a real data directory matched v0.1.0 file for file (same sha256s, same plans, same exit codes). What moved and what stayed:
+  - [x] The engine now holds the dataset format and writers, the identity table and `resolve`, merge by identity, destination-only stubs, the ignore and retire files, the state mirror, the field planner with ownership policies, check, apply with the snapshot, post-write verification and the never-null guard, restore, `changed`, and the reusable workflow.
+  - [x] This repository keeps the declarations: `LINEAR_SCHEMA` (field policies and nouns), `IDENTITY_SPEC` (identity keys), `LinearDestination`, the file names, and the CLI. Tests of the moved mechanisms moved with them, so this repository's test count is lower than at v0.1.0.
+  - [x] Source adapters: `registry-sync.yaml` picks one with `source.kind`, and `NotionSource` is the first. The v0.1 top-level `hub_page_id` and `buckets` are now an error that points to `source:`.
+  - [x] The caller workflow installs from the caller's locked uv project (`project_dir`) with https git URLs and holds no deploy key. The two Linear tokens are environment secrets named `DESTINATION_TOKEN` and `DESTINATION_READONLY_TOKEN`.
 
 ## Open
 
@@ -36,12 +41,12 @@ Some items defer to the engine's roadmap: [`gitops-engine/ROADMAP.md`](https://g
 - [ ] **Re-adding removed domains.** A domain removed in Linear is re-added from the identity table on the next apply. Project 3 (below) absorbs removals instead.
 - [ ] **Exit 2 on a Linear API error.** `sync-inbound`, `deploy` and `restore` exit 1 with a traceback on a Linear API error. Make them exit 2, as `check` does.
 - [ ] **Run the live e2e suite once.** The live end-to-end tests (`tests/test_e2e_gitops.py`) are skipped without credentials. Run them against a throwaway workspace, and verify the helper that writes the dummy config for them.
-- [ ] **Hand deploy automation to `gitops-engine`.** The approval-gated apply, the post-apply state PR and the scheduled refresh live in this repository's workflow. The engine roadmap tracks a reusable deploy and refresh workflow as a seam; move it there when the engine can host it.
 - [ ] **Require all six Notion bucket ids only for `ingest`.** The Linear-only commands (`deploy`, `check`, `generate`, `sync-inbound`) currently need a config with every Notion bucket id. Relax the config loader so only `ingest` needs them.
 - [ ] **Deployment enrichment from a self-managed environments database (config key removed until implemented).** Read deployment details from a Notion database of self-managed installs during `ingest`. The `self_managed_environments_data_source` config key was parsed but never used, so it was removed; add it back with the feature.
-- [ ] **Revisit the narrowed ruff rule set.** The repo lints with E4, E7, E9 and F only. Widen it when the code is refactored onto the engine.
-- [ ] **Publish a release tag.** No tag exists, so callers pin a commit sha in `uses:` and in the `uv` source (`rev`). Tag a release so they can pin a tag instead. The example caller keeps `@main` as a placeholder, with a comment telling adopters to pin a sha.
-- [ ] **Decide tool repository visibility.** The tool and engine repositories are private. A caller in a different owner can call the reusable workflow only if the tool repository is public. The decision is pending.
+- [ ] **Revisit the narrowed ruff rule set.** The repo lints with E4, E7, E9 and F only. The refactor onto the engine has landed, so widen the rule set.
+- [ ] **Publish v0.2.0 of both repositories.** Until the engine tag exists, this repository's `pyproject.toml` points at a local engine checkout. Tag `gitops-engine` v0.2.0, switch the dependency to its https git URL and tag, then tag this tool, so callers pin tags in their lock and in `uses:`.
+- [ ] **Decide repository visibility.** The jobs hold no deploy key and install from the caller's lock over https, so both repositories must be readable without credentials for a caller to install them. A caller in a different owner can call the reusable workflow only if `gitops-engine` is public. The decision is pending.
+- [ ] **Move the existing data repository onto v0.2.** Its `registry-sync.yaml` needs `hub_page_id` and `buckets` under `source:` with `kind: notion`, and its workflow needs the locked uv project and environment-held tokens.
 
 ## Project 3: the registry owns every written field (proposal)
 

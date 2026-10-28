@@ -26,10 +26,22 @@ Prerequisites:
 ## Requirements
 
 - Python 3.12+ and [uv](https://docs.astral.sh/uv/).
-- The library [`gitops-engine`](https://github.com/markddavidoff/gitops-engine), which supplies drift detection and the `check` exit codes. `uv sync` installs it from git (tag `v0.1.0`) over SSH.
-- SSH read access to two repositories. This tool's repository and `gitops-engine` are both private today, so installing the tool needs an SSH key that can read both.
+- The library [`gitops-engine`](https://github.com/markddavidoff/gitops-engine) v0.2.0, which supplies the generic machinery: dataset files, the identity table, merge, the field planner, check, apply, snapshots and restore, and the reusable workflow. `uv sync` installs it from git (tag `v0.2.0`) over https; no SSH key is involved.
 - `NOTION_API_TOKEN` for `ingest`: a Notion integration token with the bucket pages shared with it. Only your own machine needs it; the workflow never reads Notion.
 - `LINEAR_API_TOKEN` for `sync-inbound`, `deploy`, `restore` and `check`. `deploy --apply` and `restore` need write scope. `deploy` needs the token even as a dry run, because it reads live Linear to build the plan.
+
+## What this tool declares
+
+The engine holds the generic machinery and knows nothing about customers, Linear or Notion. This repository supplies the parts that are specific to them:
+
+| Declaration | Where | What it says |
+|---|---|---|
+| Record schema | `linear_schema.py` (`LINEAR_SCHEMA`) | Six planned fields and their policies: `name`, `status` (`required`) and `external_ids` are always written from the registry; `domains` is a union with the live values, `exclusive` so a domain another customer holds is withheld; `revenue` and `tier` keep the live value when the registry leaves them unset. A Linear-owned stub row takes every value from Linear and writes only its canonical id. The schema also carries the nouns the engine prints (`customer`, `Linear`, `registry`, `updatedAt`). |
+| Identity keys | `identity.py` (`IDENTITY_SPEC`) | Resolution tries the canonical id, then the source ids (`notion`, then `linear`), then the domain, then the name. Domains compare case-insensitively; names ignore case, spaces, punctuation and a trailing status suffix such as ` [Active]`. |
+| Destination | `linear_destination.py`, `linear_client.py` | The engine's `Destination` over the Linear GraphQL client. The client keeps its own never-null guard as a second line behind the engine's. |
+| File names | `linear_files.py`, `datasets.py` | `linear-ignore.yaml`, `linear-retire.yaml`, `linear-snapshots/`, `linear-state/`, the `notion` and `linear-found` datasets, and the `linear_status_classification` table in `datasets.yaml`. |
+| Source adapter | `sources/` | `NotionSource`, picked by `source.kind` in `registry-sync.yaml`. |
+| CLI | `cli.py` | The commands the engine's reusable workflow calls (its CLI contract), plus `ingest`, `generate` and `ignore`. |
 
 ## Configure
 
@@ -55,6 +67,8 @@ workflow:                                     # optional; read by the reusable w
 `source:` picks the adapter that reads the upstream system. Adapters ship inside this package (`src/customer_registry_sync/sources/`), so the data repository names one with `kind:` and nothing is loaded from it. An unknown `kind` is an error that names the known kinds. `hub_page_id` or `buckets` at the top level (the v0.1 shape) is an error that points to `source:`; move both under `source:` and add `kind: notion`.
 
 The six bucket names are fixed by the Notion template: `source.buckets` accepts exactly these names, requires all six, and each name decides a customer's classification (see [`docs/notion-template.md`](docs/notion-template.md)). You cannot rename or add buckets in the config.
+
+The config file holds no secret. `DESTINATION_TOKEN` and `DESTINATION_READONLY_TOKEN` do not appear in it: the caller workflow reads them from its GitHub environments (see [Run it in GitHub Actions](#run-it-in-github-actions)).
 
 Every command takes the global `--config <path>` (default `registry-sync.yaml` in the working directory). A missing file, or a missing required key, prints one line to stderr and exits 2. `data_dir` is where the registry files live; a relative path resolves against the config file's directory, and `--out-dir` overrides it per run. `config-get data_dir` prints the absolute path after that resolution. The `workflow:` section holds only the two environment names; the tool runs without it, and `config-get` fails naming a missing key.
 
@@ -131,12 +145,19 @@ An unexpected API error outside `check` (for example a Linear or Notion failure 
 
 ## Run it in GitHub Actions
 
-The reusable workflow lives in `gitops-engine` (`.github/workflows/sync.yml`); this repository ships a caller to copy, [`examples/caller-workflow.yml`](examples/caller-workflow.yml), which names this tool's CLI and token variable; the workflow installs the tool from the caller's locked uv project, and the two tokens live in the deploy and read-only environments. The workflow applies the registry behind a reviewer's approval, opens a state PR with the refreshed mirror and snapshot, and runs a daily read-only refresh that opens a PR when Linear changed. The caller passes only the GitHub App's `APP_ID` and `APP_PRIVATE_KEY`; the write token (`DESTINATION_TOKEN`) is a deploy-environment secret and the read-only token (`DESTINATION_READONLY_TOKEN`) a read-only-environment secret; the data directory and both environment names come from `registry-sync.yaml`. This tool's repository and the engine's are private today. A caller in the same owner account can call the workflow once Actions access is granted; a caller in a different owner can call it only if the tool repository is public, which is an owner decision still pending. No release tag exists yet, so pin a commit sha in the caller's `uses:` line and in the `uv` source until one is published. Setup steps: [`docs/runbooks/setup.md`](docs/runbooks/setup.md). Day-to-day operation and recovery: [`docs/runbooks/operations.md`](docs/runbooks/operations.md).
+The reusable workflow lives in `gitops-engine` (`.github/workflows/sync.yml`) and calls this tool only through the engine's [CLI contract](https://github.com/markddavidoff/gitops-engine/blob/main/docs/cli-contract.md). This repository ships a caller to copy, [`examples/caller-workflow.yml`](examples/caller-workflow.yml). It names the command (`customer-registry-sync`) and the token variable this tool reads (`LINEAR_API_TOKEN`).
+
+- **Install.** The caller's repository holds a uv project (the workflow's `project_dir` input, default the root) that depends on this tool and has a committed `uv.lock`. Each job runs `uv sync --locked` and then `uv run --frozen`, so a job that holds a token runs only locked code. The lock must use https git URLs or an index, because the jobs hold no deploy key.
+- **Secrets.** The two Linear tokens are environment secrets and are not passed by the caller: `DESTINATION_TOKEN` (write scope) lives in the deploy environment, behind its required reviewer, and `DESTINATION_READONLY_TOKEN` lives in the read-only environment. An environment secret takes precedence over a passed one, so the write token is released only after the reviewer approves a deploy. The workflow exports the token as `LINEAR_API_TOKEN` for each call and only for the steps that call Linear. The caller passes the GitHub App's `APP_ID` and `APP_PRIVATE_KEY` by name.
+- **Config.** The data directory, the state and snapshot directories and both environment names come from `registry-sync.yaml` through `config-get`.
+- **Modes.** A push that changed a deploy input applies the registry behind the approval and opens a state PR with the refreshed mirror and snapshot. A daily read-only refresh opens a PR when Linear changed. A dispatch can also run `restore` or `e2e`.
+
+Setup steps: [`docs/runbooks/setup.md`](docs/runbooks/setup.md). Day-to-day operation and recovery: [`docs/runbooks/operations.md`](docs/runbooks/operations.md).
 
 ## Documentation
 
-- [`docs/customer-registry.md`](docs/customer-registry.md): how the registry, identity resolution, the planner and the safety model work.
-- [`docs/runbooks/setup.md`](docs/runbooks/setup.md): tokens, GitHub App, SSH key, environments, caller workflow, rollout.
+- [`docs/customer-registry.md`](docs/customer-registry.md): how the registry, identity resolution, the planner and the safety model work, and the code map.
+- [`docs/runbooks/setup.md`](docs/runbooks/setup.md): tokens, GitHub App, environments, locked caller project, caller workflow, rollout.
 - [`docs/runbooks/operations.md`](docs/runbooks/operations.md): applying, recovering from a failing `check`, retiring values, restoring snapshots.
 - [`docs/notion-template.md`](docs/notion-template.md): the Notion page layout `ingest` reads, so you can build compatible pages, and the fields of the dataset record it writes (sample: [`examples/dataset-record.example.yaml`](examples/dataset-record.example.yaml)).
 - [`docs/linear-api-notes.md`](docs/linear-api-notes.md): Linear schema, concurrency and rate limits.
@@ -153,7 +174,7 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-To work on `gitops-engine` at the same time, clone it next to this repo and point `[tool.uv.sources]` in `pyproject.toml` at it with `gitops-engine = { path = "../gitops-engine" }` (do not commit that change).
+To work on `gitops-engine` at the same time, clone it next to this repo and point `[tool.uv.sources]` in `pyproject.toml` at it with `gitops-engine = { path = "../gitops-engine", editable = true }` (do not commit that change). Mechanisms that moved to the engine are tested there, against its toy schema; the tests here cover the customer declarations and the CLI paths.
 
 ### Tests
 
