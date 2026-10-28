@@ -11,6 +11,8 @@ from customer_registry_sync.config import (
     config_value,
     load_config,
 )
+from customer_registry_sync.sources import SOURCES
+from customer_registry_sync.sources.notion import NotionSource
 
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "registry-sync.example.yaml"
 
@@ -31,9 +33,12 @@ def _write(path: Path, data: dict) -> Path:
 
 def _valid() -> dict:
     return {
-        "hub_page_id": "11111111-1111-4111-8111-111111111111",
-        "buckets": {
-            name: f"22222222-2222-4222-8222-{i:012d}" for i, name in enumerate(BUCKET_NAMES)
+        "source": {
+            "kind": "notion",
+            "hub_page_id": "11111111-1111-4111-8111-111111111111",
+            "buckets": {
+                name: f"22222222-2222-4222-8222-{i:012d}" for i, name in enumerate(BUCKET_NAMES)
+            },
         },
         "data_dir": "registry-data",
     }
@@ -42,11 +47,58 @@ def _valid() -> dict:
 def test_load_config_reads_ids_from_yaml(tmp_path):
     cfg = load_config(_write(tmp_path / "registry-sync.yaml", _valid()))
     assert isinstance(cfg, RegistryConfig)
-    assert cfg.hub_page_id == "11111111-1111-4111-8111-111111111111"
-    assert list(cfg.buckets) == BUCKET_NAMES
-    assert cfg.buckets["Prospects"] == "22222222-2222-4222-8222-000000000004"
+    assert isinstance(cfg.source, NotionSource)
+    assert cfg.source.hub_page_id == "11111111-1111-4111-8111-111111111111"
+    assert list(cfg.source.buckets) == BUCKET_NAMES
+    assert cfg.source.buckets["Prospects"] == "22222222-2222-4222-8222-000000000004"
     # relative data_dir resolves against the directory holding the config file
     assert cfg.data_dir == tmp_path / "registry-data"
+
+
+def test_source_section_selects_notion(tmp_path):
+    cfg = load_config(_write(tmp_path / "registry-sync.yaml", _valid()))
+    assert SOURCES == {"notion": NotionSource}
+    assert isinstance(cfg.source, NotionSource)
+    assert cfg.source.name == "notion"
+
+
+def test_unknown_source_kind_names_known(tmp_path):
+    data = _valid()
+    data["source"]["kind"] = "hubspot"
+    with pytest.raises(ConfigError, match=r"hubspot.*notion"):
+        load_config(_write(tmp_path / "registry-sync.yaml", data))
+
+
+def test_missing_source_kind_names_known(tmp_path):
+    data = _valid()
+    del data["source"]["kind"]
+    with pytest.raises(ConfigError, match=r"source\.kind.*notion"):
+        load_config(_write(tmp_path / "registry-sync.yaml", data))
+
+
+def test_missing_source_section_names_the_key(tmp_path):
+    data = _valid()
+    del data["source"]
+    with pytest.raises(ConfigError, match=r"'source'"):
+        load_config(_write(tmp_path / "registry-sync.yaml", data))
+
+
+@pytest.mark.parametrize("key", ["hub_page_id", "buckets"])
+def test_old_top_level_hub_page_id_points_to_source(tmp_path, key):
+    """The v0.1 shape (Notion keys at the top level) is refused with a pointer to `source:`."""
+    data = _valid()
+    data[key] = data["source"].pop(key)
+    with pytest.raises(ConfigError, match=rf"'{key}'.*source:"):
+        load_config(_write(tmp_path / "registry-sync.yaml", data))
+
+
+def test_old_top_level_shape_without_source_points_to_source(tmp_path):
+    data = {
+        "hub_page_id": "11111111-1111-4111-8111-111111111111",
+        "buckets": {n: f"22222222-2222-4222-8222-{i:012d}" for i, n in enumerate(BUCKET_NAMES)},
+    }
+    with pytest.raises(ConfigError, match=r"'hub_page_id'.*source:"):
+        load_config(_write(tmp_path / "registry-sync.yaml", data))
 
 
 def test_data_dir_defaults_to_customers(tmp_path):
@@ -115,14 +167,14 @@ def test_default_config_is_registry_sync_yaml_in_cwd(tmp_path, monkeypatch, caps
 
 def test_missing_bucket_key_names_the_key(tmp_path):
     data = _valid()
-    del data["buckets"]["Prospects"]
+    del data["source"]["buckets"]["Prospects"]
     with pytest.raises(ConfigError, match="Prospects"):
         load_config(_write(tmp_path / "registry-sync.yaml", data))
 
 
 def test_missing_bucket_key_exits_2_with_one_line(tmp_path, capsys):
     data = _valid()
-    del data["buckets"]["POCs"]
+    del data["source"]["buckets"]["POCs"]
     path = _write(tmp_path / "registry-sync.yaml", data)
     assert cli.main(["--config", str(path), "check"]) == 2
     err = capsys.readouterr().err
@@ -131,16 +183,16 @@ def test_missing_bucket_key_exits_2_with_one_line(tmp_path, capsys):
 
 
 @pytest.mark.parametrize("key", ["hub_page_id", "buckets"])
-def test_missing_top_level_key_names_the_key(tmp_path, key):
+def test_missing_source_key_names_the_key(tmp_path, key):
     data = _valid()
-    del data[key]
-    with pytest.raises(ConfigError, match=key):
+    del data["source"][key]
+    with pytest.raises(ConfigError, match=rf"source\.{key}"):
         load_config(_write(tmp_path / "registry-sync.yaml", data))
 
 
 def test_unknown_bucket_name_is_rejected(tmp_path):
     data = _valid()
-    data["buckets"]["Leads"] = "44444444-4444-4444-8444-444444444444"
+    data["source"]["buckets"]["Leads"] = "44444444-4444-4444-8444-444444444444"
     with pytest.raises(ConfigError, match="Leads"):
         load_config(_write(tmp_path / "registry-sync.yaml", data))
 
@@ -154,7 +206,8 @@ def test_non_mapping_config_is_rejected(tmp_path):
 
 def test_example_config_loads():
     cfg = load_config(EXAMPLE)
-    assert set(cfg.buckets) == set(BUCKET_NAMES)
+    assert isinstance(cfg.source, NotionSource)
+    assert set(cfg.source.buckets) == set(BUCKET_NAMES)
     # The example carries the workflow settings the reusable workflow reads.
     assert cfg.workflow is not None
     assert cfg.workflow.deploy_environment
@@ -219,7 +272,7 @@ def test_config_value_reads_top_level_and_defaults(tmp_path):
     data["workflow"] = _workflow()
     cfg = load_config(_write(tmp_path / "registry-sync.yaml", data))
     assert config_value(cfg, "data_dir") == str(tmp_path / "registry-data")
-    assert config_value(cfg, "hub_page_id") == "11111111-1111-4111-8111-111111111111"
+    assert config_value(cfg, "source.kind") == "notion"
     assert config_value(cfg, "workflow.readonly_environment") == "registry-readonly"
     with pytest.raises(ConfigError, match=r"unknown config key 'workflow\.nope'"):
         config_value(cfg, "workflow.nope")

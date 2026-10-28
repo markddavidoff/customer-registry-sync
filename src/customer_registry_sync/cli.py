@@ -52,7 +52,6 @@ from gitops_engine.ignore import (
 from gitops_engine.manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
 from gitops_engine.mirror import reconcile_mirror
 
-from .assemble import assemble_dataset
 from .changed import deploy_inputs
 from .check import EXIT_OPERROR, offline_errors, orphan_lines
 from .config import DEFAULT_CONFIG_NAME, ConfigError, config_value, load_config
@@ -69,7 +68,6 @@ from .deploy_plan import (
 )
 from .generate import generate_from_dir
 from .identity import IDENTITIES_FILE, IdentityStore
-from .inputs import load_overrides, load_self_managed_customers
 from .linear_client import LinearError
 from .linear_files import (
     IGNORE_FILE,
@@ -78,7 +76,7 @@ from .linear_files import (
 )
 from .linear_found import append_record_identities, build_linear_found
 from .linear_schema import LINEAR_SCHEMA
-from .notion_ingest import extract_customers
+from .sources import SourceError
 from .tool_source import ToolSourceError, tool_source
 from .writers import (
     DESIRED_SUBDIR,
@@ -128,22 +126,13 @@ def _guard_or_refuse(directory: Path, generator: str, args) -> bool:
     return False
 
 
-def _ingest_notion(args, out_dir: Path) -> int:
-    """Notion → `datasets/notion/`. 0 when written (or a dry run), else 2."""
-    token = os.environ.get("NOTION_API_TOKEN")
-    if not token:
-        print("ERROR: NOTION_API_TOKEN not set (set it in the environment).", file=sys.stderr)
+def _ingest_source(args, out_dir: Path) -> int:
+    """The configured source → `datasets/notion/`. 0 when written (or a dry run), else 2."""
+    try:
+        records = args.registry.source.ingest(out_dir)
+    except SourceError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
         return 2
-    from notion_client import Client  # lazy so unit tests need no network
-
-    self_managed_path = out_dir / "self-managed-customers.yaml"
-    overrides_path = out_dir / "classification-overrides.yaml"
-    raw = extract_customers(Client(auth=token), args.registry.buckets)
-    self_managed = (
-        load_self_managed_customers(self_managed_path) if self_managed_path.exists() else []
-    )
-    overrides = load_overrides(overrides_path) if overrides_path.exists() else {}
-    records = assemble_dataset(raw, self_managed, overrides)
     print(_dataset_summary(records))
     target = dataset_dir(out_dir, NOTION)
     if args.dry_run:
@@ -212,7 +201,7 @@ def _cmd_ingest(args) -> int:
         print(f"ERROR: {no_mirror}; nothing written.", file=sys.stderr)
         return 2
     if args.only != LINEAR_FOUND:
-        code = _ingest_notion(args, out_dir)
+        code = _ingest_source(args, out_dir)
         if code:
             return code
     # Every dataset on disk, listed in datasets.yaml or not: existing stubs keep their ids.

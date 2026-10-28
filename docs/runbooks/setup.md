@@ -190,8 +190,8 @@ committing the new lock.
 
 **`registry-sync.yaml`**, copied from
 [`examples/registry-sync.example.yaml`](../../examples/registry-sync.example.yaml): your
-Notion page ids, an optional `data_dir`, and the two environment names the workflow
-binds its jobs to:
+a `source:` section (`kind: notion`, the hub page id and the six bucket page ids), an
+optional `data_dir`, and the two environment names the workflow binds its jobs to:
 
 ```yaml
 workflow:

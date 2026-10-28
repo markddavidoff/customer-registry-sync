@@ -81,7 +81,8 @@ def _cli(*argv, out_dir):
     # The CLI always loads a config; these runs only touch Linear, so the page ids are dummies.
     cfg = out_dir / DEFAULT_CONFIG_NAME
     cfg.write_text(
-        "hub_page_id: unused\nbuckets:\n" + "".join(f"  {name}: unused\n" for name in BUCKET_NAMES)
+        "source:\n  kind: notion\n  hub_page_id: unused\n  buckets:\n"
+        + "".join(f"    {name}: unused\n" for name in BUCKET_NAMES)
     )
     return cli.main(["--config", str(cfg), *argv, "--out-dir", str(out_dir)])
 

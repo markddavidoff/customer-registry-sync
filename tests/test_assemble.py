@@ -1,4 +1,4 @@
-from customer_registry_sync.assemble import assemble_dataset
+from customer_registry_sync.sources.notion import assemble_dataset
 from customer_registry_sync.schema import CustomerRecord, RawCustomer
 
 

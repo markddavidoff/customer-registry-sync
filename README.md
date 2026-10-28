@@ -36,21 +36,25 @@ Prerequisites:
 Copy [`examples/registry-sync.example.yaml`](examples/registry-sync.example.yaml) to `registry-sync.yaml` and fill in your Notion page ids:
 
 ```yaml
-hub_page_id: <hub page id>
-buckets:
-  Customers: <page id>
-  Churned Customers: <page id>
-  Archive: <page id>
-  POCs: <page id>
-  Prospects: <page id>
-  Partner & Supporting Accounts: <page id>
+source:
+  kind: notion                                # the source adapter; the only kind today
+  hub_page_id: <hub page id>
+  buckets:
+    Customers: <page id>
+    Churned Customers: <page id>
+    Archive: <page id>
+    POCs: <page id>
+    Prospects: <page id>
+    Partner & Supporting Accounts: <page id>
 data_dir: customers                           # optional, relative to this file
 workflow:                                     # optional; read by the reusable workflow
   deploy_environment: <GitHub environment with the required reviewer>
   readonly_environment: <GitHub environment for the scheduled refresh>
 ```
 
-The six bucket names are fixed by the Notion template: the config accepts exactly these names, requires all six, and each name decides a customer's classification (see [`docs/notion-template.md`](docs/notion-template.md)). You cannot rename or add buckets in the config.
+`source:` picks the adapter that reads the upstream system. Adapters ship inside this package (`src/customer_registry_sync/sources/`), so the data repository names one with `kind:` and nothing is loaded from it. An unknown `kind` is an error that names the known kinds. `hub_page_id` or `buckets` at the top level (the v0.1 shape) is an error that points to `source:`; move both under `source:` and add `kind: notion`.
+
+The six bucket names are fixed by the Notion template: `source.buckets` accepts exactly these names, requires all six, and each name decides a customer's classification (see [`docs/notion-template.md`](docs/notion-template.md)). You cannot rename or add buckets in the config.
 
 Every command takes the global `--config <path>` (default `registry-sync.yaml` in the working directory). A missing file, or a missing required key, prints one line to stderr and exits 2. `data_dir` is where the registry files live; a relative path resolves against the config file's directory, and `--out-dir` overrides it per run. `config-get data_dir` prints the absolute path after that resolution. The `workflow:` section holds only the two environment names; the tool runs without it, and `config-get` fails naming a missing key.
 

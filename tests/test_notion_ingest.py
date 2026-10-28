@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from customer_registry_sync.notion_ingest import (
+from customer_registry_sync.sources.notion import (
     _is_customer_page,
     classification_for_bucket,
     norm_arr,

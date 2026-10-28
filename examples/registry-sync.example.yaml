@@ -4,18 +4,21 @@
 # Notion page id: open the page, copy its link; the id is the 32-character
 # hex string at the end (dashes optional).
 
-# The hub page that holds the six bucket pages below.
-hub_page_id: REPLACE-WITH-HUB-PAGE-ID
-
-# bucket name -> id of that bucket's page. All six names are required; the
-# bucket decides each customer's classification.
-buckets:
-  Customers: REPLACE-WITH-CUSTOMERS-PAGE-ID
-  Churned Customers: REPLACE-WITH-CHURNED-PAGE-ID
-  Archive: REPLACE-WITH-ARCHIVE-PAGE-ID
-  POCs: REPLACE-WITH-POCS-PAGE-ID
-  Prospects: REPLACE-WITH-PROSPECTS-PAGE-ID
-  Partner & Supporting Accounts: REPLACE-WITH-PARTNERS-PAGE-ID
+# Where the customer records come from. `kind` picks the source adapter; the
+# other keys belong to that adapter. The only kind today is `notion`.
+source:
+  kind: notion
+  # The hub page that holds the six bucket pages below.
+  hub_page_id: REPLACE-WITH-HUB-PAGE-ID
+  # bucket name -> id of that bucket's page. All six names are required; the
+  # bucket decides each customer's classification.
+  buckets:
+    Customers: REPLACE-WITH-CUSTOMERS-PAGE-ID
+    Churned Customers: REPLACE-WITH-CHURNED-PAGE-ID
+    Archive: REPLACE-WITH-ARCHIVE-PAGE-ID
+    POCs: REPLACE-WITH-POCS-PAGE-ID
+    Prospects: REPLACE-WITH-PROSPECTS-PAGE-ID
+    Partner & Supporting Accounts: REPLACE-WITH-PARTNERS-PAGE-ID
 
 # Optional: directory that holds the dataset, relative to this file.
 # Default: customers

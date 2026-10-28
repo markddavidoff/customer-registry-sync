@@ -12,7 +12,7 @@ from customer_registry_sync.datasets import load_datasets, load_datasets_config
 from customer_registry_sync.identity import load_identities
 from customer_registry_sync.linear_files import IGNORE_FORMAT
 from customer_registry_sync.linear_schema import LINEAR_SCHEMA
-from customer_registry_sync.inputs import load_overrides, load_self_managed_customers
+from customer_registry_sync.sources.notion import load_overrides, load_self_managed_customers
 from customer_registry_sync.schema import VALID_CLASSIFICATIONS, CustomerRecord
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"

@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from customer_registry_sync import inputs
-from customer_registry_sync.inputs import load_overrides, load_self_managed_customers
+from customer_registry_sync.sources import notion as inputs
+from customer_registry_sync.sources.notion import load_overrides, load_self_managed_customers
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 SELF_MANAGED_SEED = EXAMPLES / "self-managed-customers.example.yaml"

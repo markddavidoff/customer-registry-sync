@@ -30,9 +30,12 @@ def _git(repo: Path, *args: str) -> str:
 
 def _write_config(repo: Path, workflow: dict | None = None) -> Path:
     data = {
-        "hub_page_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        "buckets": {
-            name: f"bbbbbbbb-bbbb-4bbb-8bbb-{i:012d}" for i, name in enumerate(BUCKET_NAMES)
+        "source": {
+            "kind": "notion",
+            "hub_page_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "buckets": {
+                name: f"bbbbbbbb-bbbb-4bbb-8bbb-{i:012d}" for i, name in enumerate(BUCKET_NAMES)
+            },
         },
         "data_dir": "registry",
     }

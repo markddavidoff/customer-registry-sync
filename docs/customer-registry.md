@@ -482,7 +482,7 @@ path filter. Its jobs:
 
 | Module | Role |
 |---|---|
-| `notion_ingest.py`, `assemble.py`, `inputs.py`, `config.py` | Notion extraction, cross-bucket merge, curated self-managed and override inputs, the config file. |
+| `sources/` (`base.py`, `notion.py`), `config.py` | The source adapter interface and the `SOURCES` registry; the Notion adapter (page extraction, cross-bucket merge, curated self-managed and override inputs); the config file and its `source:` section. |
 | `datasets.py`, `schema.py` | `datasets.yaml`, dataset directories, `CustomerRecord`. |
 | `identity.py` | The customer's identity declarations: `IDENTITY_SPEC` (source, domain and name keys, their order and normalisers), the `keys_for_*` reducers and `implicit_identity`. The table, `resolve`, validation and the comment-preserving store are in `gitops-engine`. |
 | `linear_found.py` | Stub building and unmapped-status errors. |

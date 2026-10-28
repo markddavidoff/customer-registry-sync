@@ -1,14 +1,14 @@
 # Notion page template
 
 `customer-registry-sync ingest` reads customer pages that a script generates from one
-template. The parser (`src/customer_registry_sync/notion_ingest.py`) does a
+template. The parser (`src/customer_registry_sync/sources/notion.py`) does a
 deterministic block walk, with no LLM, so pages must follow the layout below. This
 document lists exactly what the parser reads. Anything else on the page is ignored.
 
 ## Page tree
 
 ```
-hub page                      hub_page_id in the config (kept for reference)
+hub page                      source.hub_page_id in the config (kept for reference)
 ├── Customers                 bucket page  -> classification "real"
 │   ├── <customer page>       child page, one per customer
 │   └── ...
@@ -20,11 +20,11 @@ hub page                      hub_page_id in the config (kept for reference)
                               bucket page  -> "partner"
 ```
 
-- The config's `buckets` map names each bucket page's id. All six names are required.
+- The config's `source.buckets` map names each bucket page's id. All six names are required.
   The **bucket decides the classification**; a page's own Status line never does.
 - The six bucket names and their classifications are this template's fixed values
-  (`BUCKET_CLASSIFICATION` in `src/customer_registry_sync/notion_ingest.py`). The config
-  loader rejects any other bucket name (`src/customer_registry_sync/config.py`), so name
+  (`BUCKET_CLASSIFICATION` in `src/customer_registry_sync/sources/notion.py`). The Notion
+  adapter rejects any other bucket name when it reads `source:`, so name
   your Notion pages to match; the config cannot rename or add buckets.
 - The ingest lists the **direct children** of each bucket page (100 per request,
   following pagination). It does not recurse into sub-pages other than the customer
@@ -49,7 +49,7 @@ A `child_page` is skipped when its title is:
   than customers: `methodology`, `health report`, `start here`,
   `engagement summaries`, `document structure`, `onboarding guide`.
 
-The marker list is `NON_CUSTOMER_TITLE_MARKERS` in `notion_ingest.py`. Customize it for
+The marker list is `NON_CUSTOMER_TITLE_MARKERS` in `sources/notion.py`. Customize it for
 the reference-page titles in your own workspace.
 
 ### Partner table

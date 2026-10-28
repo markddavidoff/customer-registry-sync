@@ -27,9 +27,12 @@ def make_config(tmp_path_factory):
     def _make(data_dir=None):
         cfg_dir = tmp_path_factory.mktemp("cfg")
         data = {
-            "hub_page_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-            "buckets": {
-                name: f"bbbbbbbb-bbbb-4bbb-8bbb-{i:012d}" for i, name in enumerate(BUCKET_NAMES)
+            "source": {
+                "kind": "notion",
+                "hub_page_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "buckets": {
+                    name: f"bbbbbbbb-bbbb-4bbb-8bbb-{i:012d}" for i, name in enumerate(BUCKET_NAMES)
+                },
             },
             "data_dir": str(data_dir if data_dir is not None else cfg_dir / "customers"),
         }
@@ -260,3 +263,58 @@ class RecordingLinear:
 @pytest.fixture
 def recording_linear():
     return RecordingLinear
+
+
+@pytest.fixture
+def fake_notion(monkeypatch):
+    """A fake Notion workspace built from tests/fixtures: no network, no real token.
+
+    Replaces ``notion_client.Client`` and sets a dummy ``NOTION_API_TOKEN``. Returns
+    the bucket name -> page id map to put in the config's ``source.buckets``."""
+    import json
+    from pathlib import Path
+
+    import notion_client
+
+    fix = Path(__file__).parent / "fixtures"
+
+    def load(name):
+        return json.loads((fix / f"{name}.json").read_text())
+
+    pages = {
+        "Customers": [("Acme Robotics", "customer_acme_robotics")],
+        "Churned Customers": [("Soylent", "churned_soylent_metrics")],
+        "POCs": [("Globex Labs (US)", "poc_globex_labs")],
+        "Prospects": [
+            ("Initrode Systems", "prospect_initrode"),
+            ("Methodology", "prospect_initrode"),
+        ],
+        "Partner & Supporting Accounts": [("Vandelay Cyber", "partner_vandelay_cyber")],
+    }
+    tree: dict[str, list] = {}
+    for bucket, entries in pages.items():
+        kids = []
+        for i, (title, fixture) in enumerate(entries):
+            page_id = f"{bucket}-page-{i}"
+            kids.append({"type": "child_page", "id": page_id, "child_page": {"title": title}})
+            tree[page_id] = load(fixture)
+        if bucket == "Partner & Supporting Accounts":
+            kids.append({"type": "table", "id": "partner-table"})
+            tree["partner-table"] = load("partner_table_rows")
+        tree[f"{bucket}-bucket"] = kids
+
+    class _Children:
+        def list(self, block_id, start_cursor=None, page_size=100):
+            return {"results": tree.get(block_id, []), "has_more": False}
+
+    class _Blocks:
+        children = _Children()
+
+    class FakeClient:
+        def __init__(self, auth):
+            self.auth = auth
+            self.blocks = _Blocks()
+
+    monkeypatch.setattr(notion_client, "Client", FakeClient)
+    monkeypatch.setenv("NOTION_API_TOKEN", "fake-token")
+    return {name: f"{name}-bucket" for name in BUCKET_NAMES}
