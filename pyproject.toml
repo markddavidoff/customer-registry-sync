@@ -1,6 +1,6 @@
 [project]
 name = "customer-registry-sync"
-version = "0.1.0"
+version = "0.2.0"
 description = "Build a customer registry dataset from Notion pages and sync it to Linear customers as code."
 readme = "README.md"
 license = { text = "MIT" }
@@ -17,7 +17,7 @@ dependencies = [
 customer-registry-sync = "customer_registry_sync.cli:main"
 
 [tool.uv.sources]
-gitops-engine = { path = "../../../../gitops-engine/.claude/worktrees/engine-v0.2", editable = true }
+gitops-engine = { git = "https://github.com/markddavidoff/gitops-engine.git", tag = "v0.2.0" }
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
