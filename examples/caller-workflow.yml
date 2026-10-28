@@ -5,17 +5,22 @@
 #
 # - The reusable workflow is gitops-engine's sync workflow. GitHub can call it from
 #   any repository because gitops-engine is public. It installs this tool from the
-#   `tool` requirement below, so the tag in that line pins the tool; keep it on the
-#   same release as the workflow's `@v0.2.0`.
-# - Secrets are passed explicitly by name: `secrets: inherit` passes nothing to a
-#   workflow owned by another account. Map the names on the left (fixed by the
-#   reusable workflow) to your own repository or organization secrets on the right.
-#   The left-hand names contain a hyphen, so an environment secret cannot shadow
-#   them; keep the tokens as repository secrets, and restrict who may run the
-#   deploy through the deploy environment's required reviewers.
+#   uv project in this repository (`project_dir`, default the root; a committed
+#   uv.lock), so the lock pins the tool and its dependencies. The project's
+#   pyproject.toml depends on the tool at the same release as the workflow's
+#   `@v0.2.0`:
+#     customer-registry-sync = { git = "https://github.com/markddavidoff/customer-registry-sync.git", tag = "v0.2.0" }
+# - The two Linear tokens are not passed. Store DESTINATION_TOKEN (the write token) as
+#   a secret of the deploy environment and DESTINATION_READONLY_TOKEN as a secret of
+#   the read-only environment, both named in registry-sync.yaml. A secret of the same name in a job's environment takes
+#   precedence over a passed one, so the write token is released only after a required
+#   reviewer approves the deploy, and no other workflow can read it.
+# - The GitHub App secrets are passed explicitly by name: `secrets: inherit` passes
+#   nothing to a workflow owned by another account. Map the names on the left (fixed
+#   by the reusable workflow) to your own secrets on the right.
 # - There is no `paths:` filter: GitHub cannot read the deploy inputs from the
 #   config. Every push to main starts a run; its first job installs the tool
-#   (a `uv tool install`) and then ends the run when no deploy input changed.
+#   (a `uv sync`) and then ends the run when no deploy input changed.
 name: registry-sync
 
 on:
@@ -45,12 +50,9 @@ jobs:
     permissions:
       contents: read
     secrets:
-      destination-token: ${{ secrets.LINEAR_API_TOKEN }}
-      destination-readonly-token: ${{ secrets.LINEAR_READONLY_TOKEN }}
-      app-id: ${{ secrets.REGISTRY_SYNC_APP_ID }}
-      app-private-key: ${{ secrets.REGISTRY_SYNC_APP_PRIVATE_KEY }}
+      APP_ID: ${{ secrets.REGISTRY_SYNC_APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.REGISTRY_SYNC_APP_PRIVATE_KEY }}
     with:
-      tool: "customer-registry-sync @ git+https://github.com/markddavidoff/customer-registry-sync.git@v0.2.0"
       command: customer-registry-sync
       config: registry-sync.yaml
       token-env: LINEAR_API_TOKEN

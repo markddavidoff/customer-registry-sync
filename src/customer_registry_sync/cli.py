@@ -607,6 +607,8 @@ def _cmd_check(args) -> int:
     return code
 
 
+LINEAR_TOKEN_ENV = "LINEAR_API_TOKEN"
+
 # What `refresh` runs, in order: the state mirror, the found-dataset ingest, the generated files.
 REFRESH_STEPS: tuple[tuple[str, ...], ...] = (
     ("sync-inbound", "--no-input"),
@@ -617,14 +619,23 @@ REFRESH_STEPS: tuple[tuple[str, ...], ...] = (
 
 def _cmd_refresh(args) -> int:
     """`sync-inbound`, `ingest --only linear-found`, `generate`; the first non-zero exit
-    stops the run and is returned. Reads Linear only (never `check`, never a write)."""
+    stops the run and is returned. Reads Linear only (never `check`, never a write).
+
+    Only `sync-inbound` talks to Linear, so the token is withdrawn from the environment
+    for the offline steps and restored afterwards."""
     parser, handlers = build_parser()
-    for step in REFRESH_STEPS:
-        step_args = parser.parse_args(["--config", str(args.config), *step])
-        step_args.registry = args.registry
-        code = handlers[step_args.command](step_args)
-        if code != 0:
-            return code
+    token = os.environ.get(LINEAR_TOKEN_ENV)
+    try:
+        for step in REFRESH_STEPS:
+            step_args = parser.parse_args(["--config", str(args.config), *step])
+            step_args.registry = args.registry
+            code = handlers[step_args.command](step_args)
+            os.environ.pop(LINEAR_TOKEN_ENV, None)
+            if code != 0:
+                return code
+    finally:
+        if token is not None:
+            os.environ[LINEAR_TOKEN_ENV] = token
     return 0
 
 

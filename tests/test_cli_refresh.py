@@ -1,5 +1,7 @@
 """`refresh --no-input`: sync-inbound, then the found-dataset ingest, then generate."""
 
+import os
+
 import pytest
 
 from customer_registry_sync import cli
@@ -63,6 +65,33 @@ def test_refresh_uses_the_same_config_for_every_step(monkeypatch, make_config, t
         monkeypatch.setattr(cli, name, handler)
     assert cli.main(["--config", str(cfg_path), "refresh", "--no-input"]) == 0
     assert outs == [data_dir] * 3
+
+
+def test_refresh_gives_the_token_only_to_sync_inbound(monkeypatch, run_cli):
+    """The offline steps (ingest, generate) never see the Linear token."""
+    monkeypatch.setenv("LINEAR_API_TOKEN", "t0ken")
+    seen: dict[str, str | None] = {}
+
+    def make(name):
+        def handler(args):
+            seen[name] = os.environ.get("LINEAR_API_TOKEN")
+            return 0
+
+        return handler
+
+    monkeypatch.setattr(cli, "_cmd_sync_inbound", make("sync-inbound"))
+    monkeypatch.setattr(cli, "_cmd_ingest", make("ingest"))
+    monkeypatch.setattr(cli, "_cmd_generate", make("generate"))
+    assert run_cli(["refresh", "--no-input"]) == 0
+    assert seen == {"sync-inbound": "t0ken", "ingest": None, "generate": None}
+    assert os.environ["LINEAR_API_TOKEN"] == "t0ken", "restored for the caller"
+
+
+def test_refresh_restores_the_token_after_a_failure(monkeypatch, run_cli):
+    monkeypatch.setenv("LINEAR_API_TOKEN", "t0ken")
+    _stub_steps(monkeypatch, (2, 0, 0))
+    assert run_cli(["refresh", "--no-input"]) == 2
+    assert os.environ["LINEAR_API_TOKEN"] == "t0ken"
 
 
 def test_refresh_is_in_the_parser():
