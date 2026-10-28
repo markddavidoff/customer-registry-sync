@@ -120,6 +120,7 @@ def write_dataset(
     The CSVs are not written here: they come from `generate`'s merged result (`write_csvs`).
     """
     directory = dataset_dir(Path(out_dir), dataset)
+    directory.mkdir(parents=True, exist_ok=True)
 
     if stems is None:
         files = dataset_files(records)

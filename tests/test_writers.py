@@ -1,6 +1,7 @@
 import csv
 import io
 
+import pytest
 import yaml
 from gitops_engine.datasets import dataset_dir
 
@@ -219,3 +220,10 @@ def test_write_dataset_stems_and_dataset_directory(tmp_path):
     names = sorted(p.stem for p in dataset_dir(tmp_path, "linear-found").glob("*.yaml"))
     assert names == sorted(stems)
     assert not dataset_dir(tmp_path, NOTION).exists()
+
+
+def test_write_dataset_stems_length_mismatch_still_creates_the_directory(tmp_path):
+    """v0.1.0 created `datasets/<name>/` before it checked the stems."""
+    with pytest.raises(ValueError, match="stems has 1 entries for"):
+        write_dataset(sample(), tmp_path, dataset=NOTION, stems=["only-one"])
+    assert dataset_dir(tmp_path, NOTION).is_dir()
