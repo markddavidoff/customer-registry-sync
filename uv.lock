@@ -52,7 +52,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "gitops-engine", git = "ssh://git@github.com/markddavidoff/gitops-engine.git?tag=v0.1.0" },
+    { name = "gitops-engine", editable = "../../../../gitops-engine/.claude/worktrees/engine-v0.2" },
     { name = "notion-client", specifier = ">=2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruamel-yaml", specifier = ">=0.18" },
@@ -66,8 +66,15 @@ dev = [
 
 [[package]]
 name = "gitops-engine"
-version = "0.1.0"
-source = { git = "ssh://git@github.com/markddavidoff/gitops-engine.git?tag=v0.1.0#1c2816889dc72c6a72d086872fb28a98b32fb4e6" }
+source = { editable = "../../../../gitops-engine/.claude/worktrees/engine-v0.2" }
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8" },
+    { name = "ruff", specifier = ">=0.6" },
+]
 
 [[package]]
 name = "h11"
