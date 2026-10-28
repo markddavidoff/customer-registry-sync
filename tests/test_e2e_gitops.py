@@ -11,7 +11,7 @@ from customer_registry_sync.config import DEFAULT_CONFIG_NAME
 from customer_registry_sync.datasets import NOTION
 from customer_registry_sync.generate import generate_linear
 from customer_registry_sync.identity import IDENTITIES_FILE
-from customer_registry_sync.identity_store import IdentityStore
+from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.snapshot import SNAPSHOT_SUBDIR
 from customer_registry_sync.writers import (

@@ -62,7 +62,7 @@ def test_paths_resolve_under_data_dir(tmp_path, monkeypatch):
 
     from customer_registry_sync.datasets import NOTION
     from customer_registry_sync.identity import IDENTITIES_FILE
-    from customer_registry_sync.identity_store import IdentityStore
+    from customer_registry_sync.identity import IdentityStore
     from customer_registry_sync.schema import CustomerRecord
     from customer_registry_sync.writers import write_dataset
 

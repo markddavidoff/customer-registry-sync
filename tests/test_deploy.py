@@ -11,7 +11,7 @@ from customer_registry_sync.deploy import (
 from customer_registry_sync.fieldplan import FieldChange
 from customer_registry_sync.generate import generate_linear, merge_datasets
 from customer_registry_sync.identity import IDENTITIES_FILE, IdentityTable, load_identities
-from customer_registry_sync.identity_store import IdentityStore
+from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.linear_client import LiveCustomer, parse_customer_node
 from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced, content_hash_of
 from customer_registry_sync.schema import CustomerRecord

@@ -1,23 +1,30 @@
-"""The identity table and the single `resolve` that decides "same customer".
+"""The customer identity declarations: which keys say "same customer" and how each compares.
 
 `identities.yaml` (in `data_dir`) holds one entry per company, keyed by its permanent
-canonical id (stamped into Linear as the external id). Every record, desired row
-and live Linear customer is reduced to `ItemKeys`, and `resolve` matches those
-keys against the table in a fixed order: source id, then domain, then name. The
-first key that hits decides. Domains compare case-insensitively; names compare
-through `norm_name`.
+canonical id (stamped into Linear as the external id). The table, ordered-key `resolve`
+and the comment-preserving store are engine code (`gitops_engine.identity`); this module
+declares the customer's keys: source id (`notion`, then `linear`), then domain, then
+name. Domains compare case-insensitively; names compare through `norm_name`.
+
+The functions below bind `IDENTITY_SPEC` to the engine's, so callers pass no spec.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
-from ruamel.yaml import YAML
-from ruamel.yaml.constructor import DuplicateKeyError
-from ruamel.yaml.error import YAMLError
+from gitops_engine import identity as engine
+from gitops_engine import identity_store as engine_store
+from gitops_engine.identity import (  # noqa: F401 (re-export)
+    Hit,
+    Identity,
+    IdentityTable,
+    ItemKeys,
+    MatchKey,
+    load_text,
+)
 
 from .datasets import LINEAR_FOUND, NOTION
 from .linear_schema import LinearCustomer
@@ -26,12 +33,9 @@ from .schema import CustomerRecord
 if TYPE_CHECKING:
     from .linear_client import LiveCustomer
 
-IDENTITIES_FILE = "identities.yaml"
-
 SOURCE_NOTION = "notion"
 SOURCE_LINEAR = "linear"
 SOURCE_KEYS = (SOURCE_NOTION, SOURCE_LINEAR)
-_IDENTITY_FIELDS = ("names", "domains", "sources")
 
 # Linear's customer search does not surface status, so every managed customer's
 # display name carries it: "<name> [<status>]".
@@ -49,123 +53,42 @@ def norm_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", strip_status_suffix(name).lower())
 
 
-@dataclass
-class Identity:
-    canonical_id: str
-    names: list[str] = field(default_factory=list)
-    domains: list[str] = field(default_factory=list)
-    sources: dict[str, str] = field(default_factory=dict)
+IDENTITY_SPEC = engine.IdentitySpec(
+    sources=SOURCE_KEYS,
+    match_keys=(
+        MatchKey("domains", "domain", str.lower),
+        MatchKey("names", "name", norm_name),
+    ),
+    destination_source=SOURCE_LINEAR,
+    file_order=("names", "domains", "sources"),
+)
+IDENTITIES_FILE = IDENTITY_SPEC.file
+
+IDENTITIES_HEADER = (
+    "# One entry per company. The key is the canonical id, stamped into Linear as the\n"
+    "# external id; it never changes. Merge duplicates by editing this file.\n"
+)
 
 
-@dataclass
-class IdentityTable:
-    entries: dict[str, Identity] = field(default_factory=dict)
+class IdentityStore(engine_store.IdentityStore):
+    """The customer identity file, loaded for appending."""
 
-
-def _invalid(msg: str) -> ValueError:
-    """Every malformed-file problem is a ValueError, whatever the cause."""
-    return ValueError(msg)
-
-
-def _str_list(cid: str, key: str, value: Any) -> list[str]:
-    if value is None:
-        return []
-    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
-        raise ValueError(f"identity {cid!r}: {key} must be a list of strings")
-    return list(value)
-
-
-def _parse_identity(cid: str, data: Any) -> Identity:
-    if data is None:
-        data = {}
-    if not isinstance(data, dict):
-        raise _invalid(f"identity {cid!r} must be a mapping")
-    unknown = sorted(set(data) - set(_IDENTITY_FIELDS))
-    if unknown:
-        raise ValueError(f"identity {cid!r}: unknown key(s): {unknown}")
-    sources = data.get("sources") or {}
-    if not isinstance(sources, dict):
-        raise _invalid(f"identity {cid!r}: sources must be a mapping")
-    bad = sorted(set(sources) - set(SOURCE_KEYS))
-    if bad:
-        raise ValueError(f"identity {cid!r}: unknown source key(s): {bad}")
-    for k, v in sources.items():
-        if not isinstance(v, str) or not v:
-            raise ValueError(f"identity {cid!r}: source {k} must be a non-empty string")
-    return Identity(
-        canonical_id=cid,
-        names=_str_list(cid, "names", data.get("names")),
-        domains=_str_list(cid, "domains", data.get("domains")),
-        sources=dict(sources),
-    )
-
-
-def parse_identities(raw: Any, name: str) -> IdentityTable:
-    """Validate a parsed `identities.yaml` mapping into a table. `name` is for errors."""
-    if raw is None:
-        return IdentityTable()
-    if not isinstance(raw, dict):
-        raise _invalid(f"{name}: top level must be a mapping of canonical id -> identity")
-    entries: dict[str, Identity] = {}
-    for cid, data in raw.items():
-        if not isinstance(cid, str) or not cid:
-            raise ValueError(f"{name}: canonical id {cid!r} must be a non-empty string")
-        entries[cid] = _parse_identity(cid, data)
-    return IdentityTable(entries=entries)
-
-
-def load_text(text: str, name: str, *, round_trip: bool = False) -> Any:
-    """Parse YAML text with ruamel, which rejects a duplicate key (PyYAML keeps the last).
-
-    A repeated canonical id would otherwise drop an identity from a hand-edited file
-    without a word. Any parse failure is a `ValueError` naming the file."""
-    yml = YAML(typ="rt" if round_trip else "safe", pure=True)
-    if round_trip:
-        yml.preserve_quotes = True  # keep hand-written quote styles through a save
-    try:
-        return yml.load(text)
-    except DuplicateKeyError as e:
-        m = re.search(r'found duplicate key "([^"]*)"', str(e))
-        key = m.group(1) if m else "?"
-        line = f" (line {e.problem_mark.line + 1})" if e.problem_mark else ""
-        raise ValueError(
-            f"{name}: duplicate key {key!r}{line}; each canonical id may appear once"
-        ) from e
-    except YAMLError as e:
-        raise ValueError(f"{name}: not valid YAML: {e}") from e
-
-
-def load_identities(path: Path) -> IdentityTable:
-    """Load `identities.yaml`. A missing file is an empty table."""
-    if not path.exists():
-        return IdentityTable()
-    return parse_identities(load_text(path.read_text(), path.name), path.name)
-
-
-@dataclass(frozen=True)
-class ItemKeys:
-    """What one record / desired row / live customer offers to `resolve`."""
-
-    label: str
-    ids: tuple[str, ...] = ()
-    notion: str | None = None
-    linear_id: str | None = None
-    domains: tuple[str, ...] = ()
-    names: tuple[str, ...] = ()
+    def __init__(self, path: Path) -> None:
+        super().__init__(path, IDENTITY_SPEC, header=IDENTITIES_HEADER)
 
 
 def keys_for_record(rec: CustomerRecord, *, dataset: str, source_id: str) -> ItemKeys:
     """Keys for a dataset record; `source_id` is its file stem."""
-    label, domains, names = rec.canonical_name, tuple(rec.domains), (rec.canonical_name,)
+    label = rec.canonical_name
+    values = (("domains", tuple(rec.domains)), ("names", (rec.canonical_name,)))
     if dataset == NOTION:
-        return ItemKeys(label=label, notion=source_id, domains=domains, names=names)
+        return ItemKeys(label=label, sources=((SOURCE_NOTION, source_id),), values=values)
     if dataset == LINEAR_FOUND:
         return ItemKeys(
             label=label,
             ids=(source_id,),
-            linear_id=rec.linear_customer_id,
-            domains=domains,
-            names=names,
+            sources=((SOURCE_LINEAR, rec.linear_customer_id),),
+            values=values,
         )
     raise ValueError(f"unknown dataset {dataset!r}")
 
@@ -174,9 +97,8 @@ def keys_for_live(lv: LiveCustomer) -> ItemKeys:
     return ItemKeys(
         label=lv.name,
         ids=tuple(lv.external_ids),
-        linear_id=lv.id,
-        domains=tuple(lv.domains),
-        names=(lv.name,),
+        sources=((SOURCE_LINEAR, lv.id),),
+        values=(("domains", tuple(lv.domains)), ("names", (lv.name,))),
     )
 
 
@@ -184,115 +106,16 @@ def keys_for_row(row: LinearCustomer) -> ItemKeys:
     return ItemKeys(
         label=row.name,
         ids=tuple(row.external_ids),
-        linear_id=row.linear_synced.linear_id if row.linear_synced else None,
-        domains=tuple(row.domains),
-        names=(row.name,),
+        sources=((SOURCE_LINEAR, row.linear_synced.linear_id if row.linear_synced else None),),
+        values=(("domains", tuple(row.domains)), ("names", (row.name,))),
     )
 
 
-HitKey = Literal["source id", "domain", "name"]
+def implicit_identity(row: LinearCustomer, taken: set[str]) -> Identity:
+    """The identity for a row that resolves to nothing.
 
-
-@dataclass(frozen=True)
-class Hit:
-    canonical_id: str
-    key: HitKey
-    value: str
-
-
-def _hits(item: ItemKeys, table: IdentityTable) -> list[Hit]:
-    """Every (identity, key) match in resolution order, duplicates included."""
-    out: list[Hit] = []
-    for xid in item.ids:
-        if xid in table.entries:
-            out.append(Hit(xid, "source id", xid))
-    for src, value in ((SOURCE_NOTION, item.notion), (SOURCE_LINEAR, item.linear_id)):
-        if value:
-            out.extend(
-                Hit(i.canonical_id, "source id", value)
-                for i in table.entries.values()
-                if i.sources.get(src) == value
-            )
-    for d in item.domains:
-        dl = d.lower()
-        out.extend(
-            Hit(i.canonical_id, "domain", d)
-            for i in table.entries.values()
-            if dl in {x.lower() for x in i.domains}
-        )
-    for n in item.names:
-        nn = norm_name(n)
-        if not nn:
-            continue
-        out.extend(
-            Hit(i.canonical_id, "name", n)
-            for i in table.entries.values()
-            if nn in {norm_name(x) for x in i.names}
-        )
-    return out
-
-
-def resolve(item: ItemKeys, table: IdentityTable) -> Hit | None:
-    """The first hit in key order decides: source id, then domain, then name."""
-    hits = _hits(item, table)
-    return hits[0] if hits else None
-
-
-def resolve_all(item: ItemKeys, table: IdentityTable) -> list[Hit]:
-    """One hit per distinct identity the item reaches, each by its first key."""
-    seen: set[str] = set()
-    out: list[Hit] = []
-    for h in _hits(item, table):
-        if h.canonical_id not in seen:
-            seen.add(h.canonical_id)
-            out.append(h)
-    return out
-
-
-def conflict(item: ItemKeys, table: IdentityTable) -> str | None:
-    """A message when the later keys pick a different identity than the first."""
-    hits = resolve_all(item, table)
-    if len(hits) < 2:
-        return None
-    a, b = hits[0], hits[1]
-    return (
-        f"{item.label} resolves to two identities: "
-        f"{a.canonical_id} ({a.key} '{a.value}') and {b.canonical_id} ({b.key} '{b.value}')"
-    )
-
-
-def _dupes(what: str, pairs: list[tuple[str, str, str]]) -> list[str]:
-    """`pairs` = (comparison key, shown value, canonical id), in table order."""
-    owners: dict[str, list[str]] = {}
-    shown: dict[str, str] = {}
-    for k, value, cid in pairs:
-        shown.setdefault(k, value)
-        ids = owners.setdefault(k, [])
-        if cid not in ids:
-            ids.append(cid)
-    return [
-        f"{what} '{shown[k]}' is on two identities: {', '.join(ids)}"
-        for k, ids in owners.items()
-        if len(ids) > 1
-    ]
-
-
-def table_errors(table: IdentityTable) -> list[str]:
-    """A domain, name or source id listed on two identities."""
-    ents = list(table.entries.values())
-    errors = _dupes("domain", [(d.lower(), d, i.canonical_id) for i in ents for d in i.domains])
-    errors += _dupes(
-        "name", [(norm_name(n), n, i.canonical_id) for i in ents for n in i.names if norm_name(n)]
-    )
-    for src in SOURCE_KEYS:
-        errors += _dupes(
-            f"source {src}",
-            [(i.sources[src], i.sources[src], i.canonical_id) for i in ents if src in i.sources],
-        )
-    return errors
-
-
-def _implicit_id(row: LinearCustomer, taken: dict[str, Identity]) -> str:
+    The canonical id is the row's external id (generated rows carry `slug_for`), else a
+    slug of its name, with a numeric suffix when `taken` already has it."""
     if row.external_ids:
         base = row.external_ids[0]
     else:
@@ -302,25 +125,46 @@ def _implicit_id(row: LinearCustomer, taken: dict[str, Identity]) -> str:
     while cid in taken:
         n += 1
         cid = f"{base}-{n}"
-    return cid
+    sources = {SOURCE_LINEAR: row.linear_synced.linear_id} if row.linear_synced else {}
+    return Identity(
+        canonical_id=cid,
+        values={"names": [strip_status_suffix(row.name)], "domains": list(row.domains)},
+        sources=sources,
+    )
+
+
+# --- the engine's functions with the customer spec bound ---------------------------
+
+
+def parse_identities(raw: Any, name: str) -> IdentityTable:
+    return engine.parse_identities(raw, name, IDENTITY_SPEC)
+
+
+def load_identities(path: Path) -> IdentityTable:
+    """Load `identities.yaml`. A missing file is an empty table."""
+    return engine.load_identities(path, IDENTITY_SPEC)
+
+
+def resolve(item: ItemKeys, table: IdentityTable) -> Hit | None:
+    """The first hit in key order decides: source id, then domain, then name."""
+    return engine.resolve(item, table, IDENTITY_SPEC)
+
+
+def resolve_all(item: ItemKeys, table: IdentityTable) -> list[Hit]:
+    return engine.resolve_all(item, table, IDENTITY_SPEC)
+
+
+def conflict(item: ItemKeys, table: IdentityTable) -> str | None:
+    return engine.conflict(item, table, IDENTITY_SPEC)
+
+
+def table_errors(table: IdentityTable) -> list[str]:
+    """A domain, name or source id listed on two identities."""
+    return engine.table_errors(table, IDENTITY_SPEC)
 
 
 def with_implicit(table: IdentityTable, rows: list[LinearCustomer]) -> IdentityTable:
-    """A copy of `table` plus one identity per row that resolves to nothing.
-
-    The implicit canonical id is the row's external id (generated rows carry
-    `slug_for`), else a slug of its name. Rows are added in order, so a later
-    row of the same company resolves to the identity an earlier one created."""
-    out = IdentityTable(entries=dict(table.entries))
-    for row in rows:
-        if resolve(keys_for_row(row), out) is not None:
-            continue
-        cid = _implicit_id(row, out.entries)
-        sources = {SOURCE_LINEAR: row.linear_synced.linear_id} if row.linear_synced else {}
-        out.entries[cid] = Identity(
-            canonical_id=cid,
-            names=[strip_status_suffix(row.name)],
-            domains=list(row.domains),
-            sources=sources,
-        )
-    return out
+    """A copy of `table` plus one identity per row that resolves to nothing."""
+    return engine.with_implicit(
+        table, rows, IDENTITY_SPEC, keys=keys_for_row, implicit=implicit_identity
+    )

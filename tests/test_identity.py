@@ -13,14 +13,13 @@ from customer_registry_sync.identity import (
     keys_for_live,
     keys_for_record,
     keys_for_row,
-    load_identities,
     norm_name,
     resolve,
     resolve_all,
     table_errors,
     with_implicit,
 )
-from customer_registry_sync.identity_store import IdentityStore
+from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.linear_client import parse_customer_node
 from customer_registry_sync.linear_schema import LinearSynced
 from customer_registry_sync.schema import CustomerRecord
@@ -74,10 +73,6 @@ def table_from_file(tmp_path: Path, text: str) -> IdentityTable:
     return IdentityStore(p).table
 
 
-def test_missing_file_is_an_empty_table(tmp_path):
-    assert load_identities(tmp_path / IDENTITIES_FILE).entries == {}
-
-
 def test_unknown_field_raises_naming_the_key(tmp_path):
     with pytest.raises(ValueError, match="aliases"):
         table_from_file(
@@ -88,11 +83,6 @@ def test_unknown_field_raises_naming_the_key(tmp_path):
               aliases: [ACME]
         """,
         )
-
-
-def test_file_order_is_kept(tmp_path):
-    t = table(tmp_path, zeta={"names": ["Zeta"]}, alpha={"names": ["Alpha"]})
-    assert list(t.entries) == ["zeta", "alpha"]
 
 
 def test_norm_name_strips_suffix_then_case_and_punctuation():
@@ -140,9 +130,9 @@ def test_resolves_by_linear_id(tmp_path):
 
 def test_desired_row_linear_id_comes_from_linear_synced():
     [row] = generate_linear([ds()])
-    assert keys_for_row(row).linear_id is None
+    assert dict(keys_for_row(row).sources)["linear"] is None
     row.linear_synced = LinearSynced(linear_id="lin-9", updated_at="t", content_hash="h")
-    assert keys_for_row(row).linear_id == "lin-9"
+    assert dict(keys_for_row(row).sources)["linear"] == "lin-9"
 
 
 def test_domain_match_ignores_case(tmp_path):
@@ -237,9 +227,9 @@ def test_with_implicit_adds_only_unresolved_rows(tmp_path):
     )
     out = with_implicit(t, rows)
     assert list(out.entries) == ["acmeco", "beta", "gamma"]
-    assert out.entries["beta"].names == ["Beta Co"]
-    assert out.entries["beta"].domains == ["beta.io"]
-    assert out.entries["gamma"].names == ["Gamma"]
+    assert out.entries["beta"].values["names"] == ["Beta Co"]
+    assert out.entries["beta"].values["domains"] == ["beta.io"]
+    assert out.entries["gamma"].values["names"] == ["Gamma"]
     assert list(t.entries) == ["acmeco"]  # input untouched
     for row in rows:
         assert resolve(keys_for_row(row), out) is not None

@@ -27,7 +27,7 @@ from customer_registry_sync.deploy import live_to_linear
 from customer_registry_sync.fieldplan import FieldChange
 from customer_registry_sync.generate import generate_from_dir, merge_datasets
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
-from customer_registry_sync.identity_store import IdentityStore
+from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.ignore import IGNORE_FILE, load_ignore
 from customer_registry_sync.inbound_sync import reconcile_inbound
 from customer_registry_sync.linear_client import LiveCustomer, parse_customer_node
@@ -395,7 +395,7 @@ def test_identity_offline_errors_include_table_errors(tmp_path):
     table = _store(
         tmp_path, ("a", ["A"], ["x.example.test"], {}), ("b", ["B"], ["y.example.test"], {})
     )
-    table.entries["b"].domains.append(
+    table.entries["b"].values["domains"].append(
         "x.example.test"
     )  # the store refuses this; a human edit does not
     assert identity_offline_errors([], table) == [

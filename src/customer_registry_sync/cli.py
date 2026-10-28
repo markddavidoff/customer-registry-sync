@@ -48,8 +48,7 @@ from .datasets import LINEAR_FOUND, NOTION, load_datasets, load_datasets_config
 from .deploy import apply_deploy, plan_deploy
 from .fieldplan import DESTRUCTIVE, FieldChange, state_to_live
 from .generate import generate_from_dir
-from .identity import IDENTITIES_FILE, load_identities
-from .identity_store import IdentityStore
+from .identity import IDENTITIES_FILE, IdentityStore, load_identities
 from .ignore import (
     IGNORE_FILE,
     append_ignore,

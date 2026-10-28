@@ -132,7 +132,7 @@ def merge_datasets(
     for cid, group in group_by_identity(entries, table, priority).items():
         best = group[0]
         ident = table.entries.get(cid)
-        rec = _with_identity_domains(best.record, ident.domains if ident else [])
+        rec = _with_identity_domains(best.record, ident.values["domains"] if ident else [])
         winner = DatasetRecord(dataset=best.dataset, source_id=best.source_id, record=rec)
         winners.append(winner)
         row = project_record(rec, external_id=cid, linear_owned=best.dataset == LINEAR_FOUND)

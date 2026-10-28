@@ -11,6 +11,7 @@ customer's name or domain changes there.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -19,13 +20,12 @@ from .deploy import pick_primary, stamped_conflict
 from .identity import (
     SOURCE_LINEAR,
     SOURCE_NOTION,
-    ItemKeys,
+    IdentityStore,
     keys_for_live,
     keys_for_record,
     resolve,
     strip_status_suffix,
 )
-from .identity_store import IdentityStore
 from .linear_client import LiveCustomer
 from .schema import VALID_CLASSIFICATIONS, CustomerRecord
 from .writers import slug_for
@@ -107,13 +107,7 @@ def build_linear_found(
         stem = stem_by_linear.get(lv.id)
         keys = keys_for_live(lv)
         if stem is not None:
-            keys = ItemKeys(
-                label=keys.label,
-                ids=(stem, *keys.ids),
-                linear_id=keys.linear_id,
-                domains=keys.domains,
-                names=keys.names,
-            )
+            keys = dataclasses.replace(keys, ids=(stem, *keys.ids))
         hit = resolve(keys, store.table)
         if hit is not None:
             cid = hit.canonical_id

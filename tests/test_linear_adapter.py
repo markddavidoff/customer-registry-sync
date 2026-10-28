@@ -8,7 +8,7 @@ import pytest
 from customer_registry_sync.check import detect_drift
 from customer_registry_sync.deploy import apply_deploy, live_to_linear, pair_rows, plan_deploy
 from customer_registry_sync.identity import IDENTITIES_FILE, IdentityTable, load_identities
-from customer_registry_sync.identity_store import IdentityStore
+from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.linear_adapter import LinearCustomersAdapter
 from customer_registry_sync.linear_client import LiveCustomer
 from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced, content_hash_of

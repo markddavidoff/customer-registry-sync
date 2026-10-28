@@ -156,8 +156,7 @@ def _with_record_identities(table: IdentityTable, entries: list[DatasetRecord]) 
         )
         out.entries[cid] = Identity(
             canonical_id=cid,
-            names=[e.record.canonical_name],
-            domains=list(e.record.domains),
+            values={"names": [e.record.canonical_name], "domains": list(e.record.domains)},
             sources=sources,
         )
     return out
@@ -228,7 +227,7 @@ def unused_identities(
             continue
         out += [
             f"unused identity domain: {cid}: {d}"
-            for d in ident.domains
+            for d in ident.values["domains"]
             if d.lower() not in held_domains[cid]
         ]
     return out

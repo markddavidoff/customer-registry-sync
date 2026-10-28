@@ -12,7 +12,7 @@ from customer_registry_sync.generate import (
     project_record,
 )
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities, strip_status_suffix
-from customer_registry_sync.identity_store import IdentityStore
+from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.writers import write_dataset
 

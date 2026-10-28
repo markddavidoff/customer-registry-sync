@@ -17,7 +17,7 @@ from customer_registry_sync.deploy import plan_deploy
 from customer_registry_sync.fieldplan import state_to_live
 from customer_registry_sync.generate import generate_from_dir
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
-from customer_registry_sync.identity_store import IdentityStore
+from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.ignore import BUILTIN_PREFIX, IGNORE_FILE, load_ignore, partition_live
 from customer_registry_sync.inbound_sync import reconcile_inbound
 from customer_registry_sync.linear_client import parse_customer_node
@@ -196,7 +196,7 @@ def test_status_suffix_stripped(tmp_path, run_cli):
     assert stem == "pilot-co"
     assert rec.canonical_name == "Pilot Co"
     assert rec.classification == "prospect"
-    assert _identities(tmp_path)["pilot-co"].names == ["Pilot Co"]
+    assert _identities(tmp_path)["pilot-co"].values["names"] == ["Pilot Co"]
 
 
 def test_first_sighting_date_kept(tmp_path):
@@ -260,7 +260,10 @@ def test_linear_only_domain_appended_to_identity(tmp_path, run_cli):
         ],
     )
     assert _ingest(run_cli, tmp_path) == 0
-    assert _identities(tmp_path)["acme"].domains == ["acme.example.test", "Acme-Alt.example.test"]
+    assert _identities(tmp_path)["acme"].values["domains"] == [
+        "acme.example.test",
+        "Acme-Alt.example.test",
+    ]
     # a stub's later Linear-only domain lands on its identity too
     _mirror(
         tmp_path,
@@ -268,7 +271,10 @@ def test_linear_only_domain_appended_to_identity(tmp_path, run_cli):
         _node("lin_b", "Beta Corp", domains=["beta.example.test", "beta-two.example.test"]),
     )
     assert _ingest(run_cli, tmp_path) == 0
-    assert _identities(tmp_path)["beta"].domains == ["beta.example.test", "beta-two.example.test"]
+    assert _identities(tmp_path)["beta"].values["domains"] == [
+        "beta.example.test",
+        "beta-two.example.test",
+    ]
 
 
 def test_ignored_customer_not_stubbed_and_gets_no_identity(tmp_path, run_cli):
@@ -301,7 +307,7 @@ def test_same_name_live_customers_make_one_stub(tmp_path, capsys, run_cli):
     assert list(stubs) == ["dup"]
     assert stubs["dup"].linear_customer_id == "lin_1"
     ident = _identities(tmp_path)["dup"]
-    assert ident.domains == ["dup.example.test"]  # the duplicate contributes nothing
+    assert ident.values["domains"] == ["dup.example.test"]  # the duplicate contributes nothing
     # neither carries an id, so the lowest Linear id must not settle the pick
     assert ident.sources == {}
     out = capsys.readouterr().out
@@ -360,7 +366,7 @@ def test_ambiguous_duplicates_record_no_linear_source(tmp_path, capsys, run_cli)
     assert _ingest(run_cli, tmp_path) == 0
     ident = _identities(tmp_path)["acme"]
     assert ident.sources == {"notion": "acme"}
-    assert ident.domains == ["acme.example.test"]
+    assert ident.values["domains"] == ["acme.example.test"]
     assert _stubs(tmp_path) == {}
     out = capsys.readouterr().out
     assert "acme: no customer carries the canonical or recorded Linear id" in out
@@ -458,4 +464,7 @@ def test_recorded_linear_id_picks_the_primary_and_the_other_is_a_known_duplicate
     assert build.reports == []
     assert build.duplicates == ["acme: 'Acme Inc' (lin_1) is a known duplicate; merge it in Linear"]
     # only the primary contributes its Linear-only domain
-    assert store.table.entries["acme"].domains == ["acme.example.test", "acme-two.example.test"]
+    assert store.table.entries["acme"].values["domains"] == [
+        "acme.example.test",
+        "acme-two.example.test",
+    ]

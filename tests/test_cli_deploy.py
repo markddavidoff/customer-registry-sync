@@ -276,7 +276,7 @@ def test_deploy_refuses_on_planner_errors_and_loads_identities(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
     from customer_registry_sync.identity import IDENTITIES_FILE
-    from customer_registry_sync.identity_store import IdentityStore
+    from customer_registry_sync.identity import IdentityStore
 
     store = IdentityStore(tmp_path / IDENTITIES_FILE)
     store.add_identity(
@@ -417,7 +417,7 @@ def _generated(tmp_path, recs, *identities):
     from customer_registry_sync.datasets import NOTION
     from customer_registry_sync.generate import generate_from_dir
     from customer_registry_sync.identity import IDENTITIES_FILE
-    from customer_registry_sync.identity_store import IdentityStore
+    from customer_registry_sync.identity import IdentityStore
     from customer_registry_sync.writers import write_csvs, write_dataset
 
     store = IdentityStore(tmp_path / IDENTITIES_FILE)
