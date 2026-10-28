@@ -1,7 +1,9 @@
 from dataclasses import replace
 
 from gitops_engine.datasets import dataset_dir
+from gitops_engine.ignore import load_ignore
 from gitops_engine.manifest import MANIFEST, write_manifest
+from gitops_engine.mirror import reconcile_mirror
 
 from customer_registry_sync import cli, deploy
 from customer_registry_sync.check import (
@@ -15,7 +17,7 @@ from customer_registry_sync.check import (
     run_check,
     unused_identities,
 )
-from customer_registry_sync.curated import CuratedFields
+from customer_registry_sync.linear_files import CuratedFields
 from customer_registry_sync.datasets import (
     LINEAR_FOUND,
     NOTION,
@@ -28,13 +30,16 @@ from customer_registry_sync.fieldplan import FieldChange
 from customer_registry_sync.generate import generate_from_dir, merge_datasets
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
 from customer_registry_sync.identity import IdentityStore
-from customer_registry_sync.ignore import IGNORE_FILE, load_ignore
-from customer_registry_sync.inbound_sync import reconcile_inbound
+from customer_registry_sync.linear_files import IGNORE_FILE, IGNORE_FORMAT
 from customer_registry_sync.linear_client import LiveCustomer, parse_customer_node
-from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced, content_hash_of
+from customer_registry_sync.linear_schema import (
+    LINEAR_SCHEMA,
+    LinearCustomer,
+    LinearSynced,
+    content_hash_of,
+)
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.writers import (
-    load_state,
     write_csvs,
     write_dataset,
     write_desired,
@@ -412,7 +417,7 @@ _IGNORE_OWN = (
 
 def _ignore_list(tmp_path, text=_IGNORE_OWN):
     (tmp_path / IGNORE_FILE).write_text(text)
-    return load_ignore(tmp_path / IGNORE_FILE)
+    return load_ignore(tmp_path / IGNORE_FILE, IGNORE_FORMAT)
 
 
 def _node(
@@ -746,7 +751,7 @@ def test_linear_edit_to_stub_passes_check(tmp_path, monkeypatch, capsys, run_cli
     stamped = _node(
         "lin_hooli", "Hooli", domains=["hooli.example.test"], revenue=None, xids=["hooli"]
     )
-    write_state(reconcile_inbound([stamped], []), tmp_path)
+    write_state(reconcile_mirror([stamped], LINEAR_SCHEMA), tmp_path)
     write_manifest(tmp_path / "linear-state", "sync-inbound")
     args = ["--out-dir", str(tmp_path), "--no-input"]
     assert run_cli(["ingest", "--only", "linear-found", *args]) == 0
@@ -761,7 +766,7 @@ def test_linear_edit_to_stub_passes_check(tmp_path, monkeypatch, capsys, run_cli
         xids=["hooli"],
         updated="2026-10-09T00:00:00.000Z",
     )
-    write_state(reconcile_inbound([now], load_state(tmp_path)), tmp_path)
+    write_state(reconcile_mirror([now], LINEAR_SCHEMA), tmp_path)
     write_manifest(tmp_path / "linear-state", "sync-inbound")
     monkeypatch.setattr(cli, "_linear_client", lambda: _Fake([now]))
     assert run_cli(["check", "--out-dir", str(tmp_path)]) == 0

@@ -17,7 +17,7 @@ stale ignore entries and the ignored-customer list are reported, never failed:
 the next refresh appends an untracked domain to its identity, and the Notion
 dataset is the only place to maintain revenue and tier.
 
-Live customers are split once into managed and ignored (`ignore.partition_live`);
+Live customers are split once into managed and ignored (`gitops_engine.ignore.partition_live`);
 drift, the plan, untracked values and stale retire entries see only the managed
 set. A Linear edit to a stub (a `linear_owned` row) is not drift.
 
@@ -40,9 +40,14 @@ from pathlib import Path
 from gitops_engine import EXIT_DRIFT, EXIT_OK, EXIT_OPERROR, DriftReport
 from gitops_engine import detect_drift as _engine_detect_drift
 from gitops_engine.datasets import DATASETS_SUBDIR
+from gitops_engine.ignore import (
+    IgnoreList,
+    ignore_errors,
+    partition_live,
+    stale_ignore,
+)
 from gitops_engine.manifest import manifest_edits
 
-from .curated import CuratedFields
 from .datasets import DatasetRecord, datasets_errors, load_datasets, load_datasets_config
 from .deploy import DeployPlan, pair_rows, plan_deploy
 from .fieldplan import Untracked, stale_retire, untracked_values
@@ -59,18 +64,16 @@ from .identity import (
     resolve,
     table_errors,
 )
-from .ignore import (
-    IGNORE_FILE,
-    IgnoreList,
-    ignore_conflicts,
-    ignore_errors,
-    partition_live,
-    stale_ignore,
-)
 from .linear_adapter import LinearCustomersAdapter
 from .linear_client import LiveCustomer
+from .linear_files import (
+    IGNORE_FILE,
+    IGNORE_FORMAT,
+    CuratedFields,
+    ignore_conflicts,
+)
 from .linear_found import status_errors
-from .linear_schema import LinearCustomer
+from .linear_schema import LINEAR_SCHEMA, LinearCustomer
 from .writers import (
     DESIRED_SUBDIR,
     REAL_CUSTOMERS_CSV,
@@ -279,7 +282,7 @@ def run_check(
     out-of-scope rows) whose domains still count as held."""
     ignore = ignore if ignore is not None else IgnoreList()
     table = table or IdentityTable()
-    managed, ignored = partition_live(live, ignore, scope=scope)
+    managed, ignored = partition_live(live, ignore, LINEAR_SCHEMA, scope=scope)
     ignored_ids = {lv.id for lv in ignored}
     state = [s for s in state if not _state_ignored(s, ignored_ids, ignore, scope)]
     stubs = {
@@ -303,7 +306,7 @@ def run_check(
     )
     failures += live_identity_conflicts(managed, table)
     if scope is None:  # a scoped run sees only its own rows: every entry would look stale
-        reports += stale_ignore(ignore, live)
+        reports += stale_ignore(ignore, live, LINEAR_SCHEMA)
     found: list[LiveCustomer] = []
     if entries is not None:
         found = orphans(managed, table, entries)
@@ -377,7 +380,7 @@ def offline_errors(data_dir: Path) -> list[str]:
     status and a stale `generate` output (`linear/` and both CSVs); empty when clean."""
     root = Path(data_dir)
     errors: list[str] = datasets_errors(root)
-    errors += ignore_errors(root / IGNORE_FILE)
+    errors += ignore_errors(root / IGNORE_FILE, IGNORE_FORMAT)
     for sub, generator in generated_dirs(root).items():
         edits = manifest_edits(root / sub)
         if edits is None:

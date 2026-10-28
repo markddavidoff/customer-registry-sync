@@ -4,25 +4,25 @@ The `ignore` command that appends entries arrives with the CLI port; until then 
 hand-edited, so these tests write the documented YAML shape."""
 
 import pytest
-
-from customer_registry_sync.datasets import LINEAR_FOUND, NOTION, DatasetRecord
-from customer_registry_sync.generate import merge_datasets
-from customer_registry_sync.identity import IDENTITIES_FILE, IdentityTable, load_identities
-from customer_registry_sync.identity import IdentityStore
-from customer_registry_sync.ignore import (
+from gitops_engine.ignore import (
     BUILTIN_PREFIX,
-    IGNORE_FILE,
     IgnoreEntry,
     IgnorePrefix,
     append_ignore,
-    ignore_conflicts,
     ignore_errors,
     ignored_lines,
     load_ignore,
     partition_live,
     stale_ignore,
 )
+
+from customer_registry_sync.datasets import LINEAR_FOUND, NOTION, DatasetRecord
+from customer_registry_sync.generate import merge_datasets
+from customer_registry_sync.identity import IDENTITIES_FILE, IdentityTable, load_identities
+from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.linear_client import parse_customer_node
+from customer_registry_sync.linear_files import IGNORE_FILE, IGNORE_FORMAT, ignore_conflicts
+from customer_registry_sync.linear_schema import LINEAR_SCHEMA
 from customer_registry_sync.schema import CustomerRecord
 
 PRIORITY = [NOTION, LINEAR_FOUND]
@@ -58,7 +58,7 @@ def _node(lid, name, *, domains=(), xids=(), status="Active"):
 def _ignore(tmp_path, text=OWN_ORG_FILE):
     path = tmp_path / IGNORE_FILE
     path.write_text(text)
-    return load_ignore(path)
+    return load_ignore(path, IGNORE_FORMAT)
 
 
 def _table(tmp_path, *identities):
@@ -89,8 +89,8 @@ def test_match_by_prefix_and_builtin(tmp_path):
     assert isinstance(builtin, IgnorePrefix) and builtin.line is None
     assert ign.match("lin_3", "Acme test-", scope=None) is None  # startswith, not contains
     # no file at all: the built-in prefix still applies
-    empty = load_ignore(tmp_path / "missing.yaml")
-    assert empty.customers == [] and empty.match("x", f"{BUILTIN_PREFIX}x", scope=None)
+    empty = load_ignore(tmp_path / "missing.yaml", IGNORE_FORMAT)
+    assert empty.entries == [] and empty.match("x", f"{BUILTIN_PREFIX}x", scope=None)
 
 
 def test_scoped_e2e_run_may_write_its_prefix(tmp_path):
@@ -101,9 +101,9 @@ def test_scoped_e2e_run_may_write_its_prefix(tmp_path):
     assert ign.match("lin_e2e", name, scope=scope) is None  # its own scoped run: managed
     assert ign.match("lin_own", "Pied Piper", scope=scope) is not None  # ids still match
     live = [_node("lin_e2e", name), _node("lin_own", "Pied Piper")]
-    managed, ignored = partition_live(live, ign, scope=scope)
+    managed, ignored = partition_live(live, ign, LINEAR_SCHEMA, scope=scope)
     assert [lv.id for lv in managed] == ["lin_e2e"] and [lv.id for lv in ignored] == ["lin_own"]
-    managed, ignored = partition_live(live, ign, scope=None)
+    managed, ignored = partition_live(live, ign, LINEAR_SCHEMA, scope=None)
     assert managed == [] and [lv.id for lv in ignored] == ["lin_e2e", "lin_own"]
 
 
@@ -113,10 +113,12 @@ def test_file_prefix_still_ignored_under_matching_scope(tmp_path):
     scope = "test-sandbox"
     hit = ign.match("lin_t", "test-sandbox-1", scope=scope)
     assert hit == IgnorePrefix("test-", "manual experiments", 7)
-    managed, ignored = partition_live([_node("lin_t", "test-sandbox-1")], ign, scope=scope)
+    managed, ignored = partition_live(
+        [_node("lin_t", "test-sandbox-1")], ign, LINEAR_SCHEMA, scope=scope
+    )
     assert managed == [] and [lv.id for lv in ignored] == ["lin_t"]
     assert "IGNORED PREFIX: test- (linear-ignore.yaml:7): manual experiments" in ignored_lines(
-        ignored, ign, scope=scope
+        ignored, ign, LINEAR_SCHEMA, scope=scope
     )
     # the built-in prefix keeps applying to a scope that does not start with it
     assert ign.match("lin_z", f"{BUILTIN_PREFIX}x", scope=scope) is not None
@@ -135,22 +137,22 @@ def test_validation_missing_reason_short_prefix_duplicate_id(tmp_path):
         "  - prefix: zz\n"
         "    reason: too short\n"
     )
-    assert ignore_errors(path) == [
+    assert ignore_errors(path, IGNORE_FORMAT) == [
         "linear-ignore.yaml:4: missing reason",
         "linear-ignore.yaml:5: linear_id lin_a listed twice",
         "linear-ignore.yaml:8: prefix 'zz' is shorter than 4 characters",
     ]
-    assert ignore_errors(tmp_path / "missing.yaml") == []
+    assert ignore_errors(tmp_path / "missing.yaml", IGNORE_FORMAT) == []
     _ignore(tmp_path)
-    assert ignore_errors(tmp_path / IGNORE_FILE) == []
+    assert ignore_errors(tmp_path / IGNORE_FILE, IGNORE_FORMAT) == []
 
 
 def test_stale_entry_warns(tmp_path):
     ign = _ignore(tmp_path)
-    assert stale_ignore(ign, [_node("lin_other", "Acme")]) == [
+    assert stale_ignore(ign, [_node("lin_other", "Acme")], LINEAR_SCHEMA) == [
         "stale ignore entry: linear-ignore.yaml:3: lin_own is not in Linear"
     ]
-    assert stale_ignore(ign, [_node("lin_own", "Pied Piper")]) == []
+    assert stale_ignore(ign, [_node("lin_own", "Pied Piper")], LINEAR_SCHEMA) == []
 
 
 def test_conflict_message_exact(tmp_path):
@@ -215,7 +217,7 @@ def test_ignoring_a_stubbed_customer_is_not_a_conflict(tmp_path):
     umb = _node(
         "lin_umb", "Umbrella Analytics", domains=["umbrella.example.test"], xids=["umbrella"]
     )
-    _, ignored = partition_live([umb], ign, scope=None)
+    _, ignored = partition_live([umb], ign, LINEAR_SCHEMA, scope=None)
     failures, reports = ignore_conflicts(ignored, ign, entries, desired, table, scope=None)
     assert failures == []
     assert reports == [
@@ -234,9 +236,9 @@ def test_ignoring_a_stubbed_customer_is_not_a_conflict(tmp_path):
 def test_ignored_lines_list_customers_and_builtin(tmp_path):
     ign = _ignore(tmp_path)
     _, ignored = partition_live(
-        [_node("lin_own", "Pied Piper"), _node("lin_1", "Acme")], ign, scope=None
+        [_node("lin_own", "Pied Piper"), _node("lin_1", "Acme")], ign, LINEAR_SCHEMA, scope=None
     )
-    assert ignored_lines(ignored, ign, scope=None) == [
+    assert ignored_lines(ignored, ign, LINEAR_SCHEMA, scope=None) == [
         "IGNORED: 'Pied Piper' (lin_own): our own company",
         f"IGNORED PREFIX: {BUILTIN_PREFIX} (built-in)",
         "IGNORED PREFIX: test- (linear-ignore.yaml:7): manual experiments",
@@ -249,12 +251,15 @@ def test_ignored_lines_list_customers_and_builtin(tmp_path):
 
 def test_append_ignore_creates_file_with_header_and_builtin_prefix(tmp_path):
     path = tmp_path / IGNORE_FILE
-    assert append_ignore(path, linear_id="lin_x", name="Acme", reason=" a test org ") is True
+    assert (
+        append_ignore(path, IGNORE_FORMAT, live_id="lin_x", name="Acme", reason=" a test org ")
+        is True
+    )
     text = path.read_text()
     assert text.startswith("# Linear customers the sync never touches.")
-    assert ignore_errors(path) == []
-    ign = load_ignore(path)
-    assert ign.customers == [IgnoreEntry("lin_x", "Acme", "a test org", ign.customers[0].line)]
+    assert ignore_errors(path, IGNORE_FORMAT) == []
+    ign = load_ignore(path, IGNORE_FORMAT)
+    assert ign.entries == [IgnoreEntry("lin_x", "Acme", "a test org", ign.entries[0].line)]
     # the file's own builtin prefix entry is the built-in, not a second file prefix
     assert [p.line is None for p in ign.prefixes] == [True]
 
@@ -262,23 +267,29 @@ def test_append_ignore_creates_file_with_header_and_builtin_prefix(tmp_path):
 def test_append_ignore_is_idempotent_and_keeps_comments(tmp_path):
     path = tmp_path / IGNORE_FILE
     path.write_text(OWN_ORG_FILE)
-    assert append_ignore(path, linear_id="lin_own", name="Pied Piper", reason="again") is False
+    assert (
+        append_ignore(path, IGNORE_FORMAT, live_id="lin_own", name="Pied Piper", reason="again")
+        is False
+    )
     assert path.read_text() == OWN_ORG_FILE
-    assert append_ignore(path, linear_id="lin_new", name="Hooli", reason="a test org") is True
+    assert (
+        append_ignore(path, IGNORE_FORMAT, live_id="lin_new", name="Hooli", reason="a test org")
+        is True
+    )
     text = path.read_text()
     assert "# informational; matching is by linear_id" in text
-    assert [e.linear_id for e in load_ignore(path).customers] == ["lin_own", "lin_new"]
+    assert [e.live_id for e in load_ignore(path, IGNORE_FORMAT).entries] == ["lin_own", "lin_new"]
 
 
 def test_append_ignore_rejects_empty_id_or_reason_and_bad_shape(tmp_path):
     path = tmp_path / IGNORE_FILE
     for kwargs in (
-        {"linear_id": " ", "name": "x", "reason": "r"},
-        {"linear_id": "lin_x", "name": "x", "reason": " "},
+        {"live_id": " ", "name": "x", "reason": "r"},
+        {"live_id": "lin_x", "name": "x", "reason": " "},
     ):
         with pytest.raises(ValueError, match="must not be empty"):
-            append_ignore(path, **kwargs)
+            append_ignore(path, IGNORE_FORMAT, **kwargs)
     assert not path.exists()
     path.write_text("- just\n- a list\n")
     with pytest.raises(ValueError, match="top level must be a mapping"):
-        append_ignore(path, linear_id="lin_x", name="x", reason="r")
+        append_ignore(path, IGNORE_FORMAT, live_id="lin_x", name="x", reason="r")

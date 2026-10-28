@@ -22,10 +22,10 @@ import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from gitops_engine.ignore import IgnoreList
 from gitops_engine.pairing import pick_primary as engine_pick_primary
 from gitops_engine.pairing import stamped_conflict as engine_stamped_conflict
 
-from .curated import CuratedFields
 from .fieldplan import DESTRUCTIVE, FieldChange, plan_row, unacknowledged_destructive
 from .identity import (
     IDENTITY_SPEC,
@@ -35,8 +35,8 @@ from .identity import (
     resolve,
     with_implicit,
 )
-from .ignore import IgnoreList
 from .linear_client import LinearError, LiveCustomer
+from .linear_files import CuratedFields
 from .linear_schema import LINEAR_SCHEMA, LinearCustomer, LinearSynced, content_hash_of
 from .snapshot import record_written, write_snapshot
 
@@ -181,7 +181,7 @@ def _withhold_shared(
 
 
 def live_to_linear(lv: LiveCustomer) -> LinearCustomer:
-    """The live row as the mirror holds it (`reconcile_inbound`): no status is None."""
+    """The live row as the mirror holds it (`LinearSchema.mirror_row`): no status is None."""
     return LinearCustomer(
         name=lv.name,
         domains=list(lv.domains),

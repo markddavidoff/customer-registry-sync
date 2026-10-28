@@ -5,7 +5,7 @@ relevant changed. It replaces a hard-coded ``on.push.paths`` list, which GitHub 
 read from the config file.
 
 Deploy inputs are the generated desired rows (``<data_dir>/linear/``), the curated
-files ``generate``, ``check`` and ``deploy`` read (``curated.CURATED_INPUTS``), and the
+files ``generate``, ``check`` and ``deploy`` read (``linear_files.CURATED_INPUTS``), and the
 config file itself (it moves ``data_dir`` and names the workflow's environments). The state
 mirror and the snapshots are not inputs: the state PR that a deploy opens touches only
 those, and must not trigger another deploy.
@@ -22,7 +22,7 @@ import subprocess
 from pathlib import Path
 
 from .config import RegistryConfig
-from .curated import CURATED_INPUTS
+from .linear_files import CURATED_INPUTS
 from .writers import DESIRED_SUBDIR
 
 

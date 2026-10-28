@@ -346,7 +346,7 @@ someone creates customer X in Linear
   lists each ignored customer with its reason, and fails when a desired record resolves
   to the same identity as an ignored customer. The exception is the `linear-found` stub
   of that same Linear id: `check` only reports it, and the next refresh drops it. The
-  prefix `zzz-gitops-test-` is built in (`BUILTIN_PREFIX` in `ignore.py`). The live e2e
+  prefix `zzz-gitops-test-` is built in (`BUILTIN_PREFIX` in `gitops_engine.ignore`). The live e2e
   tests (`tests/test_e2e_gitops.py`) create their throwaway customers in a real Linear
   workspace under names that start with it, so the sync ignores any customer with that
   prefix and never stubs, writes or reports it as an orphan. The built-in entry is
@@ -487,9 +487,9 @@ path filter. Its jobs:
 | `identity.py` | The customer's identity declarations: `IDENTITY_SPEC` (source, domain and name keys, their order and normalisers), the `keys_for_*` reducers and `implicit_identity`. The table, `resolve`, validation and the comment-preserving store are in `gitops-engine`. |
 | `linear_found.py` | Stub building and unmapped-status errors. |
 | `generate.py`, `writers.py` | Merge by identity, projection to Linear rows, YAML and CSV writers. |
-| `inbound_sync.py`, `linear_schema.py`, `linear_client.py`, `linear_adapter.py` | The state mirror, `content_hash_of`, the GraphQL client, the engine adapter. |
-| `deploy.py`, `fieldplan.py`, `curated.py` | Pairing, field ownership, retire entries, apply. |
-| `check.py`, `ignore.py`, `manifest.py`, `snapshot.py` | `check`, the ignore list, manifests, snapshots and `restore`. |
+| `linear_schema.py`, `linear_client.py`, `linear_adapter.py` | The mirror row, `content_hash_of`, the GraphQL client, the engine adapter. |
+| `deploy.py`, `fieldplan.py`, `linear_files.py` | Pairing, field ownership, retire entries, apply. |
+| `check.py`, `manifest.py`, `snapshot.py` | `check`, manifests, snapshots and `restore`. |
 | `changed.py`, `tool_source.py` | `changed` and `tool-source`, which the reusable workflow calls. |
 | `cli.py` | The commands above. |
 

@@ -1,5 +1,8 @@
-from customer_registry_sync.ignore import BUILTIN_PREFIX, IGNORE_FILE, ignore_errors, load_ignore
-from customer_registry_sync.inbound_sync import reconcile_inbound
+from gitops_engine.ignore import BUILTIN_PREFIX, ignore_errors, load_ignore
+from gitops_engine.mirror import reconcile_mirror
+
+from customer_registry_sync.linear_files import IGNORE_FILE, IGNORE_FORMAT
+from customer_registry_sync.linear_schema import LINEAR_SCHEMA
 from customer_registry_sync.linear_client import parse_customer_node
 from customer_registry_sync.writers import write_state
 
@@ -32,7 +35,7 @@ def _node(lid, name, *, domains=()):
 
 
 def _mirror(tmp_path, *nodes):
-    write_state(reconcile_inbound(list(nodes), []), tmp_path)
+    write_state(reconcile_mirror(list(nodes), LINEAR_SCHEMA), tmp_path)
 
 
 def _run(run_cli, tmp_path, lid, reason="not a customer"):
@@ -43,13 +46,13 @@ def test_ignore_appends_with_name_from_mirror(tmp_path, capsys, run_cli):
     _mirror(tmp_path, _node("lin_hooli", "Hooli Inc", domains=["hooli.example.test"]))
     assert _run(run_cli, tmp_path, "lin_hooli", "test account") == 0
     path = tmp_path / IGNORE_FILE
-    ignore = load_ignore(path)
-    assert [(e.linear_id, e.name, e.reason) for e in ignore.customers] == [
+    ignore = load_ignore(path, IGNORE_FORMAT)
+    assert [(e.live_id, e.name, e.reason) for e in ignore.entries] == [
         ("lin_hooli", "Hooli Inc", "test account")
     ]
     assert [p.prefix for p in ignore.prefixes] == [BUILTIN_PREFIX]  # built-in always present
     assert path.read_text().startswith("# Linear customers the sync never touches.")
-    assert ignore_errors(path) == []
+    assert ignore_errors(path, IGNORE_FORMAT) == []
     assert "lin_hooli" in capsys.readouterr().out
 
 
@@ -73,7 +76,7 @@ def test_ignore_is_idempotent_and_keeps_reason(tmp_path, run_cli):
     before = path.read_text()
     assert _run(run_cli, tmp_path, "lin_hooli", "a different reason") == 4
     assert path.read_text() == before
-    assert [e.reason for e in load_ignore(path).customers] == ["first reason"]
+    assert [e.reason for e in load_ignore(path, IGNORE_FORMAT).entries] == ["first reason"]
 
 
 def test_ignore_preserves_comments(tmp_path, run_cli):
@@ -90,10 +93,10 @@ def test_ignore_preserves_comments(tmp_path, run_cli):
         '- prefix: "test-"      # hand-written prefix',
     ):
         assert kept in text
-    ignore = load_ignore(path)
-    assert [e.linear_id for e in ignore.customers] == ["lin_own", "lin_hooli"]
+    ignore = load_ignore(path, IGNORE_FORMAT)
+    assert [e.live_id for e in ignore.entries] == ["lin_own", "lin_hooli"]
     assert [p.prefix for p in ignore.prefixes] == [BUILTIN_PREFIX, "test-"]
-    assert ignore_errors(path) == []
+    assert ignore_errors(path, IGNORE_FORMAT) == []
 
 
 def test_ignore_refuses_an_invalid_file_and_an_empty_reason(tmp_path, capsys, run_cli):

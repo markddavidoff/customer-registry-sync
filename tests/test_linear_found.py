@@ -4,7 +4,9 @@ import shutil
 from datetime import date
 
 from gitops_engine.datasets import dataset_dir
+from gitops_engine.ignore import BUILTIN_PREFIX, load_ignore, partition_live
 from gitops_engine.manifest import MANIFEST, write_manifest
+from gitops_engine.mirror import reconcile_mirror
 
 from customer_registry_sync.datasets import (
     LINEAR_FOUND,
@@ -18,8 +20,7 @@ from customer_registry_sync.fieldplan import state_to_live
 from customer_registry_sync.generate import generate_from_dir
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
 from customer_registry_sync.identity import IdentityStore
-from customer_registry_sync.ignore import BUILTIN_PREFIX, IGNORE_FILE, load_ignore, partition_live
-from customer_registry_sync.inbound_sync import reconcile_inbound
+from customer_registry_sync.linear_files import IGNORE_FILE, IGNORE_FORMAT
 from customer_registry_sync.linear_client import parse_customer_node
 from customer_registry_sync.linear_found import (
     STUB_NOTE,
@@ -27,6 +28,7 @@ from customer_registry_sync.linear_found import (
     build_linear_found,
     status_errors,
 )
+from customer_registry_sync.linear_schema import LINEAR_SCHEMA
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.writers import STATE_SUBDIR, load_state, write_dataset, write_state
 
@@ -65,14 +67,14 @@ def _tree(tmp_path, *, records=(), nodes=()):
 
 
 def _mirror(tmp_path, *nodes):
-    write_state(reconcile_inbound(list(nodes), []), tmp_path)
+    write_state(reconcile_mirror(list(nodes), LINEAR_SCHEMA), tmp_path)
     write_manifest(tmp_path / STATE_SUBDIR, "sync-inbound")
 
 
 def _managed(tmp_path):
-    ignore = load_ignore(tmp_path / IGNORE_FILE)
+    ignore = load_ignore(tmp_path / IGNORE_FILE, IGNORE_FORMAT)
     live = [state_to_live(r) for r in load_state(tmp_path) if r.linear_synced is not None]
-    return partition_live(live, ignore, scope=None)[0]
+    return partition_live(live, ignore, LINEAR_SCHEMA, scope=None)[0]
 
 
 def _ingest(run_cli, tmp_path):

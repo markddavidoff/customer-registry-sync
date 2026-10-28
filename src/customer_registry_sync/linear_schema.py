@@ -14,7 +14,7 @@ import json
 from dataclasses import asdict, dataclass, field, fields
 from typing import TYPE_CHECKING, Any
 
-from gitops_engine.schema import Nouns
+from gitops_engine.schema import Always, FieldSpec, KeepIfUnset, Nouns, Union
 
 if TYPE_CHECKING:
     from gitops_engine.identity import ItemKeys
@@ -109,10 +109,20 @@ def content_hash_of(rec: LinearCustomer) -> str:
 class LinearSchema:
     """The engine's view of Linear customers (`RecordSchema[LinearCustomer, LiveCustomer]`).
 
-    Only the members the engine's merge and found-stub code call are here so far; the
-    field table, policies and snapshot members arrive with the planner."""
+    Only the members the engine's merge, found-stub, ignore, mirror and retire code call
+    are here so far; the value accessors, policies in use by the planner and the snapshot
+    members arrive with it."""
 
     nouns = Nouns("customer", "customers", "Linear")
+    fields = (
+        FieldSpec("name", Always()),
+        FieldSpec("status", Always(), required=True),
+        FieldSpec("external_ids", Always(unordered=True)),
+        FieldSpec("domains", Union(exclusive=True)),
+        FieldSpec("revenue", KeepIfUnset()),
+        FieldSpec("tier", KeepIfUnset()),
+    )
+    id_field = "external_ids"
 
     def label(self, d: LinearCustomer) -> str:
         return d.name
@@ -132,6 +142,30 @@ class LinearSchema:
         from .identity import keys_for_live  # identity imports this module for its types
 
         return keys_for_live(lv)
+
+    def destination_owned(self, d: LinearCustomer) -> bool:
+        return d.linear_owned
+
+    def mirror_row(self, lv: LiveCustomer) -> LinearCustomer:
+        """The live customer as the state mirror holds it: every field from `lv`, no
+        status as None, and a `linear_synced` mark."""
+        rec = LinearCustomer(
+            name=lv.name,
+            domains=list(lv.domains),
+            revenue=lv.revenue,
+            tier=lv.tier,
+            status=lv.status or None,
+            external_ids=list(lv.external_ids),
+        )
+        rec.linear_synced = LinearSynced(
+            linear_id=lv.id,
+            updated_at=lv.updated_at,
+            content_hash=content_hash_of(rec),
+        )
+        return rec
+
+    def live_hash(self, lv: LiveCustomer) -> str:
+        return content_hash_of(self.mirror_row(lv))
 
 
 LINEAR_SCHEMA = LinearSchema()

@@ -37,31 +37,36 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from gitops_engine.datasets import DATASETS_SUBDIR, dataset_dir
-from gitops_engine.manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
-
-from .assemble import assemble_dataset
-from .changed import changed_since
-from .check import EXIT_DRIFT, EXIT_OPERROR, offline_errors, orphan_lines, run_check
-from .config import DEFAULT_CONFIG_NAME, ConfigError, config_value, load_config
-from .curated import RETIRE_FILE, load_curated
-from .datasets import LINEAR_FOUND, NOTION, load_datasets, load_datasets_config
-from .deploy import apply_deploy, plan_deploy
-from .fieldplan import DESTRUCTIVE, FieldChange, state_to_live
-from .generate import generate_from_dir
-from .identity import IDENTITIES_FILE, IdentityStore, load_identities
-from .ignore import (
-    IGNORE_FILE,
+from gitops_engine.ignore import (
     append_ignore,
-    ignore_conflicts,
     ignore_errors,
     ignored_lines,
     load_ignore,
     partition_live,
 )
-from .inbound_sync import reconcile_inbound
+from gitops_engine.manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
+from gitops_engine.mirror import reconcile_mirror
+
+from .assemble import assemble_dataset
+from .changed import changed_since
+from .check import EXIT_DRIFT, EXIT_OPERROR, offline_errors, orphan_lines, run_check
+from .config import DEFAULT_CONFIG_NAME, ConfigError, config_value, load_config
+from .datasets import LINEAR_FOUND, NOTION, load_datasets, load_datasets_config
+from .deploy import apply_deploy, plan_deploy
+from .fieldplan import DESTRUCTIVE, FieldChange, state_to_live
+from .generate import generate_from_dir
+from .identity import IDENTITIES_FILE, IdentityStore, load_identities
 from .inputs import load_overrides, load_self_managed_customers
 from .linear_client import LinearError
+from .linear_files import (
+    IGNORE_FILE,
+    IGNORE_FORMAT,
+    RETIRE_FILE,
+    ignore_conflicts,
+    load_retire_fields,
+)
 from .linear_found import append_record_identities, build_linear_found
+from .linear_schema import LINEAR_SCHEMA
 from .notion_ingest import extract_customers
 from .snapshot import SNAPSHOT_SUBDIR, restore
 from .tool_source import ToolSourceError, tool_source
@@ -148,6 +153,7 @@ def _ingest_linear_found(args, out_dir: Path, store: IdentityStore, ignore, entr
     managed, _ = partition_live(
         [state_to_live(r) for r in load_state(out_dir) if r.linear_synced is not None],
         ignore,
+        LINEAR_SCHEMA,
         scope=None,
     )
     build = build_linear_found(
@@ -274,7 +280,7 @@ def _cmd_sync_inbound(args) -> int:
     out_dir = _out_dir(args)
     existing = load_state(out_dir)
     live = _scope_live(client.list_customers(), args.scope)
-    recs = reconcile_inbound(live, _scope_recs(existing, args.scope))
+    recs = reconcile_mirror(live, LINEAR_SCHEMA)
     if args.scope:
         # Scoped run: replace only the in-scope rows; out-of-scope state is untouched.
         recs = [r for r in existing if not r.name.startswith(args.scope)] + recs
@@ -304,14 +310,14 @@ def _cmd_ignore(args) -> int:
         print("ERROR: --reason must not be empty (each entry needs a reason).", file=sys.stderr)
         return EXIT_OPERROR
     if path.exists():
-        errors = ignore_errors(path)
+        errors = ignore_errors(path, IGNORE_FORMAT)
         if errors:
             print(f"ERROR: {IGNORE_FILE} is invalid; fix it first:", file=sys.stderr)
             for e in errors:
                 print(f"  {e}", file=sys.stderr)
             return EXIT_OPERROR
         # an id already listed is idempotent even after it has left the mirror
-        if any(e.linear_id == linear_id for e in load_ignore(path).customers):
+        if any(e.live_id == linear_id for e in load_ignore(path, IGNORE_FORMAT).entries):
             print(f"{linear_id} is already in {IGNORE_FILE}; left as is.")
             return EXIT_ALREADY_IGNORED
     mirrored = {
@@ -327,7 +333,9 @@ def _cmd_ignore(args) -> int:
         )
         return EXIT_OPERROR
     try:
-        appended = append_ignore(path, linear_id=linear_id, name=mirrored[linear_id], reason=reason)
+        appended = append_ignore(
+            path, IGNORE_FORMAT, live_id=linear_id, name=mirrored[linear_id], reason=reason
+        )
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return EXIT_OPERROR
@@ -443,7 +451,7 @@ def _load_ignore(out_dir: Path):
     """`<data_dir>/linear-ignore.yaml` (missing = built-in prefix only); None after
     printing why it cannot be read."""
     try:
-        return load_ignore(out_dir / IGNORE_FILE)
+        return load_ignore(out_dir / IGNORE_FILE, IGNORE_FORMAT)
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return None
@@ -457,7 +465,9 @@ def _partitioned(all_live, ignore, scope: str | None):
     """The one partition: (managed, ignored, other). `managed` is the in-scope,
     non-ignored set the planner writes; `other` is every other live customer
     (ignored or out of scope), whose domains still count as held."""
-    managed, ignored = partition_live(_scope_live(all_live, scope), ignore, scope=scope)
+    managed, ignored = partition_live(
+        _scope_live(all_live, scope), ignore, LINEAR_SCHEMA, scope=scope
+    )
     managed_ids = {lv.id for lv in managed}
     other = [lv for lv in all_live if lv.id not in managed_ids]
     return managed, ignored, other
@@ -477,7 +487,7 @@ def _cmd_deploy(args) -> int:
     ignore = _load_ignore(out_dir)
     if table is None or ignore is None:
         return 2
-    retire = load_curated(out_dir / RETIRE_FILE)
+    retire = load_retire_fields(out_dir / RETIRE_FILE)
     managed, ignored, other = _partitioned(client.list_customers(), ignore, args.scope)
     conflicts, reports = ignore_conflicts(
         ignored, ignore, _entries(out_dir), desired, table, scope=args.scope
@@ -600,7 +610,7 @@ def _cmd_check(args) -> int:
     except LinearError as e:
         print(f"ERROR: Linear read failed: {e}", file=sys.stderr)
         return EXIT_OPERROR
-    retire = load_curated(out_dir / RETIRE_FILE)
+    retire = load_retire_fields(out_dir / RETIRE_FILE)
     if args.scope:
         # a scoped run only sees its own rows; keep retire entries for those rows
         in_scope = {d.external_ids[0] for d in desired if d.external_ids}
@@ -619,7 +629,7 @@ def _cmd_check(args) -> int:
         other_live=[lv for lv in all_live if lv.id not in in_scope_ids],
     )
     drift, plan = res.drift, res.plan
-    for line in ignored_lines(res.ignored, ignore, scope=args.scope):
+    for line in ignored_lines(res.ignored, ignore, LINEAR_SCHEMA, scope=args.scope):
         print(f"  {line}")
     print(
         f"check: drift changed={len(drift.changed)} added={len(drift.added)} "

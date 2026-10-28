@@ -1,14 +1,17 @@
 from gitops_engine.datasets import dataset_dir
 from gitops_engine.manifest import write_manifest
+from gitops_engine.mirror import reconcile_mirror
 
 from customer_registry_sync.check import detect_drift, offline_errors, run_check
 from customer_registry_sync.datasets import LINEAR_FOUND, NOTION, DatasetConfig, load_datasets
 from customer_registry_sync.generate import generate_linear
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
 from customer_registry_sync.identity import IdentityStore
-from customer_registry_sync.inbound_sync import reconcile_inbound
 from customer_registry_sync.linear_client import LiveCustomer, parse_customer_node
-from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced, content_hash_of
+from customer_registry_sync.linear_schema import (
+    LINEAR_SCHEMA,
+    content_hash_of,
+)
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.writers import STATE_SUBDIR, load_state, write_dataset, write_state
 
@@ -28,16 +31,8 @@ def live(**kw) -> LiveCustomer:
     return LiveCustomer(**base)
 
 
-def test_match_by_external_id_updates_and_refreshes_linear_synced():
-    existing = [
-        LinearCustomer(
-            name="Globex Old",
-            domains=["globex.example.test"],
-            external_ids=["globex"],
-            linear_synced=LinearSynced("stale", "old", "oldhash"),
-        )
-    ]
-    [out] = reconcile_inbound([live(external_ids=["globex"])], existing)
+def test_mirror_reflects_live_and_refreshes_linear_synced():
+    [out] = reconcile_mirror([live(external_ids=["globex"])], LINEAR_SCHEMA)
     assert out.name == "Globex"  # mirror reflects LIVE
     assert out.external_ids == ["globex"]  # our slug preserved
     assert out.linear_synced.linear_id == "lin-1"
@@ -46,14 +41,7 @@ def test_match_by_external_id_updates_and_refreshes_linear_synced():
 
 
 def test_no_id_recovered_by_domain_or_name():
-    existing = [
-        LinearCustomer(
-            name="Hooli Casinos",
-            domains=["hoolicasinos.example.test"],
-            external_ids=["hoolicasinos"],
-        )
-    ]
-    out = reconcile_inbound(
+    out = reconcile_mirror(
         [
             live(id="l1", name="Hoolis", domains=[], revenue=None, tier=None, external_ids=[]),
             live(
@@ -64,7 +52,7 @@ def test_no_id_recovered_by_domain_or_name():
                 tier=None,
             ),
         ],
-        existing,
+        LINEAR_SCHEMA,
     )
     by_name = {o.name: o for o in out}
     # the mirror holds what Linear holds: neither live customer carries the slug, so
@@ -74,8 +62,9 @@ def test_no_id_recovered_by_domain_or_name():
 
 
 def test_unmatched_live_emitted_as_new_mirror_entry():
-    out = reconcile_inbound(
-        [live(id="new", name="New Co", domains=["new.example.test"], external_ids=[])], []
+    out = reconcile_mirror(
+        [live(id="new", name="New Co", domains=["new.example.test"], external_ids=[])],
+        LINEAR_SCHEMA,
     )
     assert len(out) == 1
     assert out[0].name == "New Co"
@@ -87,8 +76,8 @@ def test_idempotent_on_rerun():
         live(external_ids=["globex"]),
         live(id="l2", name="Beta", domains=["beta.example.test"]),
     ]
-    out1 = reconcile_inbound(live_list, [])
-    out2 = reconcile_inbound(live_list, out1)
+    out1 = reconcile_mirror(live_list, LINEAR_SCHEMA)
+    out2 = reconcile_mirror(live_list, LINEAR_SCHEMA)
     assert out1 == out2
 
 
@@ -112,7 +101,7 @@ def test_sync_inbound_never_copies_external_ids_to_a_duplicate(tmp_path):
     Linear (no canonical id), so `check` reports it as a known duplicate and passes."""
     a = _node("A", "Acme [Active]", domains=["acme.example.test"], xids=["acme"])
     b = _node("B", "Acme", domains=["acme.example.test"], updated="2026-10-02T00:00:00.000Z")
-    state = reconcile_inbound([a, b], reconcile_inbound([a], []))
+    state = reconcile_mirror([a, b], LINEAR_SCHEMA)
     by_id = {s.linear_synced.linear_id: s for s in state}
     assert by_id["A"].external_ids == ["acme"]
     assert by_id["B"].external_ids == []
@@ -141,10 +130,7 @@ def test_sync_inbound_never_copies_external_ids_to_a_duplicate(tmp_path):
 
 def test_mirror_row_takes_every_field_from_live_only():
     """An old state row sharing the live customer's domain and name contributes nothing."""
-    existing = reconcile_inbound(
-        [_node("old", "Beta", domains=["beta.example.org"], xids=["beta"])], []
-    )
-    [out] = reconcile_inbound([_node("new", "Beta", domains=["beta.example.org"])], existing)
+    [out] = reconcile_mirror([_node("new", "Beta", domains=["beta.example.org"])], LINEAR_SCHEMA)
     assert out.external_ids == []
     assert out.linear_synced.linear_id == "new"
 
@@ -154,7 +140,7 @@ def test_empty_linear_status_is_not_mirrored_as_active(tmp_path, run_cli):
     gets `classification: null`, `check` fails naming it, and the mirror is not drift."""
     lv = _node("lin_n", "Nostatus Co", domains=["nostatus.example.org"], status=None)
     assert lv.status == ""
-    [row] = reconcile_inbound([lv], [])
+    [row] = reconcile_mirror([lv], LINEAR_SCHEMA)
     assert row.status is None
     assert not detect_drift([row], [lv]).any()
 

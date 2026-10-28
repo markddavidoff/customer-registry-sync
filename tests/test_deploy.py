@@ -396,7 +396,7 @@ def test_plan_unchanged_when_only_live_extras():
 
 
 def test_plan_retire_marks_destructive_as_acknowledged():
-    from customer_registry_sync.curated import CuratedFields
+    from customer_registry_sync.linear_files import CuratedFields
 
     d = desired()
     lv = livec(domains=["acmerobotics.example.test", "old.io"])
@@ -510,7 +510,7 @@ def test_unwritable_snapshot_dir_aborts_before_any_write(tmp_path, recording_lin
 
 
 def test_update_sends_only_changed_fields(tmp_path, recording_linear):
-    from customer_registry_sync.curated import CuratedFields
+    from customer_registry_sync.linear_files import CuratedFields
 
     # live carries an extra domain and a tier the registry lacks: never sent
     lv = _robotics(
@@ -862,10 +862,12 @@ def test_merge_by_hand_restamps_one_row(tmp_path):
 
 
 def _ignore_list(tmp_path, text):
-    from customer_registry_sync.ignore import IGNORE_FILE, load_ignore
+    from gitops_engine.ignore import load_ignore
+
+    from customer_registry_sync.linear_files import IGNORE_FILE, IGNORE_FORMAT
 
     (tmp_path / IGNORE_FILE).write_text(text)
-    return load_ignore(tmp_path / IGNORE_FILE)
+    return load_ignore(tmp_path / IGNORE_FILE, IGNORE_FORMAT)
 
 
 def test_apply_never_writes_ignored_row_unscoped(tmp_path, recording_linear):
@@ -887,11 +889,13 @@ def test_apply_never_writes_ignored_row_unscoped(tmp_path, recording_linear):
 
 
 def test_apply_writes_zzz_row_when_scoped(tmp_path, recording_linear):
-    from customer_registry_sync.ignore import BUILTIN_PREFIX, load_ignore
+    from gitops_engine.ignore import BUILTIN_PREFIX, load_ignore
+
+    from customer_registry_sync.linear_files import IGNORE_FORMAT
 
     scope = f"{BUILTIN_PREFIX}1a2b3c4d-"
     rows = generate_linear([_acme(canonical_name=f"{scope}Acme", arr=9.0)])
-    ign = load_ignore(tmp_path / "missing.yaml")  # the built-in prefix only
+    ign = load_ignore(tmp_path / "missing.yaml", IGNORE_FORMAT)  # the built-in prefix only
 
     def run(scope_arg):
         lv = recording_linear.node(

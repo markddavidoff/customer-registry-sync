@@ -1,7 +1,7 @@
 """Terraform-style plan rendering: exact lines, built from real plan_deploy output."""
 
 from customer_registry_sync import cli
-from customer_registry_sync.curated import CuratedFields
+from customer_registry_sync.linear_files import CuratedFields
 from customer_registry_sync.deploy import plan_deploy
 from customer_registry_sync.linear_client import LiveCustomer
 from customer_registry_sync.linear_schema import LinearCustomer

@@ -22,9 +22,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from .curated import CuratedFields
 from .identity import IdentityTable
 from .linear_client import LiveCustomer
+from .linear_files import CuratedFields
 from .linear_schema import LinearCustomer
 
 ChangeKind = Literal["set", "change", "add", "remove", "clear"]

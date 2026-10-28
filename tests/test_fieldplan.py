@@ -2,7 +2,7 @@
 
 import itertools
 
-from customer_registry_sync.curated import CuratedFields
+from customer_registry_sync.linear_files import CuratedFields
 from customer_registry_sync.datasets import LINEAR_FOUND, NOTION, DatasetRecord
 from customer_registry_sync.fieldplan import (
     DESTRUCTIVE,

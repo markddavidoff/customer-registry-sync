@@ -309,7 +309,7 @@ def test_deploy_refuses_on_planner_errors_and_loads_identities(
 
 
 def test_deploy_passes_retire_file_to_planner(tmp_path, monkeypatch, recording_linear, run_cli):
-    from customer_registry_sync.curated import RETIRE_FILE
+    from customer_registry_sync.linear_files import RETIRE_FILE
 
     live = recording_linear.node(
         "lin_1", "Acme", domains=["acme.example.test", "old.example.org"], revenue=5, xids=["acme"]
@@ -443,7 +443,7 @@ def _mirror(tmp_path, live):
 def test_deploy_refuses_on_ignore_conflict(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
-    from customer_registry_sync.ignore import IGNORE_FILE
+    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
     _generated(
@@ -480,7 +480,7 @@ def test_deploy_refuses_on_ignore_conflict(
 def test_deploy_withholds_domain_held_only_by_ignored_customer(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
-    from customer_registry_sync.ignore import IGNORE_FILE
+    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
     # the identity lists only acme.example.test, so Pied Piper does not resolve to Acme (no conflict),
@@ -518,7 +518,7 @@ def test_deploy_withholds_domain_held_only_by_ignored_customer(
 def _acme_and_own_holder(tmp_path, recording_linear):
     """Acme's record carries piedpiper.example.test, which only the ignored Pied Piper holds; the
     identity lists only acme.example.test, so Pied Piper does not resolve to Acme."""
-    from customer_registry_sync.ignore import IGNORE_FILE
+    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
     [d] = _generated(
@@ -572,7 +572,7 @@ def test_scoped_check_withholds_domain_held_outside_the_scope(
 
 
 def test_check_lists_ignored_customers(tmp_path, monkeypatch, capsys, recording_linear, run_cli):
-    from customer_registry_sync.ignore import IGNORE_FILE
+    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
     [d] = _generated(
@@ -608,7 +608,7 @@ def test_check_lists_ignored_customers(tmp_path, monkeypatch, capsys, recording_
 def test_check_orphan_lines_print_before_the_plan_and_reports_after(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
-    from customer_registry_sync.ignore import IGNORE_FILE
+    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
     [d] = _generated(
