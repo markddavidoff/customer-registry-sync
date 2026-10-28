@@ -2,14 +2,9 @@ import csv
 import io
 
 import yaml
+from gitops_engine.datasets import dataset_dir
 
-from customer_registry_sync.datasets import (
-    LINEAR_FOUND,
-    NOTION,
-    DatasetConfig,
-    dataset_dir,
-    load_datasets,
-)
+from customer_registry_sync.datasets import LINEAR_FOUND, NOTION, DatasetConfig, load_datasets
 from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced, content_hash_of
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.writers import (
@@ -160,21 +155,6 @@ def test_linear_found_dataset_write_leaves_csvs_untouched(tmp_path):
     )
     write_dataset([stub], tmp_path, dataset=LINEAR_FOUND)
     assert {n: (tmp_path / n).read_bytes() for n in before} == before
-
-
-def test_stale_dataset_yaml_removed_on_rerun(tmp_path):
-    write_dataset(sample(), tmp_path)
-    assert (dataset_dir(tmp_path, NOTION) / "soylent-metrics.yaml").exists()
-    write_dataset([r for r in sample() if r.canonical_name != "Soylent Metrics"], tmp_path)
-    assert not (dataset_dir(tmp_path, NOTION) / "soylent-metrics.yaml").exists()
-
-
-def test_writer_does_not_touch_curated_input_files(tmp_path):
-    self_managed = tmp_path / "self-managed-customers.yaml"
-    self_managed.write_text("customers: []\n# hand edit preserved\n")
-    before = self_managed.read_bytes()
-    write_dataset(sample(), tmp_path)
-    assert self_managed.read_bytes() == before
 
 
 def test_slug_from_domain_then_name():

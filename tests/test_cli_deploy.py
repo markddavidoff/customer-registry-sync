@@ -411,11 +411,13 @@ _IGNORE_OWN = (
 def _generated(tmp_path, recs, *identities):
     """A data dir built by the real producers (identity store, dataset,
     generate); returns the desired rows."""
-    from customer_registry_sync.datasets import NOTION, dataset_dir
+    from gitops_engine.datasets import dataset_dir
+    from gitops_engine.manifest import write_manifest
+
+    from customer_registry_sync.datasets import NOTION
     from customer_registry_sync.generate import generate_from_dir
     from customer_registry_sync.identity import IDENTITIES_FILE
     from customer_registry_sync.identity_store import IdentityStore
-    from customer_registry_sync.manifest import write_manifest
     from customer_registry_sync.writers import write_csvs, write_dataset
 
     store = IdentityStore(tmp_path / IDENTITIES_FILE)
@@ -432,7 +434,7 @@ def _generated(tmp_path, recs, *identities):
 
 
 def _mirror(tmp_path, live):
-    from customer_registry_sync.manifest import write_manifest
+    from gitops_engine.manifest import write_manifest
 
     write_state([_state_from(lv) for lv in live], tmp_path)
     write_manifest(tmp_path / "linear-state", "sync-inbound")

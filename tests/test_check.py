@@ -1,5 +1,8 @@
 from dataclasses import replace
 
+from gitops_engine.datasets import dataset_dir
+from gitops_engine.manifest import MANIFEST, write_manifest
+
 from customer_registry_sync import cli, deploy
 from customer_registry_sync.check import (
     EXIT_DRIFT,
@@ -18,7 +21,6 @@ from customer_registry_sync.datasets import (
     NOTION,
     DatasetConfig,
     DatasetRecord,
-    dataset_dir,
     load_datasets,
 )
 from customer_registry_sync.deploy import live_to_linear
@@ -30,7 +32,6 @@ from customer_registry_sync.ignore import IGNORE_FILE, load_ignore
 from customer_registry_sync.inbound_sync import reconcile_inbound
 from customer_registry_sync.linear_client import LiveCustomer, parse_customer_node
 from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced, content_hash_of
-from customer_registry_sync.manifest import MANIFEST, write_manifest
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.writers import (
     load_state,

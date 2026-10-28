@@ -36,19 +36,15 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+from gitops_engine.datasets import DATASETS_SUBDIR, dataset_dir
+from gitops_engine.manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
+
 from .assemble import assemble_dataset
-from .check import EXIT_DRIFT, EXIT_OPERROR, offline_errors, orphan_lines, run_check
 from .changed import changed_since
+from .check import EXIT_DRIFT, EXIT_OPERROR, offline_errors, orphan_lines, run_check
 from .config import DEFAULT_CONFIG_NAME, ConfigError, config_value, load_config
 from .curated import RETIRE_FILE, load_curated
-from .datasets import (
-    DATASETS_SUBDIR,
-    LINEAR_FOUND,
-    NOTION,
-    dataset_dir,
-    load_datasets,
-    load_datasets_config,
-)
+from .datasets import LINEAR_FOUND, NOTION, load_datasets, load_datasets_config
 from .deploy import apply_deploy, plan_deploy
 from .fieldplan import DESTRUCTIVE, FieldChange, state_to_live
 from .generate import generate_from_dir
@@ -67,7 +63,6 @@ from .inbound_sync import reconcile_inbound
 from .inputs import load_overrides, load_self_managed_customers
 from .linear_client import LinearError
 from .linear_found import append_record_identities, build_linear_found
-from .manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
 from .notion_ingest import extract_customers
 from .snapshot import SNAPSHOT_SUBDIR, restore
 from .tool_source import ToolSourceError, tool_source

@@ -1,15 +1,10 @@
 import inspect
 
 import pytest
+from gitops_engine.datasets import dataset_dir
 
 from customer_registry_sync import cli
-from customer_registry_sync.datasets import (
-    LINEAR_FOUND,
-    NOTION,
-    DatasetConfig,
-    dataset_dir,
-    load_datasets,
-)
+from customer_registry_sync.datasets import LINEAR_FOUND, NOTION, DatasetConfig, load_datasets
 from customer_registry_sync.generate import (
     generate_from_dir,
     generate_linear,

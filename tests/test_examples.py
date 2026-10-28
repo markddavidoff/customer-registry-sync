@@ -3,9 +3,11 @@
 import shutil
 from pathlib import Path
 
+from gitops_engine.datasets import dataset_dir
+
 from customer_registry_sync.config import load_config
 from customer_registry_sync.curated import load_curated
-from customer_registry_sync.datasets import dataset_dir, load_datasets, load_datasets_config
+from customer_registry_sync.datasets import load_datasets, load_datasets_config
 from customer_registry_sync.identity import load_identities
 from customer_registry_sync.ignore import BUILTIN_PREFIX, ignore_errors, load_ignore
 from customer_registry_sync.inputs import load_overrides, load_self_managed_customers

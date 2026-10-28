@@ -3,14 +3,15 @@ Runs ONLY with `uv run pytest --run-live` and LINEAR_API_TOKEN in the environmen
 record is namespaced, uses a *.invalid domain, and is deleted in teardown."""
 
 import pytest
+from gitops_engine.datasets import dataset_dir
+from gitops_engine.manifest import write_manifest
 
 from customer_registry_sync import cli
 from customer_registry_sync.config import DEFAULT_CONFIG_NAME
-from customer_registry_sync.datasets import NOTION, dataset_dir
+from customer_registry_sync.datasets import NOTION
 from customer_registry_sync.generate import generate_linear
 from customer_registry_sync.identity import IDENTITIES_FILE
 from customer_registry_sync.identity_store import IdentityStore
-from customer_registry_sync.manifest import write_manifest
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.snapshot import SNAPSHOT_SUBDIR
 from customer_registry_sync.writers import (

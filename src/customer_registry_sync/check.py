@@ -39,15 +39,11 @@ from pathlib import Path
 
 from gitops_engine import EXIT_DRIFT, EXIT_OK, EXIT_OPERROR, DriftReport
 from gitops_engine import detect_drift as _engine_detect_drift
+from gitops_engine.datasets import DATASETS_SUBDIR
+from gitops_engine.manifest import manifest_edits
 
 from .curated import CuratedFields
-from .datasets import (
-    DATASETS_SUBDIR,
-    DatasetRecord,
-    datasets_errors,
-    load_datasets,
-    load_datasets_config,
-)
+from .datasets import DatasetRecord, datasets_errors, load_datasets, load_datasets_config
 from .deploy import DeployPlan, pair_rows, plan_deploy
 from .fieldplan import Untracked, stale_retire, untracked_values
 from .generate import canonical_id_for, generate_from_dir, group_by_identity
@@ -75,7 +71,6 @@ from .linear_adapter import LinearCustomersAdapter
 from .linear_client import LiveCustomer
 from .linear_found import status_errors
 from .linear_schema import LinearCustomer
-from .manifest import manifest_edits
 from .writers import (
     DESIRED_SUBDIR,
     REAL_CUSTOMERS_CSV,

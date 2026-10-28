@@ -67,8 +67,16 @@ dev = [
 [[package]]
 name = "gitops-engine"
 source = { editable = "../../../../gitops-engine/.claude/worktrees/engine-v0.2" }
+dependencies = [
+    { name = "pyyaml" },
+    { name = "ruamel-yaml" },
+]
 
 [package.metadata]
+requires-dist = [
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "ruamel-yaml", specifier = ">=0.18" },
+]
 
 [package.metadata.requires-dev]
 dev = [

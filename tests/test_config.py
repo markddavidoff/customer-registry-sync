@@ -58,7 +58,9 @@ def test_data_dir_defaults_to_customers(tmp_path):
 
 def test_paths_resolve_under_data_dir(tmp_path, monkeypatch):
     """A relative data_dir anchors to the config file, not to the cwd the command runs from."""
-    from customer_registry_sync.datasets import NOTION, dataset_dir
+    from gitops_engine.datasets import dataset_dir
+
+    from customer_registry_sync.datasets import NOTION
     from customer_registry_sync.identity import IDENTITIES_FILE
     from customer_registry_sync.identity_store import IdentityStore
     from customer_registry_sync.schema import CustomerRecord

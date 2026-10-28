@@ -1,4 +1,5 @@
 import yaml
+from gitops_engine.datasets import DATASETS_FILE
 
 from customer_registry_sync.curated import (
     CURATED_INPUTS,
@@ -7,7 +8,6 @@ from customer_registry_sync.curated import (
     load_curated,
     write_curated,
 )
-from customer_registry_sync.datasets import DATASETS_FILE
 from customer_registry_sync.identity import IDENTITIES_FILE
 from customer_registry_sync.ignore import IGNORE_FILE
 

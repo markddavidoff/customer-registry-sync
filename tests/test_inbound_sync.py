@@ -1,18 +1,14 @@
+from gitops_engine.datasets import dataset_dir
+from gitops_engine.manifest import write_manifest
+
 from customer_registry_sync.check import detect_drift, offline_errors, run_check
-from customer_registry_sync.datasets import (
-    LINEAR_FOUND,
-    NOTION,
-    DatasetConfig,
-    dataset_dir,
-    load_datasets,
-)
+from customer_registry_sync.datasets import LINEAR_FOUND, NOTION, DatasetConfig, load_datasets
 from customer_registry_sync.generate import generate_linear
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
 from customer_registry_sync.identity_store import IdentityStore
 from customer_registry_sync.inbound_sync import reconcile_inbound
 from customer_registry_sync.linear_client import LiveCustomer, parse_customer_node
 from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced, content_hash_of
-from customer_registry_sync.manifest import write_manifest
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.writers import STATE_SUBDIR, load_state, write_dataset, write_state
 

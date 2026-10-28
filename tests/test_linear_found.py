@@ -3,11 +3,13 @@
 import shutil
 from datetime import date
 
+from gitops_engine.datasets import dataset_dir
+from gitops_engine.manifest import MANIFEST, write_manifest
+
 from customer_registry_sync.datasets import (
     LINEAR_FOUND,
     NOTION,
     DatasetConfig,
-    dataset_dir,
     load_datasets,
     load_datasets_config,
 )
@@ -25,7 +27,6 @@ from customer_registry_sync.linear_found import (
     build_linear_found,
     status_errors,
 )
-from customer_registry_sync.manifest import MANIFEST, write_manifest
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.writers import STATE_SUBDIR, load_state, write_dataset, write_state
 
