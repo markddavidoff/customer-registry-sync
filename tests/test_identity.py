@@ -8,18 +8,21 @@ import pytest
 from customer_registry_sync.generate import generate_linear
 from customer_registry_sync.identity import (
     IDENTITIES_FILE,
+    IDENTITY_SPEC,
+    IdentityStore,
     IdentityTable,
+    ItemKeys,
     conflict,
     keys_for_live,
     keys_for_record,
     keys_for_row,
     norm_name,
+    parse_identities,
     resolve,
     resolve_all,
     table_errors,
     with_implicit,
 )
-from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.linear_client import parse_customer_node
 from customer_registry_sync.linear_schema import LinearSynced
 from customer_registry_sync.schema import CustomerRecord
@@ -233,3 +236,31 @@ def test_with_implicit_adds_only_unresolved_rows(tmp_path):
     assert list(t.entries) == ["acmeco"]  # input untouched
     for row in rows:
         assert resolve(keys_for_row(row), out) is not None
+
+
+def test_identity_spec_pins_the_declared_orders():
+    """Resolution order is sources then match keys as declared; file_order is the key
+    order inside each entry of identities.yaml. Changing either changes plans or bytes."""
+    assert IDENTITY_SPEC.sources == ("notion", "linear")
+    assert IDENTITY_SPEC.destination_source == "linear"
+    assert [mk.field for mk in IDENTITY_SPEC.match_keys] == ["domains", "names"]
+    assert [mk.label for mk in IDENTITY_SPEC.match_keys] == ["domain", "name"]
+    # v0.1.0 skipped an empty normalised name but not an empty domain
+    assert [mk.skip_empty for mk in IDENTITY_SPEC.match_keys] == [False, True]
+    assert IDENTITY_SPEC.file_order == ("names", "domains", "sources")
+    assert IDENTITY_SPEC.file == IDENTITIES_FILE == "identities.yaml"
+
+
+def test_empty_domain_is_a_value_but_an_empty_name_is_not():
+    """v0.1.0: domains compare as `d.lower()` with no skip; names skip an empty norm."""
+    t = parse_identities(
+        {
+            "a": {"domains": [""], "names": ["--"]},
+            "b": {"domains": [""], "names": ["!!"]},
+        },
+        "identities.yaml",
+    )
+    assert table_errors(t) == ["domain '' is on two identities: a, b"]
+    hit = resolve(ItemKeys(label="x", values=(("domains", ("",)),)), t)
+    assert hit is not None and (hit.canonical_id, hit.key, hit.value) == ("a", "domain", "")
+    assert resolve(ItemKeys(label="x", values=(("names", ("??",)),)), t) is None

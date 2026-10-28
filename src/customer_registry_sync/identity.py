@@ -57,7 +57,7 @@ IDENTITY_SPEC = engine.IdentitySpec(
     sources=SOURCE_KEYS,
     match_keys=(
         MatchKey("domains", "domain", str.lower),
-        MatchKey("names", "name", norm_name),
+        MatchKey("names", "name", norm_name, skip_empty=True),
     ),
     destination_source=SOURCE_LINEAR,
     file_order=("names", "domains", "sources"),

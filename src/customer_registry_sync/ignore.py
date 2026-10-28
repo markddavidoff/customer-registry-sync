@@ -277,8 +277,8 @@ def ignored_lines(
 
 
 def _round_trip_yaml() -> YAML:
-    """The identity file's round-trip style (gitops_engine.identity_store._yaml), so both curated files
-    keep one indentation: mappings 2, block sequences 4 with the dash offset 2."""
+    """The identity file's round-trip style (`gitops_engine.identity_store._yaml`), so both
+    curated files keep one indentation: mappings 2, block sequences 4 with the dash offset 2."""
     yml = YAML(typ="rt")
     yml.indent(mapping=2, sequence=4, offset=2)
     yml.width = 4096

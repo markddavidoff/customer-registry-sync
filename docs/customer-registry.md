@@ -484,7 +484,7 @@ path filter. Its jobs:
 |---|---|
 | `notion_ingest.py`, `assemble.py`, `inputs.py`, `config.py` | Notion extraction, cross-bucket merge, curated self-managed and override inputs, the config file. |
 | `datasets.py`, `schema.py` | `datasets.yaml`, dataset directories, `CustomerRecord`. |
-| `identity.py`, `identity_store.py` | `resolve`, identity table validation, comment-preserving appends. |
+| `identity.py` | The customer's identity declarations: `IDENTITY_SPEC` (source, domain and name keys, their order and normalisers), the `keys_for_*` reducers and `implicit_identity`. The table, `resolve`, validation and the comment-preserving store are in `gitops-engine`. |
 | `linear_found.py` | Stub building and unmapped-status errors. |
 | `generate.py`, `writers.py` | Merge by identity, projection to Linear rows, YAML and CSV writers. |
 | `inbound_sync.py`, `linear_schema.py`, `linear_client.py`, `linear_adapter.py` | The state mirror, `content_hash_of`, the GraphQL client, the engine adapter. |
