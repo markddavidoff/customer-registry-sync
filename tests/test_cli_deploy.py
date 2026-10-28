@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from customer_registry_sync import cli
+from customer_registry_sync import cli, deploy_plan
 from customer_registry_sync.linear_client import LiveCustomer
 from customer_registry_sync.linear_schema import (
     LINEAR_SCHEMA,
@@ -262,14 +262,14 @@ def test_deploy_refuses_unacked_destructive(
 ):
     fake = _seed_acme(tmp_path, recording_linear)
     monkeypatch.setattr(cli, "_linear_client", lambda: fake)
-    real = cli.plan_deploy
+    real = deploy_plan.plan_deploy
 
     def buggy_planner(*a, **kw):  # the planner never emits these; simulate the bug
         plan = real(*a, **kw)
         plan.unacked.append("Acme: revenue clear without retire")
         return plan
 
-    monkeypatch.setattr(cli, "plan_deploy", buggy_planner)
+    monkeypatch.setattr(deploy_plan, "plan_deploy", buggy_planner)
     assert run_cli(["deploy", "--out-dir", str(tmp_path)]) == 3
     assert run_cli(["deploy", "--apply", "--out-dir", str(tmp_path)]) == 3
     assert "UNACKNOWLEDGED DESTRUCTIVE: Acme: revenue clear" in capsys.readouterr().out

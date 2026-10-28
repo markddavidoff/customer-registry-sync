@@ -960,3 +960,14 @@ def test_stub_with_empty_live_status_applies_cleanly(tmp_path, recording_linear)
     assert res.failure is None and not plan.aborts
     [(_, _, fields, _, _)] = client.updates()
     assert fields == {"external_ids": ["initech"]}
+
+
+def test_empty_tier_without_retire_is_refused_before_the_client(tmp_path, recording_linear):
+    # The engine's never-null guard refuses a desired tier "" before LinearClient's own
+    # guard can: no update is sent, and the failure names the customer and the field.
+    lv = _robotics(recording_linear, tier="Tier 2")
+    plan = plan_deploy([desired(tier="")], [lv])
+    client = recording_linear([lv])
+    res = apply_deploy(plan, client, snapshot_dir=tmp_path)
+    assert res.failure == "Acme Robotics: update refused: empty tier without retire"
+    assert client.updates() == [] and res.persisted == []

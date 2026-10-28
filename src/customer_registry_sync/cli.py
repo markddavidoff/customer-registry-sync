@@ -47,24 +47,30 @@ from gitops_engine.ignore import (
 )
 from gitops_engine.manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
 from gitops_engine.mirror import reconcile_mirror
-from gitops_engine.retire import load_retire
 
 from .assemble import assemble_dataset
 from .changed import changed_since
-from .check import EXIT_DRIFT, EXIT_OPERROR, offline_errors, orphan_lines, run_check
+from .check import EXIT_OPERROR, offline_errors, orphan_lines
 from .config import DEFAULT_CONFIG_NAME, ConfigError, config_value, load_config
 from .datasets import LINEAR_FOUND, NOTION, load_datasets, load_datasets_config
-from .deploy import apply_deploy, plan_deploy, restore
+from .deploy import apply_deploy, restore
+from .deploy_plan import (
+    check_exit,
+    check_for,
+    load_ignore_file,
+    load_inputs,
+    load_retire_file,
+    plan_for_deploy,
+    scope_live,
+)
 from .generate import generate_from_dir
-from .identity import IDENTITIES_FILE, IdentityStore, load_identities
+from .identity import IDENTITIES_FILE, IdentityStore
 from .inputs import load_overrides, load_self_managed_customers
 from .linear_client import LinearError
 from .linear_files import (
     IGNORE_FILE,
     IGNORE_FORMAT,
-    RETIRE_FILE,
     SNAPSHOT_SUBDIR,
-    ignore_conflicts,
 )
 from .linear_found import append_record_identities, build_linear_found
 from .linear_schema import LINEAR_SCHEMA
@@ -76,7 +82,6 @@ from .writers import (
     REAL_CUSTOMERS_CSV,
     REGISTRY_CSV,
     STATE_SUBDIR,
-    load_desired,
     load_state,
     write_csvs,
     write_dataset,
@@ -194,7 +199,7 @@ def _cmd_ingest(args) -> int:
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
-    ignore = _load_ignore(out_dir)
+    ignore = load_ignore_file(out_dir)
     if ignore is None:
         return 2
     has_mirror = (out_dir / STATE_SUBDIR / MANIFEST).is_file()
@@ -269,21 +274,13 @@ def _linear_client():
     return LinearClient()
 
 
-def _scope_live(live, scope: str | None):
-    return [c for c in live if c.name.startswith(scope)] if scope else live
-
-
-def _scope_recs(recs, scope: str | None):
-    return [r for r in recs if r.name.startswith(scope)] if scope else recs
-
-
 def _cmd_sync_inbound(args) -> int:
     client = _linear_client()
     if client is None:
         return 2
     out_dir = _out_dir(args)
     existing = load_state(out_dir)
-    live = _scope_live(client.list_customers(), args.scope)
+    live = scope_live(client.list_customers(), args.scope)
     recs = reconcile_mirror(live, LINEAR_SCHEMA)
     if args.scope:
         # Scoped run: replace only the in-scope rows; out-of-scope state is untouched.
@@ -442,61 +439,17 @@ def _prod_write_refused(args, what: str) -> bool:
     return False
 
 
-def _load_table(out_dir: Path):
-    """`<data_dir>/identities.yaml` (missing = empty); None after printing why it is invalid."""
-    try:
-        return load_identities(out_dir / IDENTITIES_FILE)
-    except ValueError as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        return None
-
-
-def _load_ignore(out_dir: Path):
-    """`<data_dir>/linear-ignore.yaml` (missing = built-in prefix only); None after
-    printing why it cannot be read."""
-    try:
-        return load_ignore(out_dir / IGNORE_FILE, IGNORE_FORMAT)
-    except ValueError as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        return None
-
-
-def _entries(out_dir: Path):
-    return load_datasets(out_dir, load_datasets_config(out_dir))
-
-
-def _partitioned(all_live, ignore, scope: str | None):
-    """The one partition: (managed, ignored, other). `managed` is the in-scope,
-    non-ignored set the planner writes; `other` is every other live customer
-    (ignored or out of scope), whose domains still count as held."""
-    managed, ignored = partition_live(
-        _scope_live(all_live, scope), ignore, LINEAR_SCHEMA, scope=scope
-    )
-    managed_ids = {lv.id for lv in managed}
-    other = [lv for lv in all_live if lv.id not in managed_ids]
-    return managed, ignored, other
-
-
 def _cmd_deploy(args) -> int:
     client = _linear_client()
     if client is None:
         return 2
     out_dir = _out_dir(args)
-    desired = _scope_recs(load_desired(out_dir), args.scope)
-    if not desired and not args.scope:
-        print(f"No {out_dir}/{DESIRED_SUBDIR}/* found — run `generate` first.", file=sys.stderr)
+    inp = load_inputs(out_dir, args.scope, require_desired=True)
+    if inp is None:
         return 2
-    state = _scope_recs(load_state(out_dir), args.scope)
-    table = _load_table(out_dir)
-    ignore = _load_ignore(out_dir)
-    if table is None or ignore is None:
-        return 2
-    retire = load_retire(out_dir / RETIRE_FILE, LINEAR_SCHEMA)
-    managed, ignored, other = _partitioned(client.list_customers(), ignore, args.scope)
-    conflicts, reports = ignore_conflicts(
-        ignored, ignore, _entries(out_dir), desired, table, scope=args.scope
-    )
-    plan = plan_deploy(desired, managed, table, state=state, retire=retire, other_live=other)
+    retire = load_retire_file(out_dir)
+    planning = plan_for_deploy(inp, client.list_customers(), args.scope, retire=retire)
+    plan, conflicts, reports = planning.plan, planning.conflicts, planning.reports
     _print_plan(plan)
     for msg in reports:
         print(f"  NOTE: {msg}")
@@ -536,7 +489,7 @@ def _cmd_deploy(args) -> int:
             plan,
             client,
             snapshot_dir=out_dir / SNAPSHOT_SUBDIR,
-            ignore=ignore,
+            ignore=inp.ignore,
             scope=args.scope,
         )
     except (OSError, ValueError) as e:
@@ -603,35 +556,16 @@ def _cmd_check(args) -> int:
     if client is None:
         return EXIT_OPERROR
     out_dir = _out_dir(args)
-    desired = _scope_recs(load_desired(out_dir), args.scope)
-    state = _scope_recs(load_state(out_dir), args.scope)
-    table = _load_table(out_dir)
-    ignore = _load_ignore(out_dir)
-    if table is None or ignore is None:
+    inp = load_inputs(out_dir, args.scope)
+    if inp is None:
         return EXIT_OPERROR
     try:
         all_live = client.list_customers()
     except LinearError as e:
         print(f"ERROR: Linear read failed: {e}", file=sys.stderr)
         return EXIT_OPERROR
-    retire = load_retire(out_dir / RETIRE_FILE, LINEAR_SCHEMA)
-    if args.scope:
-        # a scoped run only sees its own rows; keep retire entries for those rows
-        in_scope = {d.external_ids[0] for d in desired if d.external_ids}
-        retire = {k: v for k, v in retire.items() if k in in_scope}
-    live = _scope_live(all_live, args.scope)
-    in_scope_ids = {lv.id for lv in live}
-    res = run_check(
-        desired,
-        state,
-        live,
-        table,
-        retire=retire,
-        ignore=ignore,
-        scope=args.scope,
-        entries=_entries(out_dir),
-        other_live=[lv for lv in all_live if lv.id not in in_scope_ids],
-    )
+    res = check_for(inp, all_live, args.scope)
+    ignore = inp.ignore
     drift, plan = res.drift, res.plan
     for line in ignored_lines(res.ignored, ignore, LINEAR_SCHEMA, scope=args.scope):
         print(f"  {line}")
@@ -659,7 +593,7 @@ def _cmd_check(args) -> int:
     offline = offline_errors(out_dir)
     for msg in offline:
         print(f"  OFFLINE: {msg}")
-    code = res.code or (EXIT_DRIFT if offline else 0)
+    code = check_exit(res, offline)
     if code == 0:
         print("IN SYNC")
     elif res.code:
