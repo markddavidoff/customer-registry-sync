@@ -12,7 +12,14 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field, fields
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from gitops_engine.schema import Nouns
+
+if TYPE_CHECKING:
+    from gitops_engine.identity import ItemKeys
+
+    from .linear_client import LiveCustomer
 
 LinearStatus = str
 # The deployable statuses generate emits. A workspace can define more, which a
@@ -97,3 +104,34 @@ def content_hash_of(rec: LinearCustomer) -> str:
     }
     blob = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(blob.encode()).hexdigest()
+
+
+class LinearSchema:
+    """The engine's view of Linear customers (`RecordSchema[LinearCustomer, LiveCustomer]`).
+
+    Only the members the engine's merge and found-stub code call are here so far; the
+    field table, policies and snapshot members arrive with the planner."""
+
+    nouns = Nouns("customer", "customers", "Linear")
+
+    def label(self, d: LinearCustomer) -> str:
+        return d.name
+
+    def live_label(self, lv: LiveCustomer) -> str:
+        return lv.name
+
+    def live_id(self, lv: LiveCustomer) -> str:
+        return lv.id
+
+    def desired_keys(self, d: LinearCustomer) -> ItemKeys:
+        from .identity import keys_for_row  # identity imports this module for its types
+
+        return keys_for_row(d)
+
+    def live_keys(self, lv: LiveCustomer) -> ItemKeys:
+        from .identity import keys_for_live  # identity imports this module for its types
+
+        return keys_for_live(lv)
+
+
+LINEAR_SCHEMA = LinearSchema()

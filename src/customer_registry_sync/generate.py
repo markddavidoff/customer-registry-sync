@@ -18,6 +18,9 @@ import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 
+from gitops_engine.merge import group_by_identity as engine_group_by_identity
+from gitops_engine.merge import merge_by_identity
+
 from .datasets import LINEAR_FOUND, DatasetRecord, load_datasets, load_datasets_config
 from .identity import (  # noqa: F401 (re-export)
     _STATUS_SUFFIX_RE,
@@ -101,13 +104,9 @@ def group_by_identity(
     priority: list[str],
 ) -> dict[str, list[DatasetRecord]]:
     """Canonical id -> its entries, best first: dataset priority, then file name."""
-    rank = {name: i for i, name in enumerate(priority)}
-    groups: dict[str, list[DatasetRecord]] = {}
-    for entry in entries:
-        groups.setdefault(canonical_id_for(entry, table), []).append(entry)
-    for group in groups.values():
-        group.sort(key=lambda e: (rank.get(e.dataset, len(rank)), e.source_id))
-    return groups
+    return engine_group_by_identity(
+        entries, table, priority, record_id=lambda e: canonical_id_for(e, table)
+    )
 
 
 def _with_identity_domains(rec: CustomerRecord, extra: list[str]) -> CustomerRecord:
@@ -129,13 +128,19 @@ def merge_datasets(
     """One row per identity; the highest-priority record wins whole."""
     rows: list[LinearCustomer] = []
     winners: list[DatasetRecord] = []
-    for cid, group in group_by_identity(entries, table, priority).items():
-        best = group[0]
-        ident = table.entries.get(cid)
-        rec = _with_identity_domains(best.record, ident.values["domains"] if ident else [])
-        winner = DatasetRecord(dataset=best.dataset, source_id=best.source_id, record=rec)
+    for cid, winner in merge_by_identity(
+        entries,
+        table,
+        priority,
+        record_id=lambda e: canonical_id_for(e, table),
+        gather=lambda rec, ident: _with_identity_domains(
+            rec, ident.values["domains"] if ident else []
+        ),
+    ):
         winners.append(winner)
-        row = project_record(rec, external_id=cid, linear_owned=best.dataset == LINEAR_FOUND)
+        row = project_record(
+            winner.record, external_id=cid, linear_owned=winner.dataset == LINEAR_FOUND
+        )
         if row is not None:
             rows.append(row)
     rows.sort(key=lambda x: x.name.lower())

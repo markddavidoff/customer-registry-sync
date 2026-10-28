@@ -22,10 +22,13 @@ import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from gitops_engine.pairing import pick_primary as engine_pick_primary
+from gitops_engine.pairing import stamped_conflict as engine_stamped_conflict
+
 from .curated import CuratedFields
 from .fieldplan import DESTRUCTIVE, FieldChange, plan_row, unacknowledged_destructive
 from .identity import (
-    SOURCE_LINEAR,
+    IDENTITY_SPEC,
     IdentityTable,
     keys_for_live,
     keys_for_row,
@@ -34,7 +37,7 @@ from .identity import (
 )
 from .ignore import IgnoreList
 from .linear_client import LinearError, LiveCustomer
-from .linear_schema import LinearCustomer, LinearSynced, content_hash_of
+from .linear_schema import LINEAR_SCHEMA, LinearCustomer, LinearSynced, content_hash_of
 from .snapshot import record_written, write_snapshot
 
 
@@ -78,25 +81,12 @@ def pick_primary(
     id, else the one whose id the identity records as its Linear source. None when
     neither id is on any of them, or when two or more carry the canonical id
     (`stamped_conflict` names that error)."""
-    stamped = [lv for lv in group if cid in lv.external_ids]
-    if len(stamped) > 1:
-        return None
-    if stamped:
-        return stamped[0]
-    linear_id = table.entries[cid].sources.get(SOURCE_LINEAR)
-    return next((lv for lv in group if linear_id and lv.id == linear_id), None)
+    return engine_pick_primary(cid, group, table, schema=LINEAR_SCHEMA, spec=IDENTITY_SPEC)
 
 
 def stamped_conflict(cid: str, group: list[LiveCustomer]) -> str | None:
     """The planner error when two or more live customers carry the canonical id `cid`."""
-    stamped = sorted((lv for lv in group if cid in lv.external_ids), key=lambda lv: lv.id)
-    if len(stamped) < 2:
-        return None
-    named = ", ".join(f"'{lv.name}' ({lv.id})" for lv in stamped)
-    return (
-        f"two or more Linear customers carry the canonical id {cid}: {named}: "
-        "merge them in Linear or remove the id from all but one"
-    )
+    return engine_stamped_conflict(cid, group, schema=LINEAR_SCHEMA)
 
 
 def pair_rows(
