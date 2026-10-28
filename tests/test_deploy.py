@@ -486,7 +486,7 @@ def _robotics(rl, **kw):
 
 
 def test_snapshot_written_before_first_mutation(tmp_path, recording_linear):
-    from customer_registry_sync.snapshot import load_snapshot
+    from gitops_engine.snapshot import load_snapshot
 
     lv = _robotics(recording_linear, revenue=300000)
     plan = plan_deploy([desired(revenue=250000)], [lv])
@@ -495,9 +495,13 @@ def test_snapshot_written_before_first_mutation(tmp_path, recording_linear):
     res = apply_deploy(plan, client, snapshot_dir=snaps)
     [call] = client.updates()
     assert call[4] == [res.snapshot.name]  # the snapshot existed at the first write
-    [row] = load_snapshot(res.snapshot)
-    assert (row.linear_id, row.revenue, row.updated_at) == ("lin-1", 300000, lv.updated_at)
-    assert row.written_updated_at == client.rows["lin-1"].updated_at
+    [row] = load_snapshot(res.snapshot, schema=LINEAR_SCHEMA)
+    assert (row["linear_id"], row["revenue"], row["updated_at"]) == (
+        "lin-1",
+        300000,
+        lv.updated_at,
+    )
+    assert row["written_updated_at"] == client.rows["lin-1"].updated_at
     assert res.failure is None and res.created == []
 
 

@@ -21,9 +21,9 @@ Live customers are split once into managed and ignored (`gitops_engine.ignore.pa
 drift, the plan, untracked values and stale retire entries see only the managed
 set. A Linear edit to a stub (a `linear_owned` row) is not drift.
 
-Drift detection and the exit codes come from `gitops_engine` (through
-`linear_adapter.LinearCustomersAdapter`); the plan is the local field-level
-planner, `deploy.plan_deploy`, the same one `deploy` runs.
+Drift detection and the exit codes come from `gitops_engine` (drift reads
+`LINEAR_SCHEMA` through `_DriftView`); the plan is the engine's field-level planner,
+`deploy.plan_deploy`, the same one `deploy` runs.
 
 `offline_errors` is the part of `check` that needs no Linear access: the
 generated directories must match their manifests (no hand edits), the ignore
@@ -49,6 +49,7 @@ from gitops_engine.ignore import (
 from gitops_engine.fieldplan import Untracked, stale_retire, untracked_values
 from gitops_engine.manifest import manifest_edits
 from gitops_engine.retire import RetireEntry
+from gitops_engine.schema import SyncMark
 
 from .datasets import DatasetRecord, datasets_errors, load_datasets, load_datasets_config
 from .deploy import DeployPlan, plan_deploy
@@ -68,7 +69,6 @@ from .identity import (
     resolve,
     table_errors,
 )
-from .linear_adapter import LinearCustomersAdapter
 from .linear_client import LiveCustomer
 from .linear_files import (
     IGNORE_FILE,
@@ -100,6 +100,21 @@ __all__ = [
 ]
 
 
+class _DriftView:
+    """What the engine's `detect_drift` reads, answered by `LINEAR_SCHEMA`: the live
+    id, the live content hash, and a state row's `linear_synced` mark (None for an
+    untracked row)."""
+
+    def live_id(self, lv: LiveCustomer) -> str:
+        return LINEAR_SCHEMA.live_id(lv)
+
+    def live_hash(self, lv: LiveCustomer) -> str:
+        return LINEAR_SCHEMA.live_hash(lv)
+
+    def state_mark(self, s: LinearCustomer) -> SyncMark | None:
+        return LINEAR_SCHEMA.mark(s)
+
+
 def detect_drift(
     state: list[LinearCustomer],
     live: list[LiveCustomer],
@@ -109,7 +124,7 @@ def detect_drift(
     """Whether the recorded state mirror still matches live, by content hash
     (`gitops_engine.detect_drift`). `linear_owned` are the live ids of stub rows:
     Linear owns them, so a content change there is not drift."""
-    rep = _engine_detect_drift(state, live, LinearCustomersAdapter())
+    rep = _engine_detect_drift(state, live, _DriftView())
     if linear_owned:
         rep.changed = [(s, lv) for s, lv in rep.changed if lv.id not in linear_owned]
     return rep

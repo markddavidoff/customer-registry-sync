@@ -1,0 +1,25 @@
+taken_at: '2026-09-03T12:00:00Z'
+rows:
+- linear_id: lin_a
+  name: Gadget Works
+  domains:
+  - gadget.example.test
+  - Gadget.example.org
+  revenue: 1200
+  tier: Gold
+  status: Active
+  external_ids:
+  - gadget
+  updated_at: '2026-09-01T10:00:00.000Z'
+  written_updated_at: '2026-09-03T12:00:05.000Z'
+- linear_id: lin_b
+  name: Sprocket Ltd
+  domains: []
+  revenue: null
+  tier: null
+  status: ''
+  external_ids:
+  - sprocket
+  - sprk
+  updated_at: '2026-09-02T11:00:00.000Z'
+  written_updated_at: null

@@ -5,7 +5,9 @@ from gitops_engine.ignore import load_ignore
 from gitops_engine.manifest import MANIFEST, write_manifest
 from gitops_engine.mirror import reconcile_mirror
 
-from customer_registry_sync import cli, deploy
+from gitops_engine import deploy
+
+from customer_registry_sync import cli
 from customer_registry_sync.check import (
     EXIT_DRIFT,
     EXIT_OK,

@@ -487,9 +487,9 @@ path filter. Its jobs:
 | `identity.py` | The customer's identity declarations: `IDENTITY_SPEC` (source, domain and name keys, their order and normalisers), the `keys_for_*` reducers and `implicit_identity`. The table, `resolve`, validation and the comment-preserving store are in `gitops-engine`. |
 | `linear_found.py` | Stub building and unmapped-status errors. |
 | `generate.py`, `writers.py` | Merge by identity, projection to Linear rows, YAML and CSV writers. |
-| `linear_schema.py`, `linear_client.py`, `linear_adapter.py` | `LINEAR_SCHEMA` (the field policies the engine's planner runs), the mirror row, `content_hash_of`, the GraphQL client, the engine adapter. |
-| `deploy.py`, `linear_files.py` | Plan and apply on the engine's pairing and field planner; the ignore and retire file names. |
-| `check.py`, `manifest.py`, `snapshot.py` | `check`, manifests, snapshots and `restore`. |
+| `linear_schema.py`, `linear_client.py`, `linear_destination.py` | `LINEAR_SCHEMA` (the field policies the engine's planner runs, the mirror and snapshot rows), `content_hash_of`, the GraphQL client, and `LinearDestination`, the engine's destination for Linear writes. |
+| `deploy.py`, `linear_files.py` | Plan, apply and `restore` bound to the engine's deploy and snapshot code; the ignore, retire and snapshot file names. |
+| `check.py`, `manifest.py` | `check` and manifests. |
 | `changed.py`, `tool_source.py` | `changed` and `tool-source`, which the reusable workflow calls. |
 | `cli.py` | The commands above. |
 

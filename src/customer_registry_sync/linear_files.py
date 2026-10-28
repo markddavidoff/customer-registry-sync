@@ -29,6 +29,8 @@ IGNORE_FILE = "linear-ignore.yaml"
 IGNORE_HEADER = "# Linear customers the sync never touches. Each entry needs a reason.\n"
 IGNORE_FORMAT = IgnoreFormat(IGNORE_FILE, "linear_id", IGNORE_HEADER, "customers")
 RETIRE_FILE = "linear-retire.yaml"
+# Pre-apply snapshots, one file per `deploy --apply`: `<data_dir>/linear-snapshots/`.
+SNAPSHOT_SUBDIR = "linear-snapshots"
 
 # The curated files `generate`, `check` and `deploy` read directly, as names relative
 # to the registry's `data_dir`. A change to any of them changes what `deploy` may

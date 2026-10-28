@@ -1,6 +1,6 @@
-"""Tests for the gitops-engine adapter (drift detection only), the one pairing
-(`identity.pair_rows`) and the local `deploy` planner/apply it no longer drives (plan-time and write-time aborts,
-the never-null write path). All data here is invented.
+"""Drift through `check.detect_drift`, the one pairing (`identity.pair_rows`) and the
+`deploy` planner and apply on the engine (plan-time and write-time aborts, the
+never-null write path). All data here is invented.
 """
 
 import pytest
@@ -14,7 +14,6 @@ from customer_registry_sync.identity import (
     pair_rows,
 )
 from customer_registry_sync.identity import IdentityStore
-from customer_registry_sync.linear_adapter import LinearCustomersAdapter
 from customer_registry_sync.linear_client import LiveCustomer
 from customer_registry_sync.linear_schema import (
     LINEAR_SCHEMA,
@@ -159,24 +158,6 @@ def test_pairing_on_a_duplicate_group_uses_pick_primary(tmp_path):
     assert _match(d, [a, b], table) is b
     stamped = livec(id="lin-c", name="Helios Freight Inc", external_ids=["helios"])
     assert _match(d, [a, b, stamped], table) is stamped
-
-
-def test_adapter_refuses_planning_and_writes():
-    """The adapter serves drift detection only: planning is `deploy.plan_deploy`
-    (pairing `identity.pair_rows`), writes are `deploy.apply_deploy`."""
-    adapter = LinearCustomersAdapter()
-    with pytest.raises(NotImplementedError, match="plan_deploy"):
-        adapter.match(desired(), [livec()])
-    with pytest.raises(NotImplementedError, match="plan_deploy"):
-        adapter.mark_for(desired(), livec(), [])
-    with pytest.raises(NotImplementedError, match="apply_deploy"):
-        adapter.preflight(None)
-    with pytest.raises(NotImplementedError, match="apply_deploy"):
-        adapter.get("lin-1")
-    with pytest.raises(NotImplementedError, match="apply_deploy"):
-        adapter.create(desired())
-    with pytest.raises(NotImplementedError, match="apply_deploy"):
-        adapter.update("lin-1", desired())
 
 
 def test_drift_hashes_an_empty_live_status_as_the_mirror_records_it():

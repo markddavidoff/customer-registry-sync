@@ -110,19 +110,20 @@ def content_hash_of(rec: LinearCustomer) -> str:
 class LinearSchema:
     """The engine's view of Linear customers (`RecordSchema[LinearCustomer, LiveCustomer]`).
 
-    The snapshot members are not here yet; everything the engine's merge, found-stub,
-    ignore, mirror, retire, pairing and field-planner code calls is."""
+    `nouns.version` names Linear's version token in drift messages."""
 
-    nouns = Nouns("customer", "customers", "Linear", source="registry")
+    nouns = Nouns("customer", "customers", "Linear", source="registry", version="updatedAt")
     fields = (
         FieldSpec("name", Always()),
         FieldSpec("status", Always(), required=True),
         FieldSpec("external_ids", Always(unordered=True)),
-        FieldSpec("domains", Union(exclusive=True)),
+        FieldSpec("domains", Union(exclusive=True, item="domain")),
         FieldSpec("revenue", KeepIfUnset()),
         FieldSpec("tier", KeepIfUnset()),
     )
     id_field = "external_ids"
+    snapshot_id_key = "linear_id"
+    snapshot_version_key = "updated_at"
 
     def desired_value(self, d: LinearCustomer, field: str) -> Any:
         return getattr(d, field)
@@ -196,6 +197,33 @@ class LinearSchema:
             external_ids=list(s.external_ids),
             updated_at=ls.updated_at if ls else "",
         )
+
+    def snapshot_row(self, lv: LiveCustomer) -> dict[str, Any]:
+        """A snapshot row, keys in the order v0.1.0 snapshots hold them."""
+        return {
+            "linear_id": lv.id,
+            "name": lv.name,
+            "domains": list(lv.domains),
+            "revenue": lv.revenue,
+            "tier": lv.tier,
+            "status": lv.status,
+            "external_ids": list(lv.external_ids),
+            "updated_at": lv.updated_at,
+        }
+
+    def snapshot_values(self, row: dict[str, Any]) -> dict[str, Any]:
+        """What `restore` sends for a snapshot row: every managed field, except an empty
+        status (Linear cannot clear one)."""
+        send = {
+            "name": row["name"],
+            "domains": list(row["domains"]),
+            "external_ids": list(row["external_ids"]),
+            "revenue": row["revenue"],
+            "tier": row["tier"],
+        }
+        if row["status"]:
+            send["status"] = row["status"]
+        return send
 
 
 LINEAR_SCHEMA = LinearSchema()

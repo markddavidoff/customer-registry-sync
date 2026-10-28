@@ -376,7 +376,10 @@ def test_restore_stops_on_linear_error_and_reports_partial(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
     from customer_registry_sync.linear_client import LinearError
-    from customer_registry_sync.snapshot import restore, write_snapshot
+    from gitops_engine.snapshot import write_snapshot
+
+    from customer_registry_sync.deploy import restore
+    from customer_registry_sync.linear_schema import LINEAR_SCHEMA
 
     rows = [
         recording_linear.node(
@@ -384,7 +387,7 @@ def test_restore_stops_on_linear_error_and_reports_partial(
         )
         for i in (1, 2, 3)
     ]
-    snap = write_snapshot(rows, tmp_path / "snaps")
+    snap = write_snapshot(rows, tmp_path / "snaps", schema=LINEAR_SCHEMA)
     fake = recording_linear(rows)
     fake.fail["lin_2"] = LinearError("HTTP 502")
     monkeypatch.setattr(cli, "_linear_client", lambda: fake)

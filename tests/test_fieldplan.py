@@ -64,13 +64,14 @@ def test_linear_field_policies():
         ("name", Always(), False),
         ("status", Always(), True),
         ("external_ids", Always(unordered=True), False),
-        ("domains", Union(exclusive=True), False),
+        ("domains", Union(exclusive=True, item="domain"), False),
         ("revenue", KeepIfUnset(), False),
         ("tier", KeepIfUnset(), False),
     ]
     assert LINEAR_SCHEMA.id_field == "external_ids"
     assert (LINEAR_SCHEMA.nouns.record, LINEAR_SCHEMA.nouns.records) == ("customer", "customers")
     assert (LINEAR_SCHEMA.nouns.destination, LINEAR_SCHEMA.nouns.source) == ("Linear", "registry")
+    assert LINEAR_SCHEMA.nouns.version == "updatedAt"
 
 
 def test_domain_case_is_not_a_change():

@@ -54,7 +54,7 @@ from .changed import changed_since
 from .check import EXIT_DRIFT, EXIT_OPERROR, offline_errors, orphan_lines, run_check
 from .config import DEFAULT_CONFIG_NAME, ConfigError, config_value, load_config
 from .datasets import LINEAR_FOUND, NOTION, load_datasets, load_datasets_config
-from .deploy import apply_deploy, plan_deploy
+from .deploy import apply_deploy, plan_deploy, restore
 from .generate import generate_from_dir
 from .identity import IDENTITIES_FILE, IdentityStore, load_identities
 from .inputs import load_overrides, load_self_managed_customers
@@ -63,12 +63,12 @@ from .linear_files import (
     IGNORE_FILE,
     IGNORE_FORMAT,
     RETIRE_FILE,
+    SNAPSHOT_SUBDIR,
     ignore_conflicts,
 )
 from .linear_found import append_record_identities, build_linear_found
 from .linear_schema import LINEAR_SCHEMA
 from .notion_ingest import extract_customers
-from .snapshot import SNAPSHOT_SUBDIR, restore
 from .tool_source import ToolSourceError, tool_source
 from .writers import (
     DESIRED_SUBDIR,

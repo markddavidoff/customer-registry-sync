@@ -13,7 +13,7 @@ from customer_registry_sync.generate import generate_linear
 from customer_registry_sync.identity import IDENTITIES_FILE
 from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.schema import CustomerRecord
-from customer_registry_sync.snapshot import SNAPSHOT_SUBDIR
+from customer_registry_sync.linear_files import SNAPSHOT_SUBDIR
 from customer_registry_sync.writers import (
     DESIRED_SUBDIR,
     dataset_files,
