@@ -1,9 +1,13 @@
 from dataclasses import replace
 
-from customer_registry_sync import cli
-from customer_registry_sync.deploy import live_to_linear
+from customer_registry_sync import cli, deploy_plan
 from customer_registry_sync.linear_client import LiveCustomer
-from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced, content_hash_of
+from customer_registry_sync.linear_schema import (
+    LINEAR_SCHEMA,
+    LinearCustomer,
+    LinearSynced,
+    content_hash_of,
+)
 from customer_registry_sync.writers import load_state, write_desired, write_state
 
 
@@ -67,7 +71,7 @@ def _live(lid, name, updated="2026-10-01T00:00:00.000Z", revenue=1, xids=("acme"
 
 
 def _state_from(lv):
-    s = live_to_linear(lv)
+    s = LINEAR_SCHEMA.mirror_row(lv)
     s.linear_synced = LinearSynced(lv.id, lv.updated_at, content_hash_of(s))
     return s
 
@@ -258,14 +262,14 @@ def test_deploy_refuses_unacked_destructive(
 ):
     fake = _seed_acme(tmp_path, recording_linear)
     monkeypatch.setattr(cli, "_linear_client", lambda: fake)
-    real = cli.plan_deploy
+    real = deploy_plan.plan_deploy
 
     def buggy_planner(*a, **kw):  # the planner never emits these; simulate the bug
         plan = real(*a, **kw)
         plan.unacked.append("Acme: revenue clear without retire")
         return plan
 
-    monkeypatch.setattr(cli, "plan_deploy", buggy_planner)
+    monkeypatch.setattr(deploy_plan, "plan_deploy", buggy_planner)
     assert run_cli(["deploy", "--out-dir", str(tmp_path)]) == 3
     assert run_cli(["deploy", "--apply", "--out-dir", str(tmp_path)]) == 3
     assert "UNACKNOWLEDGED DESTRUCTIVE: Acme: revenue clear" in capsys.readouterr().out
@@ -276,7 +280,7 @@ def test_deploy_refuses_on_planner_errors_and_loads_identities(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
     from customer_registry_sync.identity import IDENTITIES_FILE
-    from customer_registry_sync.identity_store import IdentityStore
+    from customer_registry_sync.identity import IdentityStore
 
     store = IdentityStore(tmp_path / IDENTITIES_FILE)
     store.add_identity(
@@ -309,7 +313,7 @@ def test_deploy_refuses_on_planner_errors_and_loads_identities(
 
 
 def test_deploy_passes_retire_file_to_planner(tmp_path, monkeypatch, recording_linear, run_cli):
-    from customer_registry_sync.curated import RETIRE_FILE
+    from customer_registry_sync.linear_files import RETIRE_FILE
 
     live = recording_linear.node(
         "lin_1", "Acme", domains=["acme.example.test", "old.example.org"], revenue=5, xids=["acme"]
@@ -372,7 +376,10 @@ def test_restore_stops_on_linear_error_and_reports_partial(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
     from customer_registry_sync.linear_client import LinearError
-    from customer_registry_sync.snapshot import restore, write_snapshot
+    from gitops_engine.snapshot import write_snapshot
+
+    from customer_registry_sync.deploy import restore
+    from customer_registry_sync.linear_schema import LINEAR_SCHEMA
 
     rows = [
         recording_linear.node(
@@ -380,7 +387,7 @@ def test_restore_stops_on_linear_error_and_reports_partial(
         )
         for i in (1, 2, 3)
     ]
-    snap = write_snapshot(rows, tmp_path / "snaps")
+    snap = write_snapshot(rows, tmp_path / "snaps", schema=LINEAR_SCHEMA)
     fake = recording_linear(rows)
     fake.fail["lin_2"] = LinearError("HTTP 502")
     monkeypatch.setattr(cli, "_linear_client", lambda: fake)
@@ -411,11 +418,13 @@ _IGNORE_OWN = (
 def _generated(tmp_path, recs, *identities):
     """A data dir built by the real producers (identity store, dataset,
     generate); returns the desired rows."""
-    from customer_registry_sync.datasets import NOTION, dataset_dir
+    from gitops_engine.datasets import dataset_dir
+    from gitops_engine.manifest import write_manifest
+
+    from customer_registry_sync.datasets import NOTION
     from customer_registry_sync.generate import generate_from_dir
     from customer_registry_sync.identity import IDENTITIES_FILE
-    from customer_registry_sync.identity_store import IdentityStore
-    from customer_registry_sync.manifest import write_manifest
+    from customer_registry_sync.identity import IdentityStore
     from customer_registry_sync.writers import write_csvs, write_dataset
 
     store = IdentityStore(tmp_path / IDENTITIES_FILE)
@@ -432,7 +441,7 @@ def _generated(tmp_path, recs, *identities):
 
 
 def _mirror(tmp_path, live):
-    from customer_registry_sync.manifest import write_manifest
+    from gitops_engine.manifest import write_manifest
 
     write_state([_state_from(lv) for lv in live], tmp_path)
     write_manifest(tmp_path / "linear-state", "sync-inbound")
@@ -441,7 +450,7 @@ def _mirror(tmp_path, live):
 def test_deploy_refuses_on_ignore_conflict(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
-    from customer_registry_sync.ignore import IGNORE_FILE
+    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
     _generated(
@@ -478,7 +487,7 @@ def test_deploy_refuses_on_ignore_conflict(
 def test_deploy_withholds_domain_held_only_by_ignored_customer(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
-    from customer_registry_sync.ignore import IGNORE_FILE
+    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
     # the identity lists only acme.example.test, so Pied Piper does not resolve to Acme (no conflict),
@@ -516,7 +525,7 @@ def test_deploy_withholds_domain_held_only_by_ignored_customer(
 def _acme_and_own_holder(tmp_path, recording_linear):
     """Acme's record carries piedpiper.example.test, which only the ignored Pied Piper holds; the
     identity lists only acme.example.test, so Pied Piper does not resolve to Acme."""
-    from customer_registry_sync.ignore import IGNORE_FILE
+    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
     [d] = _generated(
@@ -570,7 +579,7 @@ def test_scoped_check_withholds_domain_held_outside_the_scope(
 
 
 def test_check_lists_ignored_customers(tmp_path, monkeypatch, capsys, recording_linear, run_cli):
-    from customer_registry_sync.ignore import IGNORE_FILE
+    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
     [d] = _generated(
@@ -606,7 +615,7 @@ def test_check_lists_ignored_customers(tmp_path, monkeypatch, capsys, recording_
 def test_check_orphan_lines_print_before_the_plan_and_reports_after(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
-    from customer_registry_sync.ignore import IGNORE_FILE
+    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
     [d] = _generated(

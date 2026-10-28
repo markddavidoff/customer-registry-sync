@@ -1,8 +1,8 @@
 # Set up the registry sync
 
 This guide takes a repository from nothing to a working registry sync: the Linear
-tokens, the GitHub App, an SSH key for the private git dependencies, the GitHub
-environments, the caller workflow, branch protection, and a staged first rollout. Day-to-day
+tokens, the GitHub App, the install source, the GitHub environments, the locked caller
+project, the caller workflow, branch protection, and a staged first rollout. Day-to-day
 operation, failure recovery, retiring values and restoring snapshots are in
 [`operations.md`](operations.md). How the system works is in
 [`../customer-registry.md`](../customer-registry.md).
@@ -11,8 +11,7 @@ operation, failure recovery, retiring values and restoring snapshots are in
 
 Your repository (the "caller") holds the registry: a `registry-sync.yaml` config, the
 data directory, and a small caller workflow. The caller workflow calls the reusable
-workflow `.github/workflows/registry-sync.yml` in the `customer-registry-sync`
-repository (the "tool repository"). The reusable workflow installs the tool from the
+workflow `.github/workflows/sync.yml` in the `gitops-engine` repository. The reusable workflow installs the tool from the
 caller's `uv.lock` and runs one of four modes:
 
 - **deploy**: on a push to the default branch that changed a deploy input, waits for a
@@ -28,12 +27,14 @@ The workflow never reads Notion and holds no Notion token. Notion ingest is manu
 your own machine you run `customer-registry-sync ingest` (with `NOTION_API_TOKEN` set),
 then `generate`, and open a PR with the result.
 
-**Visibility today.** The tool repository and `gitops-engine` are both private, so
-installing the tool needs an SSH key with read access to both (Stage 3). A caller in the
-same owner account as the tool repository can call the reusable workflow once Actions
-access is granted to it. A caller in a different owner can call it only if the tool
-repository is public; that is an owner decision still pending. No release tag exists
-yet, so pin a commit sha wherever these steps say to pin a version (Stage 5).
+**Install and visibility.** The caller's repository holds a uv project that depends on
+the tool, with a committed `uv.lock` (Stage 5). Each job runs `uv sync --locked` and
+calls the tool through `uv run --frozen`, so every job runs the locked tool and
+dependencies, and a job that holds a token runs only locked code. The jobs hold no
+deploy key, so the lock must use https git URLs or an index that the job can read
+without credentials (Stage 3). The reusable workflow is in `gitops-engine`. GitHub can
+call it from a caller in any owner when `gitops-engine` is public, and from a caller in
+the same owner once Actions access is granted to it.
 
 ## Stage 0: Prerequisites
 
@@ -85,57 +86,57 @@ them.
    `REGISTRY_SYNC_APP_PRIVATE_KEY`; Stage 4 stores both.
 6. Install the App on the caller repository only (Only select repositories).
 
-## Stage 3: SSH key for the private git dependencies
+## Stage 3: The install source
 
-The caller's lock installs two git repositories, both private today: the tool repository
-and its engine, [`gitops-engine`](https://github.com/markddavidoff/gitops-engine). The
-workflow's jobs read them over SSH with the key in the `REGISTRY_SYNC_SSH_KEY` secret.
+The jobs install from the caller's lock and hold no deploy key. Two rules follow:
 
-- The key must have read access to both repositories. A deploy key is tied to one
-  repository and cannot cover both, so use a machine user that is a collaborator on
-  both, and put its private key in the secret.
-- Use `ssh://git@github.com/...` URLs in the caller's `pyproject.toml` (Stage 5). An
-  `https://` git install of a private repository fails in the job, because no
-  credentials are set up for it.
-- If the lock has an SSH git dependency and the secret is empty, each job fails and
-  names `REGISTRY_SYNC_SSH_KEY`. If both repositories are public, skip this stage and
-  use `https://` URLs; the secret is then not needed.
+- Every git source in the lock is an `https://` URL (or a package index). An
+  `ssh://` URL fails in the job, because there is no key to read it with.
+- The tool repository and `gitops-engine` must be readable over https without
+  credentials. If either is private, the job cannot install it; make it public or
+  host the package on an index the job can read.
+
+Pin the tool and the engine by tag in the caller's `pyproject.toml` (Stage 5), and commit
+the lock. The lock, not the workflow, decides what code runs, so upgrading means
+changing the tag and committing the new lock.
 
 ## Stage 4: GitHub environments and secrets
 
 The two environment names are your choice. You write them into `registry-sync.yaml`
 under `workflow:` in Stage 5. Only the deploy environment needs a required reviewer.
 
-| Environment | Holds | Protection |
-|---|---|---|
-| deploy | `LINEAR_API_TOKEN` (write key) | required reviewer |
-| read-only | `LINEAR_READONLY_TOKEN` (read-only key) | none |
+The two Linear keys live only as **environment secrets**, under the names the reusable
+workflow expects:
 
-The caller passes five secrets by name, and the reusable workflow declares exactly
-these under `on.workflow_call.secrets`:
+| Environment | Secret | Holds | Protection |
+|---|---|---|---|
+| deploy | `DESTINATION_TOKEN` | the Linear write key | required reviewer |
+| read-only | `DESTINATION_READONLY_TOKEN` | the Linear read-only key | none |
+
+The caller passes two repository secrets by name, which the reusable workflow declares
+under `on.workflow_call.secrets`:
 
 | Secret | Holds | Used by |
 |---|---|---|
-| `LINEAR_API_TOKEN` | Linear key with write scope | `check`, `deploy`, `restore`, `e2e`, and the post-apply `sync-inbound` |
-| `LINEAR_READONLY_TOKEN` | Linear key with read scope | `refresh` |
 | `REGISTRY_SYNC_APP_ID` | the GitHub App's id | the state and refresh PRs |
 | `REGISTRY_SYNC_APP_PRIVATE_KEY` | the App's private key (the `.pem` text) | the state and refresh PRs |
-| `REGISTRY_SYNC_SSH_KEY` | the SSH private key from Stage 3 | installing the git dependencies |
 
 Rules for where they live:
 
 - Store the App id as a **secret**, not a variable. The reusable workflow reads it from
   `secrets`, and a repository or environment variable does not reach it.
-- If a secret with the same name exists both in the caller's passed values and in the
-  environment a job runs in, the job uses the environment's value. The deploy job runs in
-  the deploy environment and the refresh job in the read-only environment, so each job
-  gets its Linear token from its own environment. Store the two Linear tokens only as
-  environment secrets, which keeps them behind the approval gate. The caller still lists
-  `LINEAR_API_TOKEN` and `LINEAR_READONLY_TOKEN` in its `secrets:` block; those two
-  references resolve to nothing and the environment values replace them.
+- The caller does **not** pass `DESTINATION_TOKEN` or `DESTINATION_READONLY_TOKEN`. A
+  secret of the same name stored in a job's environment takes precedence over a passed
+  one, so the write token is released only after the required reviewer approves the
+  deploy, and no other workflow can read it. The deploy job runs in the deploy
+  environment and the refresh job in the read-only environment, so each gets its own
+  token. A repository-level secret of the same name is unnecessary and weakens that gate.
+- The workflow exports the token under the tool's own variable (`LINEAR_API_TOKEN`, the
+  caller's `token-env` input), only for the steps that call Linear: `check`, `deploy`,
+  `restore`, `sync-inbound`, the live tests and `refresh`. Checkout, upload and PR steps
+  never see it.
 - `secrets: inherit` passes nothing to a workflow owned by another account, so the
-  caller maps each name explicitly (the example does).
-- The workflow hands the Linear tokens only to the steps that call Linear.
+  caller maps each App secret explicitly (the example does).
 
 Create the environments and set the values. None of these commands print a value:
 
@@ -145,16 +146,15 @@ gh api -X PUT repos/$R/environments/<read-only environment>
 echo '{"reviewers":[{"type":"User","id":<your GitHub user id>}]}' \
   | gh api -X PUT repos/$R/environments/<deploy environment> --input -
 
-gh secret set LINEAR_READONLY_TOKEN -R $R --env <read-only environment>   # paste the read-only key
-gh secret set LINEAR_API_TOKEN -R $R --env <deploy environment>           # paste the write key
+gh secret set DESTINATION_READONLY_TOKEN -R $R --env <read-only environment>   # paste the read-only key
+gh secret set DESTINATION_TOKEN -R $R --env <deploy environment>               # paste the write key
 
 printf '%s' "<App ID>" | gh secret set REGISTRY_SYNC_APP_ID -R $R
 gh secret set REGISTRY_SYNC_APP_PRIVATE_KEY -R $R < <path to the .pem>
-gh secret set REGISTRY_SYNC_SSH_KEY -R $R < <path to the SSH private key>
 ```
 
-The caller passes the repository secrets `REGISTRY_SYNC_APP_ID`,
-`REGISTRY_SYNC_APP_PRIVATE_KEY` and `REGISTRY_SYNC_SSH_KEY` through. Check the names:
+The caller passes the repository secrets `REGISTRY_SYNC_APP_ID` and
+`REGISTRY_SYNC_APP_PRIVATE_KEY` through. Check the names:
 
 ```
 gh secret list -R $R; gh secret list -R $R --env <deploy environment>; gh secret list -R $R --env <read-only environment>
@@ -168,9 +168,10 @@ The caller needs five things in the repository that holds the registry.
 
 **A uv project that depends on the tool, with a committed `uv.lock`.** The reusable
 workflow runs `uv sync --locked` in the directory named by its `project_dir` input
-(default: the repository root), so the lock pins the tool version. uv reads
-`[tool.uv.sources]` only from the root project, so declare the engine's source here
-too, at the tag the tool's own `pyproject.toml` pins:
+(default: the repository root; set `project_dir` in the caller if the project lives in a
+subdirectory), so the lock pins the tool and every transitive dependency. uv reads
+`[tool.uv.sources]` only from the root project, so declare the engine's source here too,
+at the tag the tool's own `pyproject.toml` pins:
 
 ```toml
 [project]
@@ -180,19 +181,17 @@ requires-python = ">=3.12"
 dependencies = ["customer-registry-sync", "gitops-engine"]
 
 [tool.uv.sources]
-customer-registry-sync = { git = "ssh://git@github.com/markddavidoff/customer-registry-sync.git", rev = "<sha>" }
-gitops-engine = { git = "ssh://git@github.com/markddavidoff/gitops-engine.git", tag = "v0.1.0" }
+customer-registry-sync = { git = "https://github.com/markddavidoff/customer-registry-sync.git", tag = "v0.2.0" }
+gitops-engine = { git = "https://github.com/markddavidoff/gitops-engine.git", tag = "v0.2.0" }
 ```
 
-No release tag of the tool exists yet, so pin a commit: put the full commit sha in
-`rev`. Switch to `tag = "<release tag>"` once one is published. Run `uv lock`, then
-commit `pyproject.toml` and `uv.lock`. Upgrading the tool means changing the sha and
-committing the new lock.
+Run `uv lock`, then commit `pyproject.toml` and `uv.lock`. Upgrading the tool means
+changing the tag and committing the new lock. Use `https://` URLs only (Stage 3).
 
 **`registry-sync.yaml`**, copied from
 [`examples/registry-sync.example.yaml`](../../examples/registry-sync.example.yaml): your
-Notion page ids, an optional `data_dir`, and the two environment names the workflow
-binds its jobs to:
+a `source:` section (`kind: notion`, the hub page id and the six bucket page ids), an
+optional `data_dir`, and the two environment names the workflow binds its jobs to:
 
 ```yaml
 workflow:
@@ -205,20 +204,18 @@ Only these two keys exist under `workflow:`. The CLI works without them; the wor
 `data_dir` must stay inside the repository.
 
 **The caller workflow**, copied from
-[`examples/workflows/registry-sync.yml`](../../examples/workflows/registry-sync.yml) to
+[`examples/caller-workflow.yml`](../../examples/caller-workflow.yml) to
 `.github/workflows/registry-sync.yml`. It triggers on a push to `main`, a daily cron
-(change the time if you like) and manual dispatch, and passes the five secrets by name.
-Two points about `uses:`:
+(change the time if you like) and manual dispatch, and passes the two App secrets by
+name. Set `token-env: LINEAR_API_TOKEN`, the variable the tool reads. Two points about
+`uses:`:
 
-- The example says `@main` and carries a comment telling you to pin a sha. No release tag
-  exists yet, so change it to `@<sha>` (the full commit sha, the same commit as the
-  `rev` in your `pyproject.toml`), so a change to the tool repository cannot change your
-  deploys. Use a tag once one is published.
-- GitHub can call a reusable workflow only when the tool repository is public, or has
-  the same owner as the caller and allows access from it (tool repository, Settings,
-  Actions, General, Access). The tool repository is private today, so a caller in a
-  different owner cannot call it until it is made public. Otherwise the call fails
-  before any job starts.
+- Pin it to the same release tag as the `gitops-engine` entry in your `pyproject.toml`
+  (the example uses `@v0.2.0`), so a change to the engine's default branch cannot change
+  your deploys.
+- GitHub can call a reusable workflow when its repository is public, or has the same
+  owner as the caller and allows access from it (repository Settings, Actions, General,
+  Access). Otherwise the call fails before any job starts.
 
 There is no `paths:` filter. Every push starts a run, and its `plan` job ends the run
 (`changed --since`) when no deploy input changed. The state mirror and the snapshots
@@ -348,9 +345,9 @@ When `check` fails, its lines name the fix. Recovery steps for each failure are 
 
 | Name | Local shell | Repository secret | Deploy environment | Read-only environment |
 |---|---|---|---|---|
-| `LINEAR_API_TOKEN` | yes | optional | secret | none |
-| `LINEAR_READONLY_TOKEN` | none | optional | none | secret |
+| `LINEAR_API_TOKEN` | yes (the tool's variable; the workflow sets it per step) | none | none | none |
+| `DESTINATION_TOKEN` | none | none | secret | none |
+| `DESTINATION_READONLY_TOKEN` | none | none | none | secret |
 | `NOTION_API_TOKEN` | yes (`ingest`) | none | none | none |
 | `REGISTRY_SYNC_APP_ID` | none | secret | none | none |
 | `REGISTRY_SYNC_APP_PRIVATE_KEY` | none | secret | none | none |
-| `REGISTRY_SYNC_SSH_KEY` | none | secret | none | none |

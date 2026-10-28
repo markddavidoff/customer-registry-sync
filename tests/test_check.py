@@ -1,6 +1,13 @@
 from dataclasses import replace
 
-from customer_registry_sync import cli, deploy
+from gitops_engine.datasets import dataset_dir
+from gitops_engine.ignore import load_ignore
+from gitops_engine.manifest import MANIFEST, write_manifest
+from gitops_engine.mirror import reconcile_mirror
+
+from gitops_engine import deploy
+
+from customer_registry_sync import cli
 from customer_registry_sync.check import (
     EXIT_DRIFT,
     EXIT_OK,
@@ -12,28 +19,27 @@ from customer_registry_sync.check import (
     run_check,
     unused_identities,
 )
-from customer_registry_sync.curated import CuratedFields
 from customer_registry_sync.datasets import (
     LINEAR_FOUND,
     NOTION,
     DatasetConfig,
     DatasetRecord,
-    dataset_dir,
     load_datasets,
 )
-from customer_registry_sync.deploy import live_to_linear
-from customer_registry_sync.fieldplan import FieldChange
+from gitops_engine.fieldplan import FieldChange
 from customer_registry_sync.generate import generate_from_dir, merge_datasets
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
-from customer_registry_sync.identity_store import IdentityStore
-from customer_registry_sync.ignore import IGNORE_FILE, load_ignore
-from customer_registry_sync.inbound_sync import reconcile_inbound
+from customer_registry_sync.identity import IdentityStore
+from customer_registry_sync.linear_files import IGNORE_FILE, IGNORE_FORMAT
 from customer_registry_sync.linear_client import LiveCustomer, parse_customer_node
-from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced, content_hash_of
-from customer_registry_sync.manifest import MANIFEST, write_manifest
+from customer_registry_sync.linear_schema import (
+    LINEAR_SCHEMA,
+    LinearCustomer,
+    LinearSynced,
+    content_hash_of,
+)
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.writers import (
-    load_state,
     write_csvs,
     write_dataset,
     write_desired,
@@ -55,7 +61,7 @@ def _live(lid, name, updated="2026-10-01T00:00:00.000Z", revenue=1):
 
 
 def _state_from(lv):
-    s = live_to_linear(lv)
+    s = LINEAR_SCHEMA.mirror_row(lv)
     s.linear_synced = LinearSynced(lv.id, lv.updated_at, content_hash_of(s))
     return s
 
@@ -131,7 +137,7 @@ def test_check_reports_untracked_and_passes():
 
 def test_check_exits_3_on_stale_retire():
     lv = _live("lin_1", "Acme")
-    retire = {"acme": CuratedFields(domains=["gone.example.org"])}
+    retire = {"acme": {"domains": ["gone.example.org"]}}
     res = run_check([_desired_acme()], [_state_from(lv)], [lv], retire=retire)
     assert res.code == EXIT_DRIFT and res.stale == ["acme: domains gone.example.org not live"]
     assert not res.drift.any() and not res.untracked
@@ -140,7 +146,7 @@ def test_check_exits_3_on_stale_retire():
 def test_check_exits_3_on_unacked_destructive(monkeypatch):
     lv = _live("lin_1", "Acme")
     bad = FieldChange("revenue", 1, None, "clear")  # retire=False: a planner bug
-    monkeypatch.setattr(deploy, "plan_row", lambda d, live, retire: (d, [bad]))
+    monkeypatch.setattr(deploy, "plan_row", lambda d, live, retire, **_: (d, [bad]))
     res = run_check([_desired_acme()], [_state_from(lv)], [lv])
     assert res.plan.unacked and res.code == EXIT_DRIFT
     assert not res.drift.any() and not res.untracked and not res.stale
@@ -394,7 +400,7 @@ def test_identity_offline_errors_include_table_errors(tmp_path):
     table = _store(
         tmp_path, ("a", ["A"], ["x.example.test"], {}), ("b", ["B"], ["y.example.test"], {})
     )
-    table.entries["b"].domains.append(
+    table.entries["b"].values["domains"].append(
         "x.example.test"
     )  # the store refuses this; a human edit does not
     assert identity_offline_errors([], table) == [
@@ -411,7 +417,7 @@ _IGNORE_OWN = (
 
 def _ignore_list(tmp_path, text=_IGNORE_OWN):
     (tmp_path / IGNORE_FILE).write_text(text)
-    return load_ignore(tmp_path / IGNORE_FILE)
+    return load_ignore(tmp_path / IGNORE_FILE, IGNORE_FORMAT)
 
 
 def _node(
@@ -513,7 +519,7 @@ def test_ignored_not_in_stale_retire(tmp_path):
     own = _node(
         "lin_own", "Pied Piper", domains=["acme.example.test", "old.example.org"], xids=["acme"]
     )
-    retire = {"acme": CuratedFields(domains=["old.example.org"])}
+    retire = {"acme": {"domains": ["old.example.org"]}}
     res = run_check([_desired_acme()], [], [own, acme], retire=retire, ignore=ign)
     assert res.stale == ["acme: domains old.example.org not live"]  # only the ignored row has it
     # control: unpartitioned, both carry the canonical id, so the planner refuses
@@ -745,7 +751,7 @@ def test_linear_edit_to_stub_passes_check(tmp_path, monkeypatch, capsys, run_cli
     stamped = _node(
         "lin_hooli", "Hooli", domains=["hooli.example.test"], revenue=None, xids=["hooli"]
     )
-    write_state(reconcile_inbound([stamped], []), tmp_path)
+    write_state(reconcile_mirror([stamped], LINEAR_SCHEMA), tmp_path)
     write_manifest(tmp_path / "linear-state", "sync-inbound")
     args = ["--out-dir", str(tmp_path), "--no-input"]
     assert run_cli(["ingest", "--only", "linear-found", *args]) == 0
@@ -760,7 +766,7 @@ def test_linear_edit_to_stub_passes_check(tmp_path, monkeypatch, capsys, run_cli
         xids=["hooli"],
         updated="2026-10-09T00:00:00.000Z",
     )
-    write_state(reconcile_inbound([now], load_state(tmp_path)), tmp_path)
+    write_state(reconcile_mirror([now], LINEAR_SCHEMA), tmp_path)
     write_manifest(tmp_path / "linear-state", "sync-inbound")
     monkeypatch.setattr(cli, "_linear_client", lambda: _Fake([now]))
     assert run_cli(["check", "--out-dir", str(tmp_path)]) == 0

@@ -1,16 +1,15 @@
+"""Restore through the customer bindings. The snapshot mechanics themselves are
+tested in gitops-engine (`tests/test_snapshot.py`)."""
+
 from dataclasses import replace
-from datetime import UTC, datetime
+from functools import partial
 
-import yaml
+from gitops_engine import snapshot
 
-from customer_registry_sync.deploy import apply_deploy, plan_deploy
-from customer_registry_sync.linear_schema import LinearCustomer
-from customer_registry_sync.snapshot import (
-    load_snapshot,
-    record_written,
-    restore,
-    write_snapshot,
-)
+from customer_registry_sync.deploy import apply_deploy, plan_deploy, restore
+from customer_registry_sync.linear_schema import LINEAR_SCHEMA, LinearCustomer
+
+write_snapshot = partial(snapshot.write_snapshot, schema=LINEAR_SCHEMA)
 
 
 def _row(rl, **kw):
@@ -35,45 +34,6 @@ def _desired(**kw):
     }
     base.update(kw)
     return LinearCustomer(**base)
-
-
-def test_write_load_and_record_round_trip(tmp_path, recording_linear):
-    lv = _row(recording_linear, tier="Tier 2")
-    when = datetime(2026, 10, 22, 9, 8, 7, tzinfo=UTC)
-    path = write_snapshot([lv], tmp_path / "snaps", now=when)
-    assert path == tmp_path / "snaps" / "20261022T090807Z.yaml"
-    raw = yaml.safe_load(path.read_text())
-    assert raw["taken_at"] == "2026-10-22T09:08:07Z" and len(raw["rows"]) == 1
-    record_written(path, "lin-1", "2026-11-01T00:00:00.000Z")
-    [row] = load_snapshot(path)
-    assert (
-        row.linear_id,
-        row.name,
-        row.domains,
-        row.revenue,
-        row.tier,
-        row.status,
-        row.external_ids,
-        row.updated_at,
-        row.written_updated_at,
-    ) == (
-        "lin-1",
-        "Acme",
-        ["acme.com"],
-        300000,
-        "Tier 2",
-        "Active",
-        ["acme"],
-        lv.updated_at,
-        "2026-11-01T00:00:00.000Z",
-    )
-
-
-def test_second_snapshot_in_same_second_does_not_overwrite(tmp_path, recording_linear):
-    when = datetime(2026, 10, 22, 9, 8, 7, tzinfo=UTC)
-    first = write_snapshot([_row(recording_linear)], tmp_path, now=when)
-    second = write_snapshot([], tmp_path, now=when)
-    assert first != second and load_snapshot(first) and load_snapshot(second) == []
 
 
 def test_restore_skips_row_gone(tmp_path, recording_linear):

@@ -4,7 +4,7 @@ Every fixture is invented: fictional companies, ``example.test`` domains, and
 random (seeded) UUIDs. Nothing is copied from a real workspace.
 
 The *shape* follows what the producers emit, because the parser under test
-(``notion_ingest``) consumes that shape:
+(``sources.notion``) consumes that shape:
 
 - Notion pages: the ``blocks.children.list`` result list. Each block carries
   ``object, id, parent, created_time, last_edited_time, created_by,

@@ -1,17 +1,17 @@
 from pathlib import Path
 
+from gitops_engine.datasets import DATASETS_FILE, dataset_dir
+from gitops_engine.manifest import MANIFEST, write_manifest
+
 from customer_registry_sync.datasets import (
-    DATASETS_FILE,
     DEFAULT_STATUS_TABLE,
     LINEAR_FOUND,
     NOTION,
     DatasetConfig,
-    dataset_dir,
     datasets_errors,
     load_datasets,
     load_datasets_config,
 )
-from customer_registry_sync.manifest import MANIFEST, write_manifest
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.writers import dataset_files, write_dataset
 
@@ -40,27 +40,28 @@ def test_config_round_trip_and_default_when_absent(tmp_path):
     assert dataset_dir(tmp_path, LINEAR_FOUND) == tmp_path / "datasets" / "linear-found"
 
 
-def test_errors_unlisted_dir_missing_dir_duplicate_and_empty(tmp_path):
+def test_errors_default_directory_status_table_and_ordering(tmp_path):
     write_dataset([_rec("Acme", "acme.com")], tmp_path)
     assert datasets_errors(tmp_path) == []  # default config matches the one directory
 
     (tmp_path / "datasets" / "intercom").mkdir()
     assert datasets_errors(tmp_path) == ["datasets.yaml: directory datasets/intercom is not listed"]
 
-    (tmp_path / DATASETS_FILE).write_text("datasets: [notion, intercom, linear-found]\n")
-    assert datasets_errors(tmp_path) == ["datasets.yaml: linear-found has no directory"]
-
-    (tmp_path / DATASETS_FILE).write_text("datasets: [notion, notion, intercom]\n")
-    assert datasets_errors(tmp_path) == ["datasets.yaml: notion listed twice"]
-
-    (tmp_path / DATASETS_FILE).write_text("datasets: []\n")
-    assert "datasets.yaml: empty datasets list" in datasets_errors(tmp_path)
-
     (tmp_path / DATASETS_FILE).write_text(
         "datasets: [notion, intercom]\nlinear_status_classification:\n  Active: gold\n"
     )
     assert datasets_errors(tmp_path) == [
         "datasets.yaml: status Active maps to invalid classification gold"
+    ]
+
+    # the engine's structural messages come first, then the status table's
+    (tmp_path / DATASETS_FILE).write_text(
+        "datasets: [notion, gone]\nlinear_status_classification:\n  Active: gold\n"
+    )
+    assert datasets_errors(tmp_path) == [
+        "datasets.yaml: gone has no directory",
+        "datasets.yaml: directory datasets/intercom is not listed",
+        "datasets.yaml: status Active maps to invalid classification gold",
     ]
 
 

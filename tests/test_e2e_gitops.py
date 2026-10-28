@@ -3,16 +3,17 @@ Runs ONLY with `uv run pytest --run-live` and LINEAR_API_TOKEN in the environmen
 record is namespaced, uses a *.invalid domain, and is deleted in teardown."""
 
 import pytest
+from gitops_engine.datasets import dataset_dir
+from gitops_engine.manifest import write_manifest
 
 from customer_registry_sync import cli
 from customer_registry_sync.config import DEFAULT_CONFIG_NAME
-from customer_registry_sync.datasets import NOTION, dataset_dir
+from customer_registry_sync.datasets import NOTION
 from customer_registry_sync.generate import generate_linear
 from customer_registry_sync.identity import IDENTITIES_FILE
-from customer_registry_sync.identity_store import IdentityStore
-from customer_registry_sync.manifest import write_manifest
+from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.schema import CustomerRecord
-from customer_registry_sync.snapshot import SNAPSHOT_SUBDIR
+from customer_registry_sync.linear_files import SNAPSHOT_SUBDIR
 from customer_registry_sync.writers import (
     DESIRED_SUBDIR,
     dataset_files,
@@ -80,7 +81,8 @@ def _cli(*argv, out_dir):
     # The CLI always loads a config; these runs only touch Linear, so the page ids are dummies.
     cfg = out_dir / DEFAULT_CONFIG_NAME
     cfg.write_text(
-        "hub_page_id: unused\nbuckets:\n" + "".join(f"  {name}: unused\n" for name in BUCKET_NAMES)
+        "source:\n  kind: notion\n  hub_page_id: unused\n  buckets:\n"
+        + "".join(f"    {name}: unused\n" for name in BUCKET_NAMES)
     )
     return cli.main(["--config", str(cfg), *argv, "--out-dir", str(out_dir)])
 

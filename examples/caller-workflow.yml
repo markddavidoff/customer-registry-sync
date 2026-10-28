@@ -1,0 +1,61 @@
+# Copy to .github/workflows/registry-sync.yml in the repository that holds the
+# registry. Only the cron time and the caller-side secret names may differ between
+# repositories; the data directory and both environment names live in
+# registry-sync.yaml under `workflow:`.
+#
+# - The reusable workflow is gitops-engine's sync workflow. GitHub can call it from
+#   any repository because gitops-engine is public. It installs this tool from the
+#   uv project in this repository (`project_dir`, default the root; a committed
+#   uv.lock), so the lock pins the tool and its dependencies. The project's
+#   pyproject.toml depends on the tool at the same release as the workflow's
+#   `@v0.2.0`:
+#     customer-registry-sync = { git = "https://github.com/markddavidoff/customer-registry-sync.git", tag = "v0.2.0" }
+# - The two Linear tokens are not passed. Store DESTINATION_TOKEN (the write token) as
+#   a secret of the deploy environment and DESTINATION_READONLY_TOKEN as a secret of
+#   the read-only environment, both named in registry-sync.yaml. A secret of the same name in a job's environment takes
+#   precedence over a passed one, so the write token is released only after a required
+#   reviewer approves the deploy, and no other workflow can read it.
+# - The GitHub App secrets are passed explicitly by name: `secrets: inherit` passes
+#   nothing to a workflow owned by another account. Map the names on the left (fixed
+#   by the reusable workflow) to your own secrets on the right.
+# - There is no `paths:` filter: GitHub cannot read the deploy inputs from the
+#   config. Every push to main starts a run; its first job installs the tool
+#   (a `uv sync`) and then ends the run when no deploy input changed.
+name: registry-sync
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "deploy: apply the registry; restore: put back values from a snapshot; e2e: run the live GitOps test; refresh: re-read Linear and open a PR with the refreshed files"
+        type: choice
+        options: [deploy, restore, e2e, refresh]
+        default: deploy
+      snapshot:
+        description: "restore only: snapshot file under <data_dir>/linear-snapshots/, relative to the repository root (it must already be on main, merged via a state PR)"
+        type: string
+        required: false
+      rows:
+        description: "restore only: space-separated external ids to restore (empty restores every row)"
+        type: string
+        required: false
+
+jobs:
+  registry-sync:
+    uses: markddavidoff/gitops-engine/.github/workflows/sync.yml@v0.2.0
+    permissions:
+      contents: read
+    secrets:
+      APP_ID: ${{ secrets.REGISTRY_SYNC_APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.REGISTRY_SYNC_APP_PRIVATE_KEY }}
+    with:
+      command: customer-registry-sync
+      config: registry-sync.yaml
+      token-env: LINEAR_API_TOKEN
+      mode: ${{ inputs.mode }}
+      snapshot: ${{ inputs.snapshot }}
+      rows: ${{ inputs.rows }}

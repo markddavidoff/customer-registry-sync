@@ -1,4 +1,4 @@
-"""Registry configuration: the Notion page ids and the data directory.
+"""Registry configuration: the source adapter and the data directory.
 
 Loaded from a YAML file (default ``registry-sync.yaml`` in the working
 directory; override with the global ``--config`` flag). See
@@ -6,17 +6,28 @@ directory; override with the global ``--config`` flag). See
 
 Keys:
 
-- ``hub_page_id`` (required) — the hub page that contains the bucket pages.
-- ``buckets`` (required) — bucket name -> Notion page id. Every bucket name the
-  ingest knows must be present (see ``notion_ingest.BUCKET_CLASSIFICATION``).
+- ``source`` (required) — the source adapter, picked by ``kind``. The other keys
+  belong to that adapter (``sources.SOURCES`` lists the kinds). For ``kind: notion``:
+
+  - ``hub_page_id`` (required) — the hub page that contains the bucket pages.
+  - ``buckets`` (required) — bucket name -> Notion page id. Every bucket name the
+    ingest knows must be present (see ``sources.notion.BUCKET_CLASSIFICATION``).
+
+  An unknown ``kind`` is an error that names the known kinds. ``hub_page_id`` or
+  ``buckets`` at the top level (the v0.1 shape) is an error that points to ``source:``.
 - ``data_dir`` (optional, default ``customers``) — where the dataset lives. A
   relative path resolves against the directory that holds the config file.
-- ``workflow`` (optional) — settings the reusable ``registry-sync`` GitHub
-  workflow reads through ``config-get``: ``deploy_environment`` and
-  ``readonly_environment``, the names of the two GitHub environments. Secrets are
-  not named here: the caller passes them to the workflow explicitly. A config
-  without these keys still loads; only ``config-get`` of a missing key fails,
-  naming it. Unknown keys under ``workflow:`` are ignored.
+- ``workflow`` (optional) — settings the gitops-engine reusable sync workflow reads
+  through ``config-get``: ``deploy_environment`` and ``readonly_environment``, the
+  names of the two GitHub environments. Secrets are not named here: the caller
+  passes them to the workflow explicitly. A config without these keys still loads;
+  only ``config-get`` of a missing key fails, naming it. Unknown keys under
+  ``workflow:`` are ignored.
+
+``config-get`` answers the engine CLI contract's keys (``data_dir``,
+``deploy_environment``, ``readonly_environment``, ``state_dir``, ``snapshot_dir``,
+``e2e_tests``); ``workflow.deploy_environment`` and ``workflow.readonly_environment``
+are accepted as the same keys. ``source.kind`` names the selected source adapter.
 """
 
 from __future__ import annotations
@@ -27,10 +38,14 @@ from typing import Any
 
 import yaml
 
-from .notion_ingest import BUCKET_CLASSIFICATION
+from .linear_files import SNAPSHOT_SUBDIR
+from .sources import SOURCES, SourceAdapter, SourceConfigError
+from .writers import STATE_SUBDIR
 
 DEFAULT_CONFIG_NAME = "registry-sync.yaml"
 DEFAULT_DATA_DIR = "customers"
+# The live GitOps tests, relative to the root of this tool's source (`config-get e2e_tests`).
+E2E_TESTS = "tests/test_e2e_gitops.py"
 
 
 class ConfigError(Exception):
@@ -50,8 +65,7 @@ WORKFLOW_KEYS: tuple[str, ...] = tuple(f.name for f in fields(WorkflowConfig))
 
 @dataclass
 class RegistryConfig:
-    hub_page_id: str
-    buckets: dict[str, str] = field(default_factory=dict)
+    source: SourceAdapter
     data_dir: Path = Path(DEFAULT_DATA_DIR)
     # Complete `workflow:` settings, or None. `workflow_raw` keeps a partial mapping so
     # `config_value` can name the one key that is missing.
@@ -80,18 +94,23 @@ def _workflow(raw: dict[str, str]) -> WorkflowConfig | None:
 
 
 def config_value(cfg: RegistryConfig, key: str) -> str:
-    """One config value by dotted key (``data_dir``, ``workflow.deploy_environment``).
+    """One config value by key: the engine CLI contract's keys, plus ``source.kind``.
 
-    Raises ``ConfigError`` naming the key when it is unknown or missing.
+    Raises ``ConfigError`` naming the key when it is unknown or missing. A missing
+    environment names its place in the file (``workflow.<key>``).
     """
     if key == "data_dir":
         return str(cfg.data_dir)
-    if key == "hub_page_id":
-        return cfg.hub_page_id
-    if key.startswith("buckets."):
-        name = key.removeprefix("buckets.")
-        if name in cfg.buckets:
-            return cfg.buckets[name]
+    if key == "state_dir":
+        return str(cfg.data_dir / STATE_SUBDIR)
+    if key == "snapshot_dir":
+        return str(cfg.data_dir / SNAPSHOT_SUBDIR)
+    if key == "e2e_tests":
+        return E2E_TESTS
+    if key in WORKFLOW_KEYS:
+        key = f"workflow.{key}"
+    if key == "source.kind":
+        return cfg.source.name
     if key.startswith("workflow."):
         name = key.removeprefix("workflow.")
         if name in WORKFLOW_KEYS:
@@ -102,11 +121,32 @@ def config_value(cfg: RegistryConfig, key: str) -> str:
     raise ConfigError(f"unknown config key '{key}'")
 
 
-def _require_str(data: dict[str, Any], key: str, label: str) -> str:
-    value = data.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise ConfigError(f"config is missing required key '{label}'")
-    return value.strip()
+# Keys the v0.1 file carried at the top level; the source adapter owns them now.
+_MOVED_TO_SOURCE = ("hub_page_id", "buckets")
+
+
+def _load_source(data: dict[str, Any]) -> SourceAdapter:
+    known = ", ".join(sorted(SOURCES))
+    for key in _MOVED_TO_SOURCE:
+        if key in data:
+            raise ConfigError(
+                f"config key '{key}' moved under 'source:' "
+                "(source: {kind: notion, hub_page_id: ..., buckets: {...}}); see "
+                "examples/registry-sync.example.yaml"
+            )
+    section = data.get("source")
+    if not isinstance(section, dict):
+        raise ConfigError(f"config is missing required key 'source' (a mapping with kind: {known})")
+    kind = section.get("kind")
+    if not isinstance(kind, str) or not kind.strip():
+        raise ConfigError(f"config is missing required key 'source.kind' (known kinds: {known})")
+    adapter = SOURCES.get(kind.strip())
+    if adapter is None:
+        raise ConfigError(f"unknown source kind '{kind}' (known kinds: {known})")
+    try:
+        return adapter.from_config(section)
+    except SourceConfigError as e:
+        raise ConfigError(str(e)) from None
 
 
 def load_config(path: Path) -> RegistryConfig:
@@ -124,25 +164,14 @@ def load_config(path: Path) -> RegistryConfig:
     if not isinstance(data, dict):
         raise ConfigError(f"config file {path} must be a YAML mapping")
 
-    hub_page_id = _require_str(data, "hub_page_id", "hub_page_id")
-
-    raw_buckets = data.get("buckets")
-    if not isinstance(raw_buckets, dict):
-        raise ConfigError("config is missing required key 'buckets'")
-    for name in raw_buckets:
-        if name not in BUCKET_CLASSIFICATION:
-            raise ConfigError(f"config has unknown bucket '{name}' under 'buckets'")
-    buckets = {
-        name: _require_str(raw_buckets, name, f"buckets.{name}") for name in BUCKET_CLASSIFICATION
-    }
+    source = _load_source(data)
 
     data_dir = Path(str(data.get("data_dir") or DEFAULT_DATA_DIR))
     if not data_dir.is_absolute():
         data_dir = path.absolute().parent / data_dir
     workflow_raw = _workflow_raw(data)
     return RegistryConfig(
-        hub_page_id=hub_page_id,
-        buckets=buckets,
+        source=source,
         data_dir=data_dir,
         workflow=_workflow(workflow_raw),
         workflow_raw=workflow_raw,

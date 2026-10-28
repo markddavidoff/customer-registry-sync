@@ -1,7 +1,6 @@
 """Terraform-style plan rendering: exact lines, built from real plan_deploy output."""
 
 from customer_registry_sync import cli
-from customer_registry_sync.curated import CuratedFields
 from customer_registry_sync.deploy import plan_deploy
 from customer_registry_sync.linear_client import LiveCustomer
 from customer_registry_sync.linear_schema import LinearCustomer
@@ -53,9 +52,7 @@ def test_render_create():
 
 def test_render_retire_domain_remove_marks_header():
     lv = livec(domains=["globex.example.test", "old.example.org"])
-    plan = plan_deploy(
-        [desired()], [lv], retire={"globex": CuratedFields(domains=["old.example.org"])}
-    )
+    plan = plan_deploy([desired()], [lv], retire={"globex": {"domains": ["old.example.org"]}})
     assert cli.render_plan(plan) == ["~ Globex (retire)", "    domains: - old.example.org"]
 
 
@@ -66,7 +63,7 @@ def test_render_domain_add():
 
 def test_render_clear_and_external_ids():
     lv = livec(external_ids=["old-slug"])
-    plan = plan_deploy([desired()], [lv], retire={"globex": CuratedFields(tier="Tier 1")})
+    plan = plan_deploy([desired()], [lv], retire={"globex": {"tier": "Tier 1"}})
     assert cli.render_plan(plan) == [
         "~ Globex (retire)",
         "    external_ids: [old-slug] -> [globex]",
@@ -76,9 +73,7 @@ def test_render_clear_and_external_ids():
 
 def test_print_plan_summary_counts_destructive(capsys):
     lv = livec(domains=["globex.example.test", "old.example.org"])
-    plan = plan_deploy(
-        [desired()], [lv], retire={"globex": CuratedFields(domains=["old.example.org"])}
-    )
+    plan = plan_deploy([desired()], [lv], retire={"globex": {"domains": ["old.example.org"]}})
     cli._print_plan(plan)
     out = capsys.readouterr().out.splitlines()
     assert out[0] == (

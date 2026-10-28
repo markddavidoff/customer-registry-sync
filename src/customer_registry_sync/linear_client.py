@@ -17,6 +17,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from gitops_engine.destination import DestinationError
+
 GQL_URL = "https://api.linear.app/graphql"
 
 _CUSTOMER_FIELDS = (
@@ -49,8 +51,8 @@ def parse_customer_node(node: dict[str, Any]) -> LiveCustomer:
     )
 
 
-class LinearError(RuntimeError):
-    pass
+class LinearError(DestinationError):
+    """A Linear API failure; the engine's apply and restore stop at the first."""
 
 
 class LinearClient:

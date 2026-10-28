@@ -35,7 +35,7 @@ wheels = [
 
 [[package]]
 name = "customer-registry-sync"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "gitops-engine" },
@@ -52,7 +52,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "gitops-engine", git = "ssh://git@github.com/markddavidoff/gitops-engine.git?tag=v0.1.0" },
+    { name = "gitops-engine", git = "https://github.com/markddavidoff/gitops-engine.git?tag=v0.2.0" },
     { name = "notion-client", specifier = ">=2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruamel-yaml", specifier = ">=0.18" },
@@ -66,8 +66,12 @@ dev = [
 
 [[package]]
 name = "gitops-engine"
-version = "0.1.0"
-source = { git = "ssh://git@github.com/markddavidoff/gitops-engine.git?tag=v0.1.0#1c2816889dc72c6a72d086872fb28a98b32fb4e6" }
+version = "0.2.0"
+source = { git = "https://github.com/markddavidoff/gitops-engine.git?tag=v0.2.0#2b9e29859530dfbe3a64b228e6a21b52a1e2a26c" }
+dependencies = [
+    { name = "pyyaml" },
+    { name = "ruamel-yaml" },
+]
 
 [[package]]
 name = "h11"

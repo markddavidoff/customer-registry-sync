@@ -6,8 +6,10 @@ from pathlib import Path
 import pytest
 import yaml
 
+from gitops_engine.changed import changed_since
+
 from customer_registry_sync import cli
-from customer_registry_sync.changed import changed_since, deploy_inputs
+from customer_registry_sync.changed import deploy_inputs
 from customer_registry_sync.config import load_config
 
 BUCKET_NAMES = (
@@ -28,9 +30,12 @@ def _git(repo: Path, *args: str) -> str:
 
 def _write_config(repo: Path, workflow: dict | None = None) -> Path:
     data = {
-        "hub_page_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        "buckets": {
-            name: f"bbbbbbbb-bbbb-4bbb-8bbb-{i:012d}" for i, name in enumerate(BUCKET_NAMES)
+        "source": {
+            "kind": "notion",
+            "hub_page_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "buckets": {
+                name: f"bbbbbbbb-bbbb-4bbb-8bbb-{i:012d}" for i, name in enumerate(BUCKET_NAMES)
+            },
         },
         "data_dir": "registry",
     }
@@ -98,7 +103,7 @@ def test_config_edit_is_changed(repo):
     _edit(root / "registry-sync.yaml")
     _commit_all(root, "edit config")
     cfg = load_config(root / "registry-sync.yaml")
-    assert changed_since(root, base, cfg) is True
+    assert changed_since(root, base, deploy_inputs(cfg, root)) is True
 
 
 def test_state_only_push_is_unchanged(repo):
@@ -108,7 +113,7 @@ def test_state_only_push_is_unchanged(repo):
     _edit(root / "registry" / "linear-snapshots" / "20260102T000000Z.yaml")
     _commit_all(root, "state PR")
     cfg = load_config(root / "registry-sync.yaml")
-    assert changed_since(root, base, cfg) is False
+    assert changed_since(root, base, deploy_inputs(cfg, root)) is False
 
 
 @pytest.mark.parametrize(
@@ -127,7 +132,7 @@ def test_curated_edit_is_changed(repo, rel):
     _edit(root / "registry" / rel)
     _commit_all(root, f"edit {rel}")
     cfg = load_config(root / "registry-sync.yaml")
-    assert changed_since(root, base, cfg) is True
+    assert changed_since(root, base, deploy_inputs(cfg, root)) is True
 
 
 def test_deleted_desired_row_is_changed(repo):
@@ -135,7 +140,7 @@ def test_deleted_desired_row_is_changed(repo):
     (root / "registry" / "linear" / "acme.yaml").unlink()
     _commit_all(root, "drop a row")
     cfg = load_config(root / "registry-sync.yaml")
-    assert changed_since(root, base, cfg) is True
+    assert changed_since(root, base, deploy_inputs(cfg, root)) is True
 
 
 def test_lookalike_paths_are_not_inputs(repo):
@@ -146,21 +151,29 @@ def test_lookalike_paths_are_not_inputs(repo):
     _edit(root / "registry" / "identities.yaml.bak")
     _commit_all(root, "lookalikes")
     cfg = load_config(root / "registry-sync.yaml")
-    assert changed_since(root, base, cfg) is False
+    assert changed_since(root, base, deploy_inputs(cfg, root)) is False
 
 
 @pytest.mark.parametrize("sha", ["0" * 40, "deadbeef" * 5, "not-a-sha", "", "--output=/dev/null"])
 def test_unknown_sha_is_changed(repo, sha):
     root, _ = repo
     cfg = load_config(root / "registry-sync.yaml")
-    assert changed_since(root, sha, cfg) is True
+    assert changed_since(root, sha, deploy_inputs(cfg, root)) is True
 
 
-def test_data_dir_outside_the_repo_is_changed(repo, tmp_path):
+def test_data_dir_outside_the_repo_is_changed(repo, tmp_path, capsys, monkeypatch):
     root, base = repo
     cfg = load_config(root / "registry-sync.yaml")
     cfg.data_dir = tmp_path / "elsewhere"
-    assert changed_since(root, base, cfg) is True
+    with pytest.raises(ValueError, match="outside the repository"):
+        deploy_inputs(cfg, root)
+    # The CLI treats any doubt as "changed".
+    data = yaml.safe_load((root / "registry-sync.yaml").read_text())
+    data["data_dir"] = str(tmp_path / "elsewhere")
+    (root / "registry-sync.yaml").write_text(yaml.safe_dump(data, sort_keys=False))
+    monkeypatch.chdir(root)
+    assert cli.main(["changed", "--since", base]) == 0
+    assert capsys.readouterr().out.strip() == "changed"
 
 
 def test_cli_changed_prints_and_exits_zero(repo, capsys, monkeypatch):

@@ -16,6 +16,9 @@ Phase B:  ``generate``      — datasets → Layer-2 ``<data_dir>/linear/*`` and
           ``ignore``        — add a Linear customer to linear-ignore.yaml (offline;
                               exit 0 appended / 4 already listed / 2 refused).
 Phase C:  ``check``         — plan guard: drift (state vs live) + plan; exit 0/2/3.
+Workflow: ``changed --since SHA``, ``config-get KEY``, ``refresh --no-input`` (sync-inbound,
+          ``ingest --only linear-found``, ``generate``) and ``tool-source`` complete the CLI
+          contract in gitops-engine ``docs/cli-contract.md``.
 
 Layer 1 is the datasets (``<data_dir>/datasets/<name>/``); Layer 2 is the Linear projection:
 desired customers (``linear/``) and the state mirror of live Linear (``linear-state/``).
@@ -36,40 +39,44 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .assemble import assemble_dataset
-from .check import EXIT_DRIFT, EXIT_OPERROR, offline_errors, orphan_lines, run_check
-from .changed import changed_since
-from .config import DEFAULT_CONFIG_NAME, ConfigError, config_value, load_config
-from .curated import RETIRE_FILE, load_curated
-from .datasets import (
-    DATASETS_SUBDIR,
-    LINEAR_FOUND,
-    NOTION,
-    dataset_dir,
-    load_datasets,
-    load_datasets_config,
-)
-from .deploy import apply_deploy, plan_deploy
-from .fieldplan import DESTRUCTIVE, FieldChange, state_to_live
-from .generate import generate_from_dir
-from .identity import IDENTITIES_FILE, load_identities
-from .identity_store import IdentityStore
-from .ignore import (
-    IGNORE_FILE,
+from gitops_engine.changed import changed_since
+from gitops_engine.datasets import DATASETS_SUBDIR, dataset_dir
+from gitops_engine.fieldplan import DESTRUCTIVE, FieldChange
+from gitops_engine.ignore import (
     append_ignore,
-    ignore_conflicts,
     ignore_errors,
     ignored_lines,
     load_ignore,
     partition_live,
 )
-from .inbound_sync import reconcile_inbound
-from .inputs import load_overrides, load_self_managed_customers
+from gitops_engine.manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
+from gitops_engine.mirror import reconcile_mirror
+
+from .changed import deploy_inputs
+from .check import EXIT_OPERROR, offline_errors, orphan_lines
+from .config import DEFAULT_CONFIG_NAME, ConfigError, config_value, load_config
+from .datasets import LINEAR_FOUND, NOTION, load_datasets, load_datasets_config
+from .deploy import apply_deploy, restore
+from .deploy_plan import (
+    check_exit,
+    check_for,
+    load_ignore_file,
+    load_inputs,
+    load_retire_file,
+    plan_for_deploy,
+    scope_live,
+)
+from .generate import generate_from_dir
+from .identity import IDENTITIES_FILE, IdentityStore
 from .linear_client import LinearError
+from .linear_files import (
+    IGNORE_FILE,
+    IGNORE_FORMAT,
+    SNAPSHOT_SUBDIR,
+)
 from .linear_found import append_record_identities, build_linear_found
-from .manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
-from .notion_ingest import extract_customers
-from .snapshot import SNAPSHOT_SUBDIR, restore
+from .linear_schema import LINEAR_SCHEMA
+from .sources import SourceError
 from .tool_source import ToolSourceError, tool_source
 from .writers import (
     DESIRED_SUBDIR,
@@ -77,7 +84,6 @@ from .writers import (
     REAL_CUSTOMERS_CSV,
     REGISTRY_CSV,
     STATE_SUBDIR,
-    load_desired,
     load_state,
     write_csvs,
     write_dataset,
@@ -120,22 +126,13 @@ def _guard_or_refuse(directory: Path, generator: str, args) -> bool:
     return False
 
 
-def _ingest_notion(args, out_dir: Path) -> int:
-    """Notion → `datasets/notion/`. 0 when written (or a dry run), else 2."""
-    token = os.environ.get("NOTION_API_TOKEN")
-    if not token:
-        print("ERROR: NOTION_API_TOKEN not set (set it in the environment).", file=sys.stderr)
+def _ingest_source(args, out_dir: Path) -> int:
+    """The configured source → `datasets/notion/`. 0 when written (or a dry run), else 2."""
+    try:
+        records = args.registry.source.ingest(out_dir)
+    except SourceError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
         return 2
-    from notion_client import Client  # lazy so unit tests need no network
-
-    self_managed_path = out_dir / "self-managed-customers.yaml"
-    overrides_path = out_dir / "classification-overrides.yaml"
-    raw = extract_customers(Client(auth=token), args.registry.buckets)
-    self_managed = (
-        load_self_managed_customers(self_managed_path) if self_managed_path.exists() else []
-    )
-    overrides = load_overrides(overrides_path) if overrides_path.exists() else {}
-    records = assemble_dataset(raw, self_managed, overrides)
     print(_dataset_summary(records))
     target = dataset_dir(out_dir, NOTION)
     if args.dry_run:
@@ -152,8 +149,13 @@ def _ingest_notion(args, out_dir: Path) -> int:
 def _ingest_linear_found(args, out_dir: Path, store: IdentityStore, ignore, entries) -> int:
     """State mirror → `datasets/linear-found/`; 2 when refused."""
     managed, _ = partition_live(
-        [state_to_live(r) for r in load_state(out_dir) if r.linear_synced is not None],
+        [
+            LINEAR_SCHEMA.state_to_live(r)
+            for r in load_state(out_dir)
+            if r.linear_synced is not None
+        ],
         ignore,
+        LINEAR_SCHEMA,
         scope=None,
     )
     build = build_linear_found(
@@ -190,7 +192,7 @@ def _cmd_ingest(args) -> int:
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
-    ignore = _load_ignore(out_dir)
+    ignore = load_ignore_file(out_dir)
     if ignore is None:
         return 2
     has_mirror = (out_dir / STATE_SUBDIR / MANIFEST).is_file()
@@ -199,7 +201,7 @@ def _cmd_ingest(args) -> int:
         print(f"ERROR: {no_mirror}; nothing written.", file=sys.stderr)
         return 2
     if args.only != LINEAR_FOUND:
-        code = _ingest_notion(args, out_dir)
+        code = _ingest_source(args, out_dir)
         if code:
             return code
     # Every dataset on disk, listed in datasets.yaml or not: existing stubs keep their ids.
@@ -265,22 +267,14 @@ def _linear_client():
     return LinearClient()
 
 
-def _scope_live(live, scope: str | None):
-    return [c for c in live if c.name.startswith(scope)] if scope else live
-
-
-def _scope_recs(recs, scope: str | None):
-    return [r for r in recs if r.name.startswith(scope)] if scope else recs
-
-
 def _cmd_sync_inbound(args) -> int:
     client = _linear_client()
     if client is None:
         return 2
     out_dir = _out_dir(args)
     existing = load_state(out_dir)
-    live = _scope_live(client.list_customers(), args.scope)
-    recs = reconcile_inbound(live, _scope_recs(existing, args.scope))
+    live = scope_live(client.list_customers(), args.scope)
+    recs = reconcile_mirror(live, LINEAR_SCHEMA)
     if args.scope:
         # Scoped run: replace only the in-scope rows; out-of-scope state is untouched.
         recs = [r for r in existing if not r.name.startswith(args.scope)] + recs
@@ -310,14 +304,14 @@ def _cmd_ignore(args) -> int:
         print("ERROR: --reason must not be empty (each entry needs a reason).", file=sys.stderr)
         return EXIT_OPERROR
     if path.exists():
-        errors = ignore_errors(path)
+        errors = ignore_errors(path, IGNORE_FORMAT)
         if errors:
             print(f"ERROR: {IGNORE_FILE} is invalid; fix it first:", file=sys.stderr)
             for e in errors:
                 print(f"  {e}", file=sys.stderr)
             return EXIT_OPERROR
         # an id already listed is idempotent even after it has left the mirror
-        if any(e.linear_id == linear_id for e in load_ignore(path).customers):
+        if any(e.live_id == linear_id for e in load_ignore(path, IGNORE_FORMAT).entries):
             print(f"{linear_id} is already in {IGNORE_FILE}; left as is.")
             return EXIT_ALREADY_IGNORED
     mirrored = {
@@ -333,7 +327,9 @@ def _cmd_ignore(args) -> int:
         )
         return EXIT_OPERROR
     try:
-        appended = append_ignore(path, linear_id=linear_id, name=mirrored[linear_id], reason=reason)
+        appended = append_ignore(
+            path, IGNORE_FORMAT, live_id=linear_id, name=mirrored[linear_id], reason=reason
+        )
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return EXIT_OPERROR
@@ -436,59 +432,17 @@ def _prod_write_refused(args, what: str) -> bool:
     return False
 
 
-def _load_table(out_dir: Path):
-    """`<data_dir>/identities.yaml` (missing = empty); None after printing why it is invalid."""
-    try:
-        return load_identities(out_dir / IDENTITIES_FILE)
-    except ValueError as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        return None
-
-
-def _load_ignore(out_dir: Path):
-    """`<data_dir>/linear-ignore.yaml` (missing = built-in prefix only); None after
-    printing why it cannot be read."""
-    try:
-        return load_ignore(out_dir / IGNORE_FILE)
-    except ValueError as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        return None
-
-
-def _entries(out_dir: Path):
-    return load_datasets(out_dir, load_datasets_config(out_dir))
-
-
-def _partitioned(all_live, ignore, scope: str | None):
-    """The one partition: (managed, ignored, other). `managed` is the in-scope,
-    non-ignored set the planner writes; `other` is every other live customer
-    (ignored or out of scope), whose domains still count as held."""
-    managed, ignored = partition_live(_scope_live(all_live, scope), ignore, scope=scope)
-    managed_ids = {lv.id for lv in managed}
-    other = [lv for lv in all_live if lv.id not in managed_ids]
-    return managed, ignored, other
-
-
 def _cmd_deploy(args) -> int:
     client = _linear_client()
     if client is None:
         return 2
     out_dir = _out_dir(args)
-    desired = _scope_recs(load_desired(out_dir), args.scope)
-    if not desired and not args.scope:
-        print(f"No {out_dir}/{DESIRED_SUBDIR}/* found — run `generate` first.", file=sys.stderr)
+    inp = load_inputs(out_dir, args.scope, require_desired=True)
+    if inp is None:
         return 2
-    state = _scope_recs(load_state(out_dir), args.scope)
-    table = _load_table(out_dir)
-    ignore = _load_ignore(out_dir)
-    if table is None or ignore is None:
-        return 2
-    retire = load_curated(out_dir / RETIRE_FILE)
-    managed, ignored, other = _partitioned(client.list_customers(), ignore, args.scope)
-    conflicts, reports = ignore_conflicts(
-        ignored, ignore, _entries(out_dir), desired, table, scope=args.scope
-    )
-    plan = plan_deploy(desired, managed, table, state=state, retire=retire, other_live=other)
+    retire = load_retire_file(out_dir)
+    planning = plan_for_deploy(inp, client.list_customers(), args.scope, retire=retire)
+    plan, conflicts, reports = planning.plan, planning.conflicts, planning.reports
     _print_plan(plan)
     for msg in reports:
         print(f"  NOTE: {msg}")
@@ -528,7 +482,7 @@ def _cmd_deploy(args) -> int:
             plan,
             client,
             snapshot_dir=out_dir / SNAPSHOT_SUBDIR,
-            ignore=ignore,
+            ignore=inp.ignore,
             scope=args.scope,
         )
     except (OSError, ValueError) as e:
@@ -595,37 +549,18 @@ def _cmd_check(args) -> int:
     if client is None:
         return EXIT_OPERROR
     out_dir = _out_dir(args)
-    desired = _scope_recs(load_desired(out_dir), args.scope)
-    state = _scope_recs(load_state(out_dir), args.scope)
-    table = _load_table(out_dir)
-    ignore = _load_ignore(out_dir)
-    if table is None or ignore is None:
+    inp = load_inputs(out_dir, args.scope)
+    if inp is None:
         return EXIT_OPERROR
     try:
         all_live = client.list_customers()
     except LinearError as e:
         print(f"ERROR: Linear read failed: {e}", file=sys.stderr)
         return EXIT_OPERROR
-    retire = load_curated(out_dir / RETIRE_FILE)
-    if args.scope:
-        # a scoped run only sees its own rows; keep retire entries for those rows
-        in_scope = {d.external_ids[0] for d in desired if d.external_ids}
-        retire = {k: v for k, v in retire.items() if k in in_scope}
-    live = _scope_live(all_live, args.scope)
-    in_scope_ids = {lv.id for lv in live}
-    res = run_check(
-        desired,
-        state,
-        live,
-        table,
-        retire=retire,
-        ignore=ignore,
-        scope=args.scope,
-        entries=_entries(out_dir),
-        other_live=[lv for lv in all_live if lv.id not in in_scope_ids],
-    )
+    res = check_for(inp, all_live, args.scope)
+    ignore = inp.ignore
     drift, plan = res.drift, res.plan
-    for line in ignored_lines(res.ignored, ignore, scope=args.scope):
+    for line in ignored_lines(res.ignored, ignore, LINEAR_SCHEMA, scope=args.scope):
         print(f"  {line}")
     print(
         f"check: drift changed={len(drift.changed)} added={len(drift.added)} "
@@ -651,7 +586,7 @@ def _cmd_check(args) -> int:
     offline = offline_errors(out_dir)
     for msg in offline:
         print(f"  OFFLINE: {msg}")
-    code = res.code or (EXIT_DRIFT if offline else 0)
+    code = check_exit(res, offline)
     if code == 0:
         print("IN SYNC")
     elif res.code:
@@ -661,9 +596,44 @@ def _cmd_check(args) -> int:
     return code
 
 
+LINEAR_TOKEN_ENV = "LINEAR_API_TOKEN"
+
+# What `refresh` runs, in order: the state mirror, the found-dataset ingest, the generated files.
+REFRESH_STEPS: tuple[tuple[str, ...], ...] = (
+    ("sync-inbound", "--no-input"),
+    ("ingest", "--only", LINEAR_FOUND, "--no-input"),
+    ("generate", "--no-input"),
+)
+
+
+def _cmd_refresh(args) -> int:
+    """`sync-inbound`, `ingest --only linear-found`, `generate`; the first non-zero exit
+    stops the run and is returned. Reads Linear only (never `check`, never a write).
+
+    Only `sync-inbound` talks to Linear, so the token is withdrawn from the environment
+    for the offline steps and restored afterwards."""
+    parser, handlers = build_parser()
+    token = os.environ.get(LINEAR_TOKEN_ENV)
+    try:
+        for step in REFRESH_STEPS:
+            step_args = parser.parse_args(["--config", str(args.config), *step])
+            step_args.registry = args.registry
+            code = handlers[step_args.command](step_args)
+            os.environ.pop(LINEAR_TOKEN_ENV, None)
+            if code != 0:
+                return code
+    finally:
+        if token is not None:
+            os.environ[LINEAR_TOKEN_ENV] = token
+    return 0
+
+
 def _cmd_changed(args) -> int:
     """Print `changed` or `unchanged` for the deploy inputs since a sha; always exit 0."""
-    changed = changed_since(Path.cwd(), args.since, args.registry)
+    try:
+        changed = changed_since(Path.cwd(), args.since, deploy_inputs(args.registry))
+    except ValueError:  # not a git repository, or data_dir outside it: any doubt is "changed"
+        changed = True
     print("changed" if changed else "unchanged")
     return 0
 
@@ -795,6 +765,13 @@ def build_parser() -> tuple[argparse.ArgumentParser, dict]:
     _out_dir_arg(ign)
     handlers["ignore"] = _cmd_ignore
 
+    ref = sub.add_parser(
+        "refresh",
+        help="sync-inbound, ingest --only linear-found, generate (reads Linear; no Linear writes)",
+    )
+    _no_input_arg(ref, "never prompt; refuse to overwrite hand-edited files")
+    handlers["refresh"] = _cmd_refresh
+
     chk = sub.add_parser("check", help="plan guard: drift (state vs live) + plan; exit 0/2/3")
     _out_dir_arg(chk)
     chk.add_argument("--scope", default=None, help="only rows whose name starts with this prefix")
@@ -808,9 +785,9 @@ def build_parser() -> tuple[argparse.ArgumentParser, dict]:
     handlers["changed"] = _cmd_changed
 
     cfg_get = sub.add_parser(
-        "config-get", help="print one config value, e.g. data_dir or workflow.deploy_environment"
+        "config-get", help="print one config value, e.g. data_dir or deploy_environment"
     )
-    cfg_get.add_argument("key", help="dotted key, e.g. workflow.readonly_environment")
+    cfg_get.add_argument("key", help="e.g. data_dir, readonly_environment, state_dir, e2e_tests")
     handlers["config-get"] = _cmd_config_get
 
     sub.add_parser(

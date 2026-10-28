@@ -3,17 +3,26 @@ from dataclasses import replace
 from customer_registry_sync.datasets import LINEAR_FOUND, NOTION, DatasetRecord
 from customer_registry_sync.deploy import (
     apply_deploy,
-    live_to_linear,
-    pair_rows,
-    pick_primary,
     plan_deploy,
 )
-from customer_registry_sync.fieldplan import FieldChange
+from gitops_engine.fieldplan import FieldChange
+from gitops_engine.pairing import pick_primary
 from customer_registry_sync.generate import generate_linear, merge_datasets
-from customer_registry_sync.identity import IDENTITIES_FILE, IdentityTable, load_identities
-from customer_registry_sync.identity_store import IdentityStore
+from customer_registry_sync.identity import (
+    IDENTITIES_FILE,
+    IDENTITY_SPEC,
+    IdentityTable,
+    load_identities,
+    pair_rows,
+)
+from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.linear_client import LiveCustomer, parse_customer_node
-from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced, content_hash_of
+from customer_registry_sync.linear_schema import (
+    LINEAR_SCHEMA,
+    LinearCustomer,
+    LinearSynced,
+    content_hash_of,
+)
 from customer_registry_sync.schema import CustomerRecord
 
 
@@ -226,7 +235,7 @@ def _live(lid, name, updated, revenue=1, xids=("acme",)):
 
 
 def _state_from(lv):
-    s = live_to_linear(lv)
+    s = LINEAR_SCHEMA.mirror_row(lv)
     s.linear_synced = LinearSynced(lv.id, lv.updated_at, content_hash_of(s))
     return s
 
@@ -396,11 +405,9 @@ def test_plan_unchanged_when_only_live_extras():
 
 
 def test_plan_retire_marks_destructive_as_acknowledged():
-    from customer_registry_sync.curated import CuratedFields
-
     d = desired()
     lv = livec(domains=["acmerobotics.example.test", "old.io"])
-    plan = plan_deploy([d], [lv], retire={"acmerobotics": CuratedFields(domains=["old.io"])})
+    plan = plan_deploy([d], [lv], retire={"acmerobotics": {"domains": ["old.io"]}})
     [(target, _)] = plan.updates
     assert target.domains == ["acmerobotics.example.test"]
     [c] = plan.changes["lin-1"]
@@ -479,7 +486,7 @@ def _robotics(rl, **kw):
 
 
 def test_snapshot_written_before_first_mutation(tmp_path, recording_linear):
-    from customer_registry_sync.snapshot import load_snapshot
+    from gitops_engine.snapshot import load_snapshot
 
     lv = _robotics(recording_linear, revenue=300000)
     plan = plan_deploy([desired(revenue=250000)], [lv])
@@ -488,9 +495,13 @@ def test_snapshot_written_before_first_mutation(tmp_path, recording_linear):
     res = apply_deploy(plan, client, snapshot_dir=snaps)
     [call] = client.updates()
     assert call[4] == [res.snapshot.name]  # the snapshot existed at the first write
-    [row] = load_snapshot(res.snapshot)
-    assert (row.linear_id, row.revenue, row.updated_at) == ("lin-1", 300000, lv.updated_at)
-    assert row.written_updated_at == client.rows["lin-1"].updated_at
+    [row] = load_snapshot(res.snapshot, schema=LINEAR_SCHEMA)
+    assert (row["linear_id"], row["revenue"], row["updated_at"]) == (
+        "lin-1",
+        300000,
+        lv.updated_at,
+    )
+    assert row["written_updated_at"] == client.rows["lin-1"].updated_at
     assert res.failure is None and res.created == []
 
 
@@ -510,8 +521,6 @@ def test_unwritable_snapshot_dir_aborts_before_any_write(tmp_path, recording_lin
 
 
 def test_update_sends_only_changed_fields(tmp_path, recording_linear):
-    from customer_registry_sync.curated import CuratedFields
-
     # live carries an extra domain and a tier the registry lacks: never sent
     lv = _robotics(
         recording_linear,
@@ -530,9 +539,7 @@ def test_update_sends_only_changed_fields(tmp_path, recording_linear):
 
     # a retire-backed clear sends exactly that field as null, with retire=True
     lv2 = _robotics(recording_linear, tier="Tier 2")
-    plan2 = plan_deploy(
-        [desired(tier=None)], [lv2], retire={"acmerobotics": CuratedFields(tier="Tier 2")}
-    )
+    plan2 = plan_deploy([desired(tier=None)], [lv2], retire={"acmerobotics": {"tier": "Tier 2"}})
     client2 = recording_linear([lv2])
     res2 = apply_deploy(plan2, client2, snapshot_dir=tmp_path / "2")
     [(_, _, fields2, retire2, _)] = client2.updates()
@@ -710,7 +717,7 @@ def test_two_live_carrying_the_canonical_id_is_a_named_error(tmp_path):
         plan = plan_deploy([d], live, table)
         assert plan.errors == expected
         assert not plan.updates and not plan.creates and not plan.known_duplicates
-        assert pick_primary("acme", live, table) is None
+        assert pick_primary("acme", live, table, schema=LINEAR_SCHEMA, spec=IDENTITY_SPEC) is None
 
 
 def test_two_live_with_neither_id_is_an_error(tmp_path):
@@ -862,10 +869,12 @@ def test_merge_by_hand_restamps_one_row(tmp_path):
 
 
 def _ignore_list(tmp_path, text):
-    from customer_registry_sync.ignore import IGNORE_FILE, load_ignore
+    from gitops_engine.ignore import load_ignore
+
+    from customer_registry_sync.linear_files import IGNORE_FILE, IGNORE_FORMAT
 
     (tmp_path / IGNORE_FILE).write_text(text)
-    return load_ignore(tmp_path / IGNORE_FILE)
+    return load_ignore(tmp_path / IGNORE_FILE, IGNORE_FORMAT)
 
 
 def test_apply_never_writes_ignored_row_unscoped(tmp_path, recording_linear):
@@ -887,11 +896,13 @@ def test_apply_never_writes_ignored_row_unscoped(tmp_path, recording_linear):
 
 
 def test_apply_writes_zzz_row_when_scoped(tmp_path, recording_linear):
-    from customer_registry_sync.ignore import BUILTIN_PREFIX, load_ignore
+    from gitops_engine.ignore import BUILTIN_PREFIX, load_ignore
+
+    from customer_registry_sync.linear_files import IGNORE_FORMAT
 
     scope = f"{BUILTIN_PREFIX}1a2b3c4d-"
     rows = generate_linear([_acme(canonical_name=f"{scope}Acme", arr=9.0)])
-    ign = load_ignore(tmp_path / "missing.yaml")  # the built-in prefix only
+    ign = load_ignore(tmp_path / "missing.yaml", IGNORE_FORMAT)  # the built-in prefix only
 
     def run(scope_arg):
         lv = recording_linear.node(
@@ -949,3 +960,14 @@ def test_stub_with_empty_live_status_applies_cleanly(tmp_path, recording_linear)
     assert res.failure is None and not plan.aborts
     [(_, _, fields, _, _)] = client.updates()
     assert fields == {"external_ids": ["initech"]}
+
+
+def test_empty_tier_without_retire_is_refused_before_the_client(tmp_path, recording_linear):
+    # The engine's never-null guard refuses a desired tier "" before LinearClient's own
+    # guard can: no update is sent, and the failure names the customer and the field.
+    lv = _robotics(recording_linear, tier="Tier 2")
+    plan = plan_deploy([desired(tier="")], [lv])
+    client = recording_linear([lv])
+    res = apply_deploy(plan, client, snapshot_dir=tmp_path)
+    assert res.failure == "Acme Robotics: update refused: empty tier without retire"
+    assert client.updates() == [] and res.persisted == []

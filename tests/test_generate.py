@@ -1,15 +1,10 @@
 import inspect
 
 import pytest
+from gitops_engine.datasets import dataset_dir
 
 from customer_registry_sync import cli
-from customer_registry_sync.datasets import (
-    LINEAR_FOUND,
-    NOTION,
-    DatasetConfig,
-    dataset_dir,
-    load_datasets,
-)
+from customer_registry_sync.datasets import LINEAR_FOUND, NOTION, DatasetConfig, load_datasets
 from customer_registry_sync.generate import (
     generate_from_dir,
     generate_linear,
@@ -17,7 +12,7 @@ from customer_registry_sync.generate import (
     project_record,
 )
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities, strip_status_suffix
-from customer_registry_sync.identity_store import IdentityStore
+from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.writers import write_dataset
 

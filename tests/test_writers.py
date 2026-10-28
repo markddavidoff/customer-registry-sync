@@ -1,15 +1,11 @@
 import csv
 import io
 
+import pytest
 import yaml
+from gitops_engine.datasets import dataset_dir
 
-from customer_registry_sync.datasets import (
-    LINEAR_FOUND,
-    NOTION,
-    DatasetConfig,
-    dataset_dir,
-    load_datasets,
-)
+from customer_registry_sync.datasets import LINEAR_FOUND, NOTION, DatasetConfig, load_datasets
 from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced, content_hash_of
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.writers import (
@@ -162,21 +158,6 @@ def test_linear_found_dataset_write_leaves_csvs_untouched(tmp_path):
     assert {n: (tmp_path / n).read_bytes() for n in before} == before
 
 
-def test_stale_dataset_yaml_removed_on_rerun(tmp_path):
-    write_dataset(sample(), tmp_path)
-    assert (dataset_dir(tmp_path, NOTION) / "soylent-metrics.yaml").exists()
-    write_dataset([r for r in sample() if r.canonical_name != "Soylent Metrics"], tmp_path)
-    assert not (dataset_dir(tmp_path, NOTION) / "soylent-metrics.yaml").exists()
-
-
-def test_writer_does_not_touch_curated_input_files(tmp_path):
-    self_managed = tmp_path / "self-managed-customers.yaml"
-    self_managed.write_text("customers: []\n# hand edit preserved\n")
-    before = self_managed.read_bytes()
-    write_dataset(sample(), tmp_path)
-    assert self_managed.read_bytes() == before
-
-
 def test_slug_from_domain_then_name():
     assert (
         slug_for(
@@ -239,3 +220,10 @@ def test_write_dataset_stems_and_dataset_directory(tmp_path):
     names = sorted(p.stem for p in dataset_dir(tmp_path, "linear-found").glob("*.yaml"))
     assert names == sorted(stems)
     assert not dataset_dir(tmp_path, NOTION).exists()
+
+
+def test_write_dataset_stems_length_mismatch_still_creates_the_directory(tmp_path):
+    """v0.1.0 created `datasets/<name>/` before it checked the stems."""
+    with pytest.raises(ValueError, match="stems has 1 entries for"):
+        write_dataset(sample(), tmp_path, dataset=NOTION, stems=["only-one"])
+    assert dataset_dir(tmp_path, NOTION).is_dir()

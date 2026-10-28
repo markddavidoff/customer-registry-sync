@@ -11,22 +11,21 @@ customer's name or domain changes there.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from datetime import date
 
+from gitops_engine.found import FoundBuild, build_found
+
 from .datasets import LINEAR_FOUND, NOTION, DatasetConfig, DatasetRecord
-from .deploy import pick_primary, stamped_conflict
 from .identity import (
-    SOURCE_LINEAR,
+    IDENTITY_SPEC,
     SOURCE_NOTION,
-    ItemKeys,
-    keys_for_live,
+    IdentityStore,
     keys_for_record,
     resolve,
     strip_status_suffix,
 )
-from .identity_store import IdentityStore
 from .linear_client import LiveCustomer
+from .linear_schema import LINEAR_SCHEMA
 from .schema import VALID_CLASSIFICATIONS, CustomerRecord
 from .writers import slug_for
 
@@ -50,13 +49,6 @@ def append_record_identities(store: IdentityStore, entries: list[DatasetRecord])
             store.add_identity(slug_for(rec) or "customer", **values)
         else:
             store.add_values(hit.canonical_id, **values)
-
-
-@dataclass
-class StubBuild:
-    stubs: list[tuple[str, CustomerRecord]] = field(default_factory=list)  # (canonical id, record)
-    duplicates: list[str] = field(default_factory=list)
-    reports: list[str] = field(default_factory=list)
 
 
 def _classification(cfg: DatasetConfig, status: str | None) -> str | None:
@@ -86,7 +78,7 @@ def build_linear_found(
     cfg: DatasetConfig,
     *,
     today: date,
-) -> StubBuild:
+) -> FoundBuild[CustomerRecord]:
     """Stubs for the managed customers whose identity has no `notion` record.
 
     `managed` must already exclude ignored customers. Customers are taken in Linear-id
@@ -94,79 +86,35 @@ def build_linear_found(
     or the recorded Linear id (as the planner picks it); the others are known duplicates
     and contribute nothing. When neither id is on any of them, nothing is recorded on the
     identity (it is reported), and a stub, if the identity needs one, is built from the
-    lowest Linear id."""
-    out = StubBuild()
-    old = [e for e in entries if e.dataset == LINEAR_FOUND]
-    stem_by_linear = {
-        e.record.linear_customer_id: e.source_id for e in old if e.record.linear_customer_id
-    }
-    note_by_stem = {e.source_id: e.record.notes for e in old}
+    lowest Linear id. The walk itself is `gitops_engine.found.build_found`."""
 
-    groups: dict[str, list[LiveCustomer]] = {}
-    for lv in sorted(managed, key=lambda c: c.id):
-        stem = stem_by_linear.get(lv.id)
-        keys = keys_for_live(lv)
-        if stem is not None:
-            keys = ItemKeys(
-                label=keys.label,
-                ids=(stem, *keys.ids),
-                linear_id=keys.linear_id,
-                domains=keys.domains,
-                names=keys.names,
-            )
-        hit = resolve(keys, store.table)
-        if hit is not None:
-            cid = hit.canonical_id
-        else:
-            name = strip_status_suffix(lv.name)
-            base = stem or slug_for(CustomerRecord(canonical_name=name, domains=lv.domains))
-            # No Linear source yet: a second unresolved customer may land on this new
-            # identity, and recording the first id would settle the pick by id order. The
-            # primary's id is recorded below once the group is known.
-            cid = store.add_identity(
-                base or "customer", names=[name], domains=list(lv.domains), sources={}
-            )
-        groups.setdefault(cid, []).append(lv)
+    def new_id(lv: LiveCustomer, stem: str | None) -> str:
+        name = strip_status_suffix(lv.name)
+        return (
+            stem or slug_for(CustomerRecord(canonical_name=name, domains=lv.domains)) or "customer"
+        )
 
-    with_record = set()
-    for e in entries:
-        if e.dataset != NOTION:
-            continue
-        hit = resolve(keys_for_record(e.record, dataset=NOTION, source_id=e.source_id), store.table)
-        if hit is not None:
-            with_record.add(hit.canonical_id)
+    def stub(cid: str, lv: LiveCustomer, previous: CustomerRecord | None) -> CustomerRecord:
+        note = (previous.notes if previous else None) or STUB_NOTE.format(date=today.isoformat())
+        return _stub(lv, cfg, note)
 
-    for cid, group in groups.items():
-        primary = group[0] if len(group) == 1 else pick_primary(cid, group, store.table)
-        if primary is None:
-            # Ambiguous: record nothing on the identity, so the planner's error keeps
-            # failing `check` until a human records one or merges the customers in Linear.
-            conflict = stamped_conflict(cid, group)
-            if conflict is not None:
-                out.reports.append(f"linear-found: {conflict}; nothing recorded")
-            else:
-                named = ", ".join(f"'{lv.name}' ({lv.id})" for lv in group)
-                out.reports.append(
-                    f"linear-found: {cid}: no customer carries the canonical or recorded "
-                    f"Linear id ({named}); nothing recorded: record one in identities.yaml "
-                    "or merge in Linear"
-                )
-            primary = group[0]
-        else:
-            out.duplicates += [
-                f"{cid}: '{lv.name}' ({lv.id}) is a known duplicate; merge it in Linear"
-                for lv in group
-                if lv is not primary
-            ]
-            store.add_values(
-                cid, domains=list(primary.domains), sources={SOURCE_LINEAR: primary.id}
-            )
-        if cid in with_record:
-            continue
-        note = note_by_stem.get(cid) or STUB_NOTE.format(date=today.isoformat())
-        out.stubs.append((cid, _stub(primary, cfg, note)))
-    out.stubs.sort(key=lambda p: p[0])
-    return out
+    return build_found(
+        managed,
+        store,
+        entries,
+        schema=LINEAR_SCHEMA,
+        spec=IDENTITY_SPEC,
+        found_dataset=LINEAR_FOUND,
+        primary_dataset=NOTION,
+        record_keys=lambda e: keys_for_record(e.record, dataset=e.dataset, source_id=e.source_id),
+        new_id=new_id,
+        stub=stub,
+        new_values=lambda lv: {
+            "names": [strip_status_suffix(lv.name)],
+            "domains": list(lv.domains),
+        },
+        learned_values=lambda lv: {"domains": list(lv.domains)},
+    )
 
 
 def status_errors(entries: list[DatasetRecord], cfg: DatasetConfig) -> list[str]:

@@ -212,9 +212,21 @@ revenue and tier.
 7. Merge the written rows into the state mirror. The workflow then runs a full
    `sync-inbound`.
 
-This tool takes drift detection and the exit codes from the
-[`gitops-engine`](https://github.com/markddavidoff/gitops-engine) library. The
-field-level planning and the apply run in this repository.
+The engine runs this plan and apply: [`gitops-engine`](https://github.com/markddavidoff/gitops-engine)
+v0.2 plans by identity and field policy, applies under check-and-set with the snapshot,
+verifies each write, and restores. This repository declares what is specific to
+customers and Linear; see "What this tool declares on the engine" below.
+
+## What this tool declares on the engine
+
+| Declaration | Module | Content |
+|---|---|---|
+| Record schema | `linear_schema.py` | `LINEAR_SCHEMA`: the fields in plan order and their policies. `name`: always written. `status`: always written, and `required`, so a Linear-owned stub whose live status is empty falls back to the desired status, and verification of an unplanned status expects the value from before the write. `external_ids`: always written, compared unordered. `domains`: union of registry and live, `exclusive` (a domain another live customer holds is withheld), dropped only by a retire entry. `revenue`, `tier`: the registry value when set, else the live value is kept. A Linear-owned stub takes every value from live and writes only its canonical id. |
+| Nouns | `linear_schema.py` | `customer`, `customers`, `Linear`, `registry`, `updatedAt`: the words the engine prints, so output text stays the same as before the move. |
+| Identity keys | `identity.py` | `IDENTITY_SPEC`: sources `notion` then `linear`, then the match keys `domains` (lower case) and `names` (case, spaces, punctuation and a trailing ` [Status]` ignored), and the key order inside each `identities.yaml` entry. |
+| Destination | `linear_destination.py` | `LinearDestination`, the engine's `Destination` over `LinearClient`: it resolves statuses and tiers to Linear ids before any write and maps the field values onto GraphQL calls. |
+| Files | `linear_files.py`, `datasets.py`, `writers.py` | The names the engine takes as parameters: `linear-ignore.yaml`, `linear-retire.yaml`, `linear-snapshots/`, `linear-state/`, `linear/`, the dataset names, `linear_status_classification` in `datasets.yaml`. |
+| Source adapter | `sources/` | `NotionSource`, chosen by `source.kind` in `registry-sync.yaml`. |
 
 ## Safety model
 
@@ -346,7 +358,7 @@ someone creates customer X in Linear
   lists each ignored customer with its reason, and fails when a desired record resolves
   to the same identity as an ignored customer. The exception is the `linear-found` stub
   of that same Linear id: `check` only reports it, and the next refresh drops it. The
-  prefix `zzz-gitops-test-` is built in (`BUILTIN_PREFIX` in `ignore.py`). The live e2e
+  prefix `zzz-gitops-test-` is built in (`BUILTIN_PREFIX` in `gitops_engine.ignore`). The live e2e
   tests (`tests/test_e2e_gitops.py`) create their throwaway customers in a real Linear
   workspace under names that start with it, so the sync ignores any customer with that
   prefix and never stubs, writes or reports it as an orphan. The built-in entry is
@@ -413,10 +425,10 @@ ignored customers. A passing run ends with `IN SYNC`.
 
 ## Workflows
 
-The repository ships one reusable GitHub Actions workflow,
-[`.github/workflows/registry-sync.yml`](../.github/workflows/registry-sync.yml), and a
-short caller to copy into the repository that holds the registry,
-[`examples/workflows/registry-sync.yml`](../examples/workflows/registry-sync.yml). The
+The reusable GitHub Actions workflow lives in `gitops-engine`
+(`.github/workflows/sync.yml`). This repository ships a short caller to copy into the
+repository that holds the registry,
+[`examples/caller-workflow.yml`](../examples/caller-workflow.yml). The
 [setup runbook](runbooks/setup.md) covers adoption.
 
 The caller triggers it on a push to `main`, a daily schedule and manual dispatch. The
@@ -440,10 +452,16 @@ path filter. Its jobs:
   fails and every deploy blocks.
 - The workflow never reads Notion. Notion ingest stays manual: run `ingest` locally,
   run `generate`, and open a PR.
-- This repository and the engine are private today. A caller in a different owner can
-  call the reusable workflow only if this repository is public (an owner decision
-  still pending), and no release tag exists, so pin a commit sha in the caller's
-  `uses:` line and in the `uv` source.
+- The caller installs the tool from its own uv project, with a committed `uv.lock`
+  (`project_dir` input, default the repository root). Each job runs `uv sync --locked` and
+  `uv run --frozen`, so every job runs the locked tool and dependencies. The lock must use
+  https git URLs or an index; the jobs hold no deploy key.
+- The two Linear tokens are secrets of the GitHub environments, named
+  `DESTINATION_TOKEN` (deploy environment) and `DESTINATION_READONLY_TOKEN` (read-only
+  environment). The caller does not pass them; an environment secret takes precedence
+  over a passed one, so the write token is released only after the required reviewer
+  approves. The workflow exports the token as `LINEAR_API_TOKEN` (the caller's
+  `token-env` input) for the steps that call Linear, and for no other step.
 - A failing `check` in the `deploy` job stops the job before the apply, so no state PR
   opens; a refresh PR is the way out.
 - A failed apply still uploads its snapshot and opens the state PR, then marks the run
@@ -482,14 +500,15 @@ path filter. Its jobs:
 
 | Module | Role |
 |---|---|
-| `notion_ingest.py`, `assemble.py`, `inputs.py`, `config.py` | Notion extraction, cross-bucket merge, curated self-managed and override inputs, the config file. |
+| `sources/` (`base.py`, `notion.py`), `config.py` | The source adapter interface and the `SOURCES` registry; the Notion adapter (page extraction, cross-bucket merge, curated self-managed and override inputs); the config file and its `source:` section. |
 | `datasets.py`, `schema.py` | `datasets.yaml`, dataset directories, `CustomerRecord`. |
-| `identity.py`, `identity_store.py` | `resolve`, identity table validation, comment-preserving appends. |
+| `identity.py` | The customer's identity declarations: `IDENTITY_SPEC` (source, domain and name keys, their order and normalisers), the `keys_for_*` reducers and `implicit_identity`. The table, `resolve`, validation and the comment-preserving store are in `gitops-engine`. |
 | `linear_found.py` | Stub building and unmapped-status errors. |
 | `generate.py`, `writers.py` | Merge by identity, projection to Linear rows, YAML and CSV writers. |
-| `inbound_sync.py`, `linear_schema.py`, `linear_client.py`, `linear_adapter.py` | The state mirror, `content_hash_of`, the GraphQL client, the engine adapter. |
-| `deploy.py`, `fieldplan.py`, `curated.py` | Pairing, field ownership, retire entries, apply. |
-| `check.py`, `ignore.py`, `manifest.py`, `snapshot.py` | `check`, the ignore list, manifests, snapshots and `restore`. |
+| `linear_schema.py`, `linear_client.py`, `linear_destination.py` | `LINEAR_SCHEMA` (the field policies the engine's planner runs, the mirror and snapshot rows), `content_hash_of`, the GraphQL client, and `LinearDestination`, the engine's destination for Linear writes. |
+| `deploy.py`, `linear_files.py` | Plan, apply and `restore` bound to the engine's deploy and snapshot code; the ignore, retire and snapshot file names. |
+| `check.py` | `check`: the engine's `run_check` with the customer dataset hooks bound, plus the offline checks. |
+| `deploy_plan.py` | The planning path `deploy` and `check` share, and `offline_plan` (the state mirror stands in for live Linear). |
 | `changed.py`, `tool_source.py` | `changed` and `tool-source`, which the reusable workflow calls. |
 | `cli.py` | The commands above. |
 

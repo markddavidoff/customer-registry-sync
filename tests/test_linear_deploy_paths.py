@@ -1,17 +1,26 @@
-"""Tests for the gitops-engine adapter (drift detection only), the one pairing
-(`deploy.pair_rows`) and the local `deploy` planner/apply it no longer drives (plan-time and write-time aborts,
-the never-null write path). All data here is invented.
+"""Drift through `check.detect_drift`, the one pairing (`identity.pair_rows`) and the
+`deploy` planner and apply on the engine (plan-time and write-time aborts, the
+never-null write path). All data here is invented.
 """
 
 import pytest
 
 from customer_registry_sync.check import detect_drift
-from customer_registry_sync.deploy import apply_deploy, live_to_linear, pair_rows, plan_deploy
-from customer_registry_sync.identity import IDENTITIES_FILE, IdentityTable, load_identities
-from customer_registry_sync.identity_store import IdentityStore
-from customer_registry_sync.linear_adapter import LinearCustomersAdapter
+from customer_registry_sync.deploy import apply_deploy, plan_deploy
+from customer_registry_sync.identity import (
+    IDENTITIES_FILE,
+    IdentityTable,
+    load_identities,
+    pair_rows,
+)
+from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.linear_client import LiveCustomer
-from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced, content_hash_of
+from customer_registry_sync.linear_schema import (
+    LINEAR_SCHEMA,
+    LinearCustomer,
+    LinearSynced,
+    content_hash_of,
+)
 
 
 def desired(**kw) -> LinearCustomer:
@@ -151,27 +160,9 @@ def test_pairing_on_a_duplicate_group_uses_pick_primary(tmp_path):
     assert _match(d, [a, b, stamped], table) is stamped
 
 
-def test_adapter_refuses_planning_and_writes():
-    """The adapter serves drift detection only: planning is `deploy.plan_deploy`
-    (pairing `deploy.pair_rows`), writes are `deploy.apply_deploy`."""
-    adapter = LinearCustomersAdapter()
-    with pytest.raises(NotImplementedError, match="plan_deploy"):
-        adapter.match(desired(), [livec()])
-    with pytest.raises(NotImplementedError, match="plan_deploy"):
-        adapter.mark_for(desired(), livec(), [])
-    with pytest.raises(NotImplementedError, match="apply_deploy"):
-        adapter.preflight(None)
-    with pytest.raises(NotImplementedError, match="apply_deploy"):
-        adapter.get("lin-1")
-    with pytest.raises(NotImplementedError, match="apply_deploy"):
-        adapter.create(desired())
-    with pytest.raises(NotImplementedError, match="apply_deploy"):
-        adapter.update("lin-1", desired())
-
-
 def test_drift_hashes_an_empty_live_status_as_the_mirror_records_it():
     lv = livec(status="")
-    st = live_to_linear(lv)
+    st = LINEAR_SCHEMA.mirror_row(lv)
     assert st.status is None
     st.linear_synced = LinearSynced(lv.id, lv.updated_at, content_hash_of(st))
     assert not detect_drift([st], [lv]).any()
@@ -236,7 +227,7 @@ def test_abort_when_state_matched_only_via_live_id_and_both_moved():
         revenue=1,
         updated_at="2026-01-01T00:00:00.000Z",
     )
-    st = live_to_linear(recorded)
+    st = LINEAR_SCHEMA.mirror_row(recorded)
     st.external_ids = []  # nothing for state_by_xid to key on
     st.linear_synced = LinearSynced("lin-9", recorded.updated_at, content_hash_of(st))
 

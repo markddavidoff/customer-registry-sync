@@ -11,14 +11,19 @@ from __future__ import annotations
 
 import csv
 import io
-import re
 from pathlib import Path
 
-import yaml
+from gitops_engine.datasets import DatasetRecord, dataset_dir
+from gitops_engine.writers import (
+    load_record_dir,
+    slugify,
+    unique_slugs,
+    write_files,
+    write_record_dir,
+)
 
-from .datasets import NOTION, DatasetRecord, dataset_dir
+from .datasets import NOTION
 from .linear_schema import LinearCustomer
-from .manifest import MANIFEST
 from .schema import CustomerRecord
 
 REGISTRY_CSV = "registry.csv"
@@ -46,28 +51,14 @@ CSV_COLUMNS = [
 ]
 
 
-def _slugify(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-
-
 def slug_for(rec: CustomerRecord) -> str:
     if rec.domains:
-        return _slugify(rec.domains[0].split(".")[0])
-    return _slugify(rec.canonical_name)
+        return slugify(rec.domains[0].split(".")[0])
+    return slugify(rec.canonical_name)
 
 
-def _unique_slugs(records: list[CustomerRecord]) -> dict[int, str]:
-    seen: dict[str, int] = {}
-    out: dict[int, str] = {}
-    for rec in records:
-        base = slug_for(rec) or "customer"
-        if base in seen:
-            seen[base] += 1
-            out[id(rec)] = f"{base}-{seen[base]}"
-        else:
-            seen[base] = 1
-            out[id(rec)] = base
-    return out
+def _record_slug(rec: CustomerRecord) -> str:
+    return slug_for(rec) or "customer"
 
 
 def _csv_row(entry: DatasetRecord) -> dict[str, str]:
@@ -113,8 +104,7 @@ def write_csvs(entries: list[DatasetRecord], out_dir: str | Path) -> None:
 def dataset_files(records: list[CustomerRecord]) -> list[tuple[str, CustomerRecord]]:
     """(file stem, record) in write order: sorted by name, slugs made unique."""
     ordered = sorted(records, key=lambda r: r.canonical_name.lower())
-    slugs = _unique_slugs(ordered)
-    return [(slugs[id(r)], r) for r in ordered]
+    return list(zip(unique_slugs([_record_slug(r) for r in ordered]), ordered, strict=True))
 
 
 def write_dataset(
@@ -129,8 +119,7 @@ def write_dataset(
     ``stems`` (parallel to ``records``) names the files; the default is `dataset_files`.
     The CSVs are not written here: they come from `generate`'s merged result (`write_csvs`).
     """
-    out = Path(out_dir)
-    directory = dataset_dir(out, dataset)
+    directory = dataset_dir(Path(out_dir), dataset)
     directory.mkdir(parents=True, exist_ok=True)
 
     if stems is None:
@@ -140,17 +129,8 @@ def write_dataset(
             raise ValueError(f"stems has {len(stems)} entries for {len(records)} records")
         files = sorted(zip(stems, records, strict=True), key=lambda p: p[1].canonical_name.lower())
 
-    # remove stale generated yamls (never touches curated inputs outside the dataset directory)
-    wanted = {f"{stem}.yaml" for stem, _ in files}
-    for existing in directory.glob("*.yaml"):
-        if existing.name not in wanted and existing.name != MANIFEST:
-            existing.unlink()
-
-    for stem, rec in files:
-        text = yaml.safe_dump(
-            rec.to_dict(), sort_keys=False, default_flow_style=False, allow_unicode=True
-        )
-        (directory / f"{stem}.yaml").write_text(text)
+    # stale generated yamls go; curated inputs outside the dataset directory are never touched
+    write_files(files, directory, to_dict=CustomerRecord.to_dict)
 
 
 # ---- Layer-1 dataset reader + Layer-2 desired/state read/write ----
@@ -161,60 +141,29 @@ STATE_SUBDIR = "linear-state"  # mirror of live Linear (sync-inbound) — with l
 
 def load_dataset(data_dir: str | Path, dataset: str = NOTION) -> list[CustomerRecord]:
     """Read one dataset (<data_dir>/datasets/<name>/*.yaml) back into records."""
-    ds = dataset_dir(Path(data_dir), dataset)
-    out: list[CustomerRecord] = []
-    for path in sorted(ds.glob("*.yaml")):
-        if path.name == MANIFEST:
-            continue
-        out.append(CustomerRecord.from_dict(yaml.safe_load(path.read_text())))
-    return out
+    return load_record_dir(dataset_dir(Path(data_dir), dataset), CustomerRecord.from_dict)
 
 
 def _layer2_slug(rec: LinearCustomer) -> str:
     if rec.external_ids:
-        return _slugify(rec.external_ids[0])
-    return _slugify(rec.name) or "customer"
-
-
-def _load_layer2_dir(path: Path) -> list[LinearCustomer]:
-    out: list[LinearCustomer] = []
-    for p in sorted(path.glob("*.yaml")):
-        if p.name == MANIFEST:
-            continue
-        out.append(LinearCustomer.from_dict(yaml.safe_load(p.read_text())))
-    return out
+        return slugify(rec.external_ids[0])
+    return slugify(rec.name) or "customer"
 
 
 def _write_layer2_dir(records: list[LinearCustomer], path: Path, *, strip_synced: bool) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-    records = sorted(records, key=lambda r: r.name.lower())
-    seen: dict[str, int] = {}
-    slugs: dict[int, str] = {}
-    wanted: set[str] = set()
-    for rec in records:
-        base = _layer2_slug(rec)
-        if base in seen:
-            seen[base] += 1
-            slug = f"{base}-{seen[base]}"
-        else:
-            seen[base] = 1
-            slug = base
-        slugs[id(rec)] = slug
-        wanted.add(f"{slug}.yaml")
-    for existing in path.glob("*.yaml"):
-        if existing.name not in wanted and existing.name != MANIFEST:
-            existing.unlink()
-    for rec in records:
+    def to_dict(rec: LinearCustomer) -> dict:
         d = rec.to_dict()
         if strip_synced:
             d.pop("linear_synced", None)
-        text = yaml.safe_dump(d, sort_keys=False, default_flow_style=False, allow_unicode=True)
-        (path / f"{slugs[id(rec)]}.yaml").write_text(text)
+        return d
+
+    rows = sorted(records, key=lambda r: r.name.lower())
+    write_record_dir(rows, path, slug=_layer2_slug, to_dict=to_dict)
 
 
 def load_desired(data_dir: str | Path) -> list[LinearCustomer]:
     """<data_dir>/linear/*.yaml — the desired config a PR changes."""
-    return _load_layer2_dir(Path(data_dir) / DESIRED_SUBDIR)
+    return load_record_dir(Path(data_dir) / DESIRED_SUBDIR, LinearCustomer.from_dict)
 
 
 def write_desired(records: list[LinearCustomer], data_dir: str | Path) -> None:
@@ -223,7 +172,7 @@ def write_desired(records: list[LinearCustomer], data_dir: str | Path) -> None:
 
 def load_state(data_dir: str | Path) -> list[LinearCustomer]:
     """<data_dir>/linear-state/*.yaml — the last-synced mirror of live Linear."""
-    return _load_layer2_dir(Path(data_dir) / STATE_SUBDIR)
+    return load_record_dir(Path(data_dir) / STATE_SUBDIR, LinearCustomer.from_dict)
 
 
 def write_state(records: list[LinearCustomer], data_dir: str | Path) -> None:
