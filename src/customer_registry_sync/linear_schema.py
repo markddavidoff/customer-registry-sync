@@ -113,7 +113,7 @@ class LinearSchema:
     The snapshot members are not here yet; everything the engine's merge, found-stub,
     ignore, mirror, retire, pairing and field-planner code calls is."""
 
-    nouns = Nouns("customer", "customers", "Linear")
+    nouns = Nouns("customer", "customers", "Linear", source="registry")
     fields = (
         FieldSpec("name", Always()),
         FieldSpec("status", Always(), required=True),

@@ -70,7 +70,7 @@ def test_linear_field_policies():
     ]
     assert LINEAR_SCHEMA.id_field == "external_ids"
     assert (LINEAR_SCHEMA.nouns.record, LINEAR_SCHEMA.nouns.records) == ("customer", "customers")
-    assert LINEAR_SCHEMA.nouns.destination == "Linear"
+    assert (LINEAR_SCHEMA.nouns.destination, LINEAR_SCHEMA.nouns.source) == ("Linear", "registry")
 
 
 def test_domain_case_is_not_a_change():

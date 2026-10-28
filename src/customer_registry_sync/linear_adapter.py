@@ -17,7 +17,7 @@ from gitops_engine import SyncMark
 from .linear_client import LiveCustomer
 from .linear_schema import LINEAR_SCHEMA, LinearCustomer, LinearSynced, content_hash_of
 
-_PLANNING_REFUSED = "planning goes through deploy.plan_deploy (pairing: deploy.pair_rows)"
+_PLANNING_REFUSED = "planning goes through deploy.plan_deploy (pairing: identity.pair_rows)"
 _WRITES_REFUSED = "writes go through deploy.apply_deploy, not the engine adapter"
 
 
