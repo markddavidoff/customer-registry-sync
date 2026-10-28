@@ -48,12 +48,16 @@ def test_retire_fields_adapter_matches_the_v010_loader(tmp_path):
     }
 
 
-@pytest.mark.parametrize("field", ["name", "status", "external_ids"])
-def test_retire_file_rejects_an_always_field(tmp_path, field):
+@pytest.mark.parametrize("field", ["name", "status", "external_ids", "linear_synced", "bogus"])
+def test_retire_file_ignores_keys_it_does_not_read_as_v010_did(tmp_path, field):
+    # v0.1.0's `load_curated` read only domains, revenue and tier; another key was
+    # accepted silently and had no effect. `check` and `deploy` must not fail on one.
     path = tmp_path / RETIRE_FILE
-    path.write_text(f"acme:\n  {field}: x\n")
-    with pytest.raises(ValueError, match="cannot be retired"):
-        load_retire_fields(path)
+    path.write_text(f"acme:\n  {field}: x\n  domains: [old.io]\n  tier: Tier 1\n")
+    assert load_retire_fields(path) == {
+        "acme": CuratedFields(domains=["old.io"], revenue=None, tier="Tier 1")
+    }
+    assert field not in load_retire(path, LINEAR_SCHEMA)["acme"]
 
 
 def test_curated_inputs_name_the_files_check_and_deploy_read():

@@ -280,7 +280,7 @@ def run_check(
     skipped.
     `other_live` are further live customers outside this run (a scoped run's
     out-of-scope rows) whose domains still count as held."""
-    ignore = ignore if ignore is not None else IgnoreList()
+    ignore = ignore if ignore is not None else IgnoreList(IGNORE_FILE)
     table = table or IdentityTable()
     managed, ignored = partition_live(live, ignore, LINEAR_SCHEMA, scope=scope)
     ignored_ids = {lv.id for lv in ignored}

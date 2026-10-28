@@ -10,6 +10,8 @@ from customer_registry_sync.identity import IdentityStore
 from customer_registry_sync.linear_client import LiveCustomer, parse_customer_node
 from customer_registry_sync.linear_schema import (
     LINEAR_SCHEMA,
+    LinearCustomer,
+    LinearSynced,
     content_hash_of,
 )
 from customer_registry_sync.schema import CustomerRecord
@@ -31,17 +33,60 @@ def live(**kw) -> LiveCustomer:
     return LiveCustomer(**base)
 
 
-def test_mirror_reflects_live_and_refreshes_linear_synced():
-    [out] = reconcile_mirror([live(external_ids=["globex"])], LINEAR_SCHEMA)
+class FakeClient:
+    def __init__(self, live):
+        self._live = live
+
+    def list_customers(self):
+        return list(self._live)
+
+
+def _sync_inbound(tmp_path, monkeypatch, run_cli, live_rows):
+    """Run `sync-inbound` against `live_rows`; the mirror then holds what it wrote."""
+    from customer_registry_sync import cli
+
+    monkeypatch.setattr(cli, "_linear_client", lambda: FakeClient(live_rows))
+    assert run_cli(["sync-inbound", "--out-dir", str(tmp_path)]) == 0
+    return load_state(tmp_path)
+
+
+def test_match_by_external_id_updates_and_refreshes_linear_synced(tmp_path, monkeypatch, run_cli):
+    # an old state row for the same customer, with a stale mark and an old name
+    write_state(
+        [
+            LinearCustomer(
+                name="Globex Old",
+                domains=["globex.example.test"],
+                external_ids=["globex"],
+                linear_synced=LinearSynced("stale", "old", "oldhash"),
+            )
+        ],
+        tmp_path,
+    )
+    [out] = _sync_inbound(tmp_path, monkeypatch, run_cli, [live(external_ids=["globex"])])
     assert out.name == "Globex"  # mirror reflects LIVE
-    assert out.external_ids == ["globex"]  # our slug preserved
+    assert out.external_ids == ["globex"]  # the id Linear holds
     assert out.linear_synced.linear_id == "lin-1"
     assert out.linear_synced.updated_at == "2026-10-07T00:00:00.000Z"
     assert out.linear_synced.content_hash == content_hash_of(out)
 
 
-def test_no_id_recovered_by_domain_or_name():
-    out = reconcile_mirror(
+def test_no_id_recovered_by_domain_or_name(tmp_path, monkeypatch, run_cli):
+    # an old state row carries a canonical id and shares a domain and a name with live rows
+    write_state(
+        [
+            LinearCustomer(
+                name="Hooli Casinos",
+                domains=["hoolicasinos.example.test"],
+                external_ids=["hoolicasinos"],
+            )
+        ],
+        tmp_path,
+    )
+    out = _sync_inbound(
+        tmp_path,
+        monkeypatch,
+        run_cli,
         [
             live(id="l1", name="Hoolis", domains=[], revenue=None, tier=None, external_ids=[]),
             live(
@@ -52,7 +97,6 @@ def test_no_id_recovered_by_domain_or_name():
                 tier=None,
             ),
         ],
-        LINEAR_SCHEMA,
     )
     by_name = {o.name: o for o in out}
     # the mirror holds what Linear holds: neither live customer carries the slug, so
@@ -128,9 +172,14 @@ def test_sync_inbound_never_copies_external_ids_to_a_duplicate(tmp_path):
     assert res.code == 0
 
 
-def test_mirror_row_takes_every_field_from_live_only():
+def test_mirror_row_takes_every_field_from_live_only(tmp_path, monkeypatch, run_cli):
     """An old state row sharing the live customer's domain and name contributes nothing."""
-    [out] = reconcile_mirror([_node("new", "Beta", domains=["beta.example.org"])], LINEAR_SCHEMA)
+    old = _node("old", "Beta", domains=["beta.example.org"], xids=["beta"])
+    [first] = _sync_inbound(tmp_path, monkeypatch, run_cli, [old])
+    assert first.external_ids == ["beta"]
+    [out] = _sync_inbound(
+        tmp_path, monkeypatch, run_cli, [_node("new", "Beta", domains=["beta.example.org"])]
+    )
     assert out.external_ids == []
     assert out.linear_synced.linear_id == "new"
 

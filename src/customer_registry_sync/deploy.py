@@ -36,7 +36,7 @@ from .identity import (
     with_implicit,
 )
 from .linear_client import LinearError, LiveCustomer
-from .linear_files import CuratedFields
+from .linear_files import IGNORE_FILE, CuratedFields
 from .linear_schema import LINEAR_SCHEMA, LinearCustomer, LinearSynced, content_hash_of
 from .snapshot import record_written, write_snapshot
 
@@ -403,7 +403,7 @@ def apply_deploy(
     if missing:
         raise ValueError(f"unresolvable Linear tier(s), nothing written: {missing}")
 
-    ignore = ignore if ignore is not None else IgnoreList()
+    ignore = ignore if ignore is not None else IgnoreList(IGNORE_FILE)
     snapshot = write_snapshot([lv for _, lv in plan.updates], snapshot_dir)
     result = ApplyResult(persisted=[], snapshot=snapshot, created=[])
 
