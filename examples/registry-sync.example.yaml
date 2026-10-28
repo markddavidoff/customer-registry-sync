@@ -22,7 +22,7 @@ buckets:
 data_dir: customers
 
 # Settings for the reusable registry-sync GitHub workflow (see
-# examples/workflows/registry-sync.yml). The tool runs without them; the
+# examples/caller-workflow.yml). The tool runs without them; the
 # workflow reads them with `customer-registry-sync config-get` and fails naming
 # any key that is missing. Secrets are not named here: the caller passes them
 # to the workflow explicitly (see the example caller).

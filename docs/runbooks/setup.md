@@ -11,8 +11,7 @@ operation, failure recovery, retiring values and restoring snapshots are in
 
 Your repository (the "caller") holds the registry: a `registry-sync.yaml` config, the
 data directory, and a small caller workflow. The caller workflow calls the reusable
-workflow `.github/workflows/registry-sync.yml` in the `customer-registry-sync`
-repository (the "tool repository"). The reusable workflow installs the tool from the
+workflow `.github/workflows/sync.yml` in the `gitops-engine` repository. The reusable workflow installs the tool from the
 caller's `uv.lock` and runs one of four modes:
 
 - **deploy**: on a push to the default branch that changed a deploy input, waits for a
@@ -205,7 +204,7 @@ Only these two keys exist under `workflow:`. The CLI works without them; the wor
 `data_dir` must stay inside the repository.
 
 **The caller workflow**, copied from
-[`examples/workflows/registry-sync.yml`](../../examples/workflows/registry-sync.yml) to
+[`examples/caller-workflow.yml`](../../examples/caller-workflow.yml) to
 `.github/workflows/registry-sync.yml`. It triggers on a push to `main`, a daily cron
 (change the time if you like) and manual dispatch, and passes the five secrets by name.
 Two points about `uses:`:

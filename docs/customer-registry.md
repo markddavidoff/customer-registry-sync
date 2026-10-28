@@ -413,10 +413,10 @@ ignored customers. A passing run ends with `IN SYNC`.
 
 ## Workflows
 
-The repository ships one reusable GitHub Actions workflow,
-[`.github/workflows/registry-sync.yml`](../.github/workflows/registry-sync.yml), and a
-short caller to copy into the repository that holds the registry,
-[`examples/workflows/registry-sync.yml`](../examples/workflows/registry-sync.yml). The
+The reusable GitHub Actions workflow lives in `gitops-engine`
+(`.github/workflows/sync.yml`). This repository ships a short caller to copy into the
+repository that holds the registry,
+[`examples/caller-workflow.yml`](../examples/caller-workflow.yml). The
 [setup runbook](runbooks/setup.md) covers adoption.
 
 The caller triggers it on a push to `main`, a daily schedule and manual dispatch. The

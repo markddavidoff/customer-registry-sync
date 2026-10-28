@@ -16,6 +16,9 @@ Phase B:  ``generate``      — datasets → Layer-2 ``<data_dir>/linear/*`` and
           ``ignore``        — add a Linear customer to linear-ignore.yaml (offline;
                               exit 0 appended / 4 already listed / 2 refused).
 Phase C:  ``check``         — plan guard: drift (state vs live) + plan; exit 0/2/3.
+Workflow: ``changed --since SHA``, ``config-get KEY``, ``refresh --no-input`` (sync-inbound,
+          ``ingest --only linear-found``, ``generate``) and ``tool-source`` complete the CLI
+          contract in gitops-engine ``docs/cli-contract.md``.
 
 Layer 1 is the datasets (``<data_dir>/datasets/<name>/``); Layer 2 is the Linear projection:
 desired customers (``linear/``) and the state mirror of live Linear (``linear-state/``).
@@ -36,6 +39,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+from gitops_engine.changed import changed_since
 from gitops_engine.datasets import DATASETS_SUBDIR, dataset_dir
 from gitops_engine.fieldplan import DESTRUCTIVE, FieldChange
 from gitops_engine.ignore import (
@@ -49,7 +53,7 @@ from gitops_engine.manifest import MANIFEST, guard_overwrite, manifest_edits, wr
 from gitops_engine.mirror import reconcile_mirror
 
 from .assemble import assemble_dataset
-from .changed import changed_since
+from .changed import deploy_inputs
 from .check import EXIT_OPERROR, offline_errors, orphan_lines
 from .config import DEFAULT_CONFIG_NAME, ConfigError, config_value, load_config
 from .datasets import LINEAR_FOUND, NOTION, load_datasets, load_datasets_config
@@ -603,9 +607,33 @@ def _cmd_check(args) -> int:
     return code
 
 
+# What `refresh` runs, in order: the state mirror, the found-dataset ingest, the generated files.
+REFRESH_STEPS: tuple[tuple[str, ...], ...] = (
+    ("sync-inbound", "--no-input"),
+    ("ingest", "--only", LINEAR_FOUND, "--no-input"),
+    ("generate", "--no-input"),
+)
+
+
+def _cmd_refresh(args) -> int:
+    """`sync-inbound`, `ingest --only linear-found`, `generate`; the first non-zero exit
+    stops the run and is returned. Reads Linear only (never `check`, never a write)."""
+    parser, handlers = build_parser()
+    for step in REFRESH_STEPS:
+        step_args = parser.parse_args(["--config", str(args.config), *step])
+        step_args.registry = args.registry
+        code = handlers[step_args.command](step_args)
+        if code != 0:
+            return code
+    return 0
+
+
 def _cmd_changed(args) -> int:
     """Print `changed` or `unchanged` for the deploy inputs since a sha; always exit 0."""
-    changed = changed_since(Path.cwd(), args.since, args.registry)
+    try:
+        changed = changed_since(Path.cwd(), args.since, deploy_inputs(args.registry))
+    except ValueError:  # not a git repository, or data_dir outside it: any doubt is "changed"
+        changed = True
     print("changed" if changed else "unchanged")
     return 0
 
@@ -737,6 +765,13 @@ def build_parser() -> tuple[argparse.ArgumentParser, dict]:
     _out_dir_arg(ign)
     handlers["ignore"] = _cmd_ignore
 
+    ref = sub.add_parser(
+        "refresh",
+        help="sync-inbound, ingest --only linear-found, generate (reads Linear; no Linear writes)",
+    )
+    _no_input_arg(ref, "never prompt; refuse to overwrite hand-edited files")
+    handlers["refresh"] = _cmd_refresh
+
     chk = sub.add_parser("check", help="plan guard: drift (state vs live) + plan; exit 0/2/3")
     _out_dir_arg(chk)
     chk.add_argument("--scope", default=None, help="only rows whose name starts with this prefix")
@@ -750,9 +785,9 @@ def build_parser() -> tuple[argparse.ArgumentParser, dict]:
     handlers["changed"] = _cmd_changed
 
     cfg_get = sub.add_parser(
-        "config-get", help="print one config value, e.g. data_dir or workflow.deploy_environment"
+        "config-get", help="print one config value, e.g. data_dir or deploy_environment"
     )
-    cfg_get.add_argument("key", help="dotted key, e.g. workflow.readonly_environment")
+    cfg_get.add_argument("key", help="e.g. data_dir, readonly_environment, state_dir, e2e_tests")
     handlers["config-get"] = _cmd_config_get
 
     sub.add_parser(

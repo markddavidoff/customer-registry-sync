@@ -3,20 +3,19 @@
 # repositories; the data directory and both environment names live in
 # registry-sync.yaml under `workflow:`.
 #
-# - GitHub can call this reusable workflow only when the customer-registry-sync
-#   repository is public, or has the same owner as this repository (and allows
-#   Actions access from it). That repository is private today, so a caller in
-#   another owner cannot use it until it is made public.
-# - No release tag exists yet. Replace `@main` below with `@<full commit sha>`,
-#   the same commit your pyproject.toml pins with `rev`, until a tag is published.
+# - The reusable workflow is gitops-engine's sync workflow. GitHub can call it from
+#   any repository because gitops-engine is public. It installs this tool from the
+#   `tool` requirement below, so the tag in that line pins the tool; keep it on the
+#   same release as the workflow's `@v0.2.0`.
 # - Secrets are passed explicitly by name: `secrets: inherit` passes nothing to a
 #   workflow owned by another account. Map the names on the left (fixed by the
-#   reusable workflow) to your own secrets on the right. A secret with the
-#   left-hand name stored in the deploy or read-only environment takes precedence,
-#   so the Linear tokens can live behind the approval gate.
+#   reusable workflow) to your own repository or organization secrets on the right.
+#   The left-hand names contain a hyphen, so an environment secret cannot shadow
+#   them; keep the tokens as repository secrets, and restrict who may run the
+#   deploy through the deploy environment's required reviewers.
 # - There is no `paths:` filter: GitHub cannot read the deploy inputs from the
 #   config. Every push to main starts a run; its first job installs the tool
-#   (a `uv sync`) and then ends the run when no deploy input changed.
+#   (a `uv tool install`) and then ends the run when no deploy input changed.
 name: registry-sync
 
 on:
@@ -42,17 +41,19 @@ on:
 
 jobs:
   registry-sync:
-    # `@main` is a placeholder: pin a commit sha here (see the note at the top).
-    uses: markddavidoff/customer-registry-sync/.github/workflows/registry-sync.yml@main
+    uses: markddavidoff/gitops-engine/.github/workflows/sync.yml@v0.2.0
     permissions:
       contents: read
     secrets:
-      LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
-      LINEAR_READONLY_TOKEN: ${{ secrets.LINEAR_READONLY_TOKEN }}
-      REGISTRY_SYNC_APP_ID: ${{ secrets.REGISTRY_SYNC_APP_ID }}
-      REGISTRY_SYNC_APP_PRIVATE_KEY: ${{ secrets.REGISTRY_SYNC_APP_PRIVATE_KEY }}
-      REGISTRY_SYNC_SSH_KEY: ${{ secrets.REGISTRY_SYNC_SSH_KEY }}
+      destination-token: ${{ secrets.LINEAR_API_TOKEN }}
+      destination-readonly-token: ${{ secrets.LINEAR_READONLY_TOKEN }}
+      app-id: ${{ secrets.REGISTRY_SYNC_APP_ID }}
+      app-private-key: ${{ secrets.REGISTRY_SYNC_APP_PRIVATE_KEY }}
     with:
+      tool: "customer-registry-sync @ git+https://github.com/markddavidoff/customer-registry-sync.git@v0.2.0"
+      command: customer-registry-sync
+      config: registry-sync.yaml
+      token-env: LINEAR_API_TOKEN
       mode: ${{ inputs.mode }}
       snapshot: ${{ inputs.snapshot }}
       rows: ${{ inputs.rows }}

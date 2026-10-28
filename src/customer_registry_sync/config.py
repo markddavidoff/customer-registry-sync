@@ -11,12 +11,17 @@ Keys:
   ingest knows must be present (see ``notion_ingest.BUCKET_CLASSIFICATION``).
 - ``data_dir`` (optional, default ``customers``) — where the dataset lives. A
   relative path resolves against the directory that holds the config file.
-- ``workflow`` (optional) — settings the reusable ``registry-sync`` GitHub
-  workflow reads through ``config-get``: ``deploy_environment`` and
-  ``readonly_environment``, the names of the two GitHub environments. Secrets are
-  not named here: the caller passes them to the workflow explicitly. A config
-  without these keys still loads; only ``config-get`` of a missing key fails,
-  naming it. Unknown keys under ``workflow:`` are ignored.
+- ``workflow`` (optional) — settings the gitops-engine reusable sync workflow reads
+  through ``config-get``: ``deploy_environment`` and ``readonly_environment``, the
+  names of the two GitHub environments. Secrets are not named here: the caller
+  passes them to the workflow explicitly. A config without these keys still loads;
+  only ``config-get`` of a missing key fails, naming it. Unknown keys under
+  ``workflow:`` are ignored.
+
+``config-get`` answers the engine CLI contract's keys (``data_dir``,
+``deploy_environment``, ``readonly_environment``, ``state_dir``, ``snapshot_dir``,
+``e2e_tests``); ``workflow.deploy_environment`` and ``workflow.readonly_environment``
+are accepted as the same keys.
 """
 
 from __future__ import annotations
@@ -27,10 +32,14 @@ from typing import Any
 
 import yaml
 
+from .linear_files import SNAPSHOT_SUBDIR
 from .notion_ingest import BUCKET_CLASSIFICATION
+from .writers import STATE_SUBDIR
 
 DEFAULT_CONFIG_NAME = "registry-sync.yaml"
 DEFAULT_DATA_DIR = "customers"
+# The live GitOps tests, relative to the root of this tool's source (`config-get e2e_tests`).
+E2E_TESTS = "tests/test_e2e_gitops.py"
 
 
 class ConfigError(Exception):
@@ -80,12 +89,22 @@ def _workflow(raw: dict[str, str]) -> WorkflowConfig | None:
 
 
 def config_value(cfg: RegistryConfig, key: str) -> str:
-    """One config value by dotted key (``data_dir``, ``workflow.deploy_environment``).
+    """One config value by key: the engine CLI contract's keys, plus ``hub_page_id`` and
+    ``buckets.<name>``.
 
-    Raises ``ConfigError`` naming the key when it is unknown or missing.
+    Raises ``ConfigError`` naming the key when it is unknown or missing. A missing
+    environment names its place in the file (``workflow.<key>``).
     """
     if key == "data_dir":
         return str(cfg.data_dir)
+    if key == "state_dir":
+        return str(cfg.data_dir / STATE_SUBDIR)
+    if key == "snapshot_dir":
+        return str(cfg.data_dir / SNAPSHOT_SUBDIR)
+    if key == "e2e_tests":
+        return E2E_TESTS
+    if key in WORKFLOW_KEYS:
+        key = f"workflow.{key}"
     if key == "hub_page_id":
         return cfg.hub_page_id
     if key.startswith("buckets."):

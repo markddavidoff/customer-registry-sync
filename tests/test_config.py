@@ -235,3 +235,41 @@ def test_cli_config_get(tmp_path, capsys):
     assert capsys.readouterr().out == "registry-deploy\n"
     assert cli.main(["--config", str(path), "config-get", "nope"]) == 2
     assert "nope" in capsys.readouterr().err
+
+
+CONTRACT_KEYS = (
+    "data_dir",
+    "deploy_environment",
+    "readonly_environment",
+    "state_dir",
+    "snapshot_dir",
+    "e2e_tests",
+)
+
+
+def test_config_get_answers_every_engine_contract_key(tmp_path, capsys):
+    data = _valid()
+    data["workflow"] = _workflow()
+    path = _write(tmp_path / "registry-sync.yaml", data)
+    want = {
+        "data_dir": str(tmp_path / "registry-data"),
+        "deploy_environment": "registry-deploy",
+        "readonly_environment": "registry-readonly",
+        "state_dir": str(tmp_path / "registry-data" / "linear-state"),
+        "snapshot_dir": str(tmp_path / "registry-data" / "linear-snapshots"),
+        "e2e_tests": "tests/test_e2e_gitops.py",
+    }
+    assert set(want) == set(CONTRACT_KEYS)
+    for key in CONTRACT_KEYS:
+        assert cli.main(["--config", str(path), "config-get", key]) == 0
+        assert capsys.readouterr().out == f"{want[key]}\n", key
+
+
+def test_environment_keys_missing_name_the_yaml_key(tmp_path, capsys):
+    path = _write(tmp_path / "registry-sync.yaml", _valid())
+    for key in ("deploy_environment", "readonly_environment"):
+        assert cli.main(["--config", str(path), "config-get", key]) == 2
+        assert f"'workflow.{key}'" in capsys.readouterr().err
+    # The directories and the test path need no `workflow:` section.
+    for key in ("state_dir", "snapshot_dir", "e2e_tests"):
+        assert cli.main(["--config", str(path), "config-get", key]) == 0
