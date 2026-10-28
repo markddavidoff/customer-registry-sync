@@ -16,7 +16,6 @@ from customer_registry_sync.datasets import (
     load_datasets_config,
 )
 from customer_registry_sync.deploy import plan_deploy
-from customer_registry_sync.fieldplan import state_to_live
 from customer_registry_sync.generate import generate_from_dir
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
 from customer_registry_sync.identity import IdentityStore
@@ -73,7 +72,9 @@ def _mirror(tmp_path, *nodes):
 
 def _managed(tmp_path):
     ignore = load_ignore(tmp_path / IGNORE_FILE, IGNORE_FORMAT)
-    live = [state_to_live(r) for r in load_state(tmp_path) if r.linear_synced is not None]
+    live = [
+        LINEAR_SCHEMA.state_to_live(r) for r in load_state(tmp_path) if r.linear_synced is not None
+    ]
     return partition_live(live, ignore, LINEAR_SCHEMA, scope=None)[0]
 
 
@@ -374,7 +375,7 @@ def test_ambiguous_duplicates_record_no_linear_source(tmp_path, capsys, run_cli)
     assert "acme: no customer carries the canonical or recorded Linear id" in out
     plan = plan_deploy(
         generate_from_dir(tmp_path).rows,
-        [state_to_live(r) for r in load_state(tmp_path)],
+        [LINEAR_SCHEMA.state_to_live(r) for r in load_state(tmp_path)],
         load_identities(tmp_path / IDENTITIES_FILE),
     )
     assert any(
@@ -403,7 +404,7 @@ def test_new_identity_for_two_unstamped_duplicates_records_no_linear_source(
     assert "gamma: no customer carries the canonical or recorded Linear id" in out
     plan = plan_deploy(
         generate_from_dir(tmp_path).rows,
-        [state_to_live(r) for r in load_state(tmp_path)],
+        [LINEAR_SCHEMA.state_to_live(r) for r in load_state(tmp_path)],
         load_identities(tmp_path / IDENTITIES_FILE),
     )
     assert any(

@@ -11,15 +11,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import dataclasses
 from dataclasses import asdict, dataclass, field, fields
 from typing import TYPE_CHECKING, Any
 
-from gitops_engine.schema import Always, FieldSpec, KeepIfUnset, Nouns, Union
+from gitops_engine.schema import Always, FieldSpec, KeepIfUnset, Nouns, SyncMark, Union
+
+from .linear_client import LiveCustomer
 
 if TYPE_CHECKING:
     from gitops_engine.identity import ItemKeys
-
-    from .linear_client import LiveCustomer
 
 LinearStatus = str
 # The deployable statuses generate emits. A workspace can define more, which a
@@ -109,9 +110,8 @@ def content_hash_of(rec: LinearCustomer) -> str:
 class LinearSchema:
     """The engine's view of Linear customers (`RecordSchema[LinearCustomer, LiveCustomer]`).
 
-    Only the members the engine's merge, found-stub, ignore, mirror and retire code call
-    are here so far; the value accessors, policies in use by the planner and the snapshot
-    members arrive with it."""
+    The snapshot members are not here yet; everything the engine's merge, found-stub,
+    ignore, mirror, retire, pairing and field-planner code calls is."""
 
     nouns = Nouns("customer", "customers", "Linear")
     fields = (
@@ -124,6 +124,12 @@ class LinearSchema:
     )
     id_field = "external_ids"
 
+    def desired_value(self, d: LinearCustomer, field: str) -> Any:
+        return getattr(d, field)
+
+    def live_value(self, lv: LiveCustomer, field: str) -> Any:
+        return getattr(lv, field)
+
     def label(self, d: LinearCustomer) -> str:
         return d.name
 
@@ -132,6 +138,9 @@ class LinearSchema:
 
     def live_id(self, lv: LiveCustomer) -> str:
         return lv.id
+
+    def live_version(self, lv: LiveCustomer) -> str:
+        return lv.updated_at
 
     def desired_keys(self, d: LinearCustomer) -> ItemKeys:
         from .identity import keys_for_row  # identity imports this module for its types
@@ -143,8 +152,15 @@ class LinearSchema:
 
         return keys_for_live(lv)
 
+    def mark(self, d: LinearCustomer) -> SyncMark | None:
+        ls = d.linear_synced
+        return SyncMark(ls.linear_id, ls.updated_at, ls.content_hash) if ls else None
+
     def destination_owned(self, d: LinearCustomer) -> bool:
         return d.linear_owned
+
+    def with_values(self, d: LinearCustomer, values: dict[str, Any]) -> LinearCustomer:
+        return dataclasses.replace(d, **values)
 
     def mirror_row(self, lv: LiveCustomer) -> LinearCustomer:
         """The live customer as the state mirror holds it: every field from `lv`, no
@@ -166,6 +182,20 @@ class LinearSchema:
 
     def live_hash(self, lv: LiveCustomer) -> str:
         return content_hash_of(self.mirror_row(lv))
+
+    def state_to_live(self, s: LinearCustomer) -> LiveCustomer:
+        """A `LiveCustomer` view of a state-mirror row (id/updatedAt from `linear_synced`)."""
+        ls = s.linear_synced
+        return LiveCustomer(
+            id=ls.linear_id if ls else "",
+            name=s.name,
+            domains=list(s.domains),
+            revenue=s.revenue,
+            tier=s.tier,
+            status=s.status or "",
+            external_ids=list(s.external_ids),
+            updated_at=ls.updated_at if ls else "",
+        )
 
 
 LINEAR_SCHEMA = LinearSchema()

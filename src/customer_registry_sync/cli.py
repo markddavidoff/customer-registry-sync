@@ -37,6 +37,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from gitops_engine.datasets import DATASETS_SUBDIR, dataset_dir
+from gitops_engine.fieldplan import DESTRUCTIVE, FieldChange
 from gitops_engine.ignore import (
     append_ignore,
     ignore_errors,
@@ -46,6 +47,7 @@ from gitops_engine.ignore import (
 )
 from gitops_engine.manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
 from gitops_engine.mirror import reconcile_mirror
+from gitops_engine.retire import load_retire
 
 from .assemble import assemble_dataset
 from .changed import changed_since
@@ -53,7 +55,6 @@ from .check import EXIT_DRIFT, EXIT_OPERROR, offline_errors, orphan_lines, run_c
 from .config import DEFAULT_CONFIG_NAME, ConfigError, config_value, load_config
 from .datasets import LINEAR_FOUND, NOTION, load_datasets, load_datasets_config
 from .deploy import apply_deploy, plan_deploy
-from .fieldplan import DESTRUCTIVE, FieldChange, state_to_live
 from .generate import generate_from_dir
 from .identity import IDENTITIES_FILE, IdentityStore, load_identities
 from .inputs import load_overrides, load_self_managed_customers
@@ -63,7 +64,6 @@ from .linear_files import (
     IGNORE_FORMAT,
     RETIRE_FILE,
     ignore_conflicts,
-    load_retire_fields,
 )
 from .linear_found import append_record_identities, build_linear_found
 from .linear_schema import LINEAR_SCHEMA
@@ -151,7 +151,11 @@ def _ingest_notion(args, out_dir: Path) -> int:
 def _ingest_linear_found(args, out_dir: Path, store: IdentityStore, ignore, entries) -> int:
     """State mirror → `datasets/linear-found/`; 2 when refused."""
     managed, _ = partition_live(
-        [state_to_live(r) for r in load_state(out_dir) if r.linear_synced is not None],
+        [
+            LINEAR_SCHEMA.state_to_live(r)
+            for r in load_state(out_dir)
+            if r.linear_synced is not None
+        ],
         ignore,
         LINEAR_SCHEMA,
         scope=None,
@@ -487,7 +491,7 @@ def _cmd_deploy(args) -> int:
     ignore = _load_ignore(out_dir)
     if table is None or ignore is None:
         return 2
-    retire = load_retire_fields(out_dir / RETIRE_FILE)
+    retire = load_retire(out_dir / RETIRE_FILE, LINEAR_SCHEMA)
     managed, ignored, other = _partitioned(client.list_customers(), ignore, args.scope)
     conflicts, reports = ignore_conflicts(
         ignored, ignore, _entries(out_dir), desired, table, scope=args.scope
@@ -610,7 +614,7 @@ def _cmd_check(args) -> int:
     except LinearError as e:
         print(f"ERROR: Linear read failed: {e}", file=sys.stderr)
         return EXIT_OPERROR
-    retire = load_retire_fields(out_dir / RETIRE_FILE)
+    retire = load_retire(out_dir / RETIRE_FILE, LINEAR_SCHEMA)
     if args.scope:
         # a scoped run only sees its own rows; keep retire entries for those rows
         in_scope = {d.external_ids[0] for d in desired if d.external_ids}

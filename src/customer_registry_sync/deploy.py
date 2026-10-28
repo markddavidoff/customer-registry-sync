@@ -2,7 +2,7 @@
 optimistic concurrency (the write gate).
 
 `plan_deploy` pairs desired rows with live customers by identity and diffs them
-field by field (`fieldplan.plan_row`) into creates / updates / aborts / orphans
+field by field (`gitops_engine.fieldplan.plan_row`) into creates / updates / aborts / orphans
 / unchanged. `apply_deploy` performs create/update ONLY: it snapshots the live
 rows first, re-reads each customer at write time and aborts on drift
 (check-and-set), never a silent clobber; it sends only the planned fields and
@@ -22,22 +22,19 @@ import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from gitops_engine.ignore import IgnoreList
-from gitops_engine.pairing import pick_primary as engine_pick_primary
-from gitops_engine.pairing import stamped_conflict as engine_stamped_conflict
-
-from .fieldplan import DESTRUCTIVE, FieldChange, plan_row, unacknowledged_destructive
-from .identity import (
-    IDENTITY_SPEC,
-    IdentityTable,
-    keys_for_live,
-    keys_for_row,
-    resolve,
-    with_implicit,
+from gitops_engine.fieldplan import (
+    DESTRUCTIVE,
+    FieldChange,
+    plan_row,
+    unacknowledged_destructive,
 )
+from gitops_engine.ignore import IgnoreList
+from gitops_engine.retire import RetireEntry
+
+from .identity import IdentityTable, pair_rows
 from .linear_client import LinearError, LiveCustomer
-from .linear_files import IGNORE_FILE, CuratedFields
-from .linear_schema import LINEAR_SCHEMA, LinearCustomer, LinearSynced, content_hash_of
+from .linear_files import IGNORE_FILE
+from .linear_schema import LINEAR_SCHEMA, LinearCustomer
 from .snapshot import record_written, write_snapshot
 
 
@@ -60,89 +57,6 @@ class DeployPlan:
     withheld: list[str] = field(default_factory=list)
     # report-only lines (a stub with no live customer)
     notes: list[str] = field(default_factory=list)
-
-
-@dataclass
-class Pairing:
-    """Desired rows paired with their live customer by identity."""
-
-    pairs: list[tuple[LinearCustomer, LiveCustomer | None]] = field(default_factory=list)
-    duplicates: list[tuple[str, LiveCustomer]] = field(default_factory=list)
-    errors: list[str] = field(default_factory=list)
-    unmatched: list[LiveCustomer] = field(default_factory=list)
-
-
-def pick_primary(
-    cid: str,
-    group: list[LiveCustomer],
-    table: IdentityTable,
-) -> LiveCustomer | None:
-    """Of several live customers on one identity: the one carrying the canonical
-    id, else the one whose id the identity records as its Linear source. None when
-    neither id is on any of them, or when two or more carry the canonical id
-    (`stamped_conflict` names that error)."""
-    return engine_pick_primary(cid, group, table, schema=LINEAR_SCHEMA, spec=IDENTITY_SPEC)
-
-
-def stamped_conflict(cid: str, group: list[LiveCustomer]) -> str | None:
-    """The planner error when two or more live customers carry the canonical id `cid`."""
-    return engine_stamped_conflict(cid, group, schema=LINEAR_SCHEMA)
-
-
-def pair_rows(
-    desired: list[LinearCustomer],
-    live: list[LiveCustomer],
-    table: IdentityTable,
-) -> Pairing:
-    """Resolve every desired row and live customer to an identity and pair them.
-
-    A desired row that resolves to nothing gets an implicit identity. A
-    second desired row on one identity is an error and is not paired. Live
-    customers resolving to no desired row are `unmatched` (the plan's orphans).
-    With two or more live customers on one identity, `pick_primary` chooses the one to
-    write and the rest are known duplicates; if it finds none, that is an error
-    and the identity is not paired. Two or more carrying the canonical id is an
-    error too (`stamped_conflict`), never a pick by API order."""
-    table = with_implicit(table, desired)
-    out = Pairing()
-    by_cid: dict[str, LinearCustomer] = {}
-    for d in desired:
-        hit = resolve(keys_for_row(d), table)
-        assert hit is not None  # with_implicit gives every row an identity
-        if hit.canonical_id in by_cid:
-            out.errors.append(
-                f"two desired rows resolve to {hit.canonical_id}: "
-                f"'{by_cid[hit.canonical_id].name}' and '{d.name}'"
-            )
-            continue
-        by_cid[hit.canonical_id] = d
-    groups: dict[str, list[LiveCustomer]] = {}
-    for lv in live:
-        hit = resolve(keys_for_live(lv), table)
-        if hit is None or hit.canonical_id not in by_cid:
-            out.unmatched.append(lv)
-            continue
-        groups.setdefault(hit.canonical_id, []).append(lv)
-    for cid, d in by_cid.items():
-        group = groups.get(cid, [])
-        if len(group) <= 1:
-            out.pairs.append((d, group[0] if group else None))
-            continue
-        conflict = stamped_conflict(cid, group)
-        if conflict is not None:
-            out.errors.append(conflict)
-            continue
-        chosen = pick_primary(cid, group, table)
-        if chosen is None:
-            named = ", ".join(f"'{lv.name}' ({lv.id})" for lv in group)
-            out.errors.append(
-                f"known duplicates for {cid} with no canonical or recorded Linear id: {named}: "
-                "merge them in Linear or record one in identities.yaml"
-            )
-            continue
-        out.pairs.append((d, chosen))
-        out.duplicates += [(cid, lv) for lv in group if lv is not chosen]
-    return out
 
 
 def _withhold_shared(
@@ -180,25 +94,13 @@ def _withhold_shared(
     return d if keep == d.domains else dataclasses.replace(d, domains=keep)
 
 
-def live_to_linear(lv: LiveCustomer) -> LinearCustomer:
-    """The live row as the mirror holds it (`LinearSchema.mirror_row`): no status is None."""
-    return LinearCustomer(
-        name=lv.name,
-        domains=list(lv.domains),
-        revenue=lv.revenue,
-        tier=lv.tier,
-        status=lv.status or None,
-        external_ids=list(lv.external_ids),
-    )
-
-
 def plan_deploy(
     desired: list[LinearCustomer],
     live: list[LiveCustomer],
     table: IdentityTable | None = None,
     *,
     state: list[LinearCustomer] | None = None,
-    retire: dict[str, CuratedFields] | None = None,
+    retire: dict[str, RetireEntry] | None = None,
     other_live: list[LiveCustomer] | None = None,
 ) -> DeployPlan:
     """Diff desired vs live, paired by identity (`pair_rows`). The
@@ -237,7 +139,7 @@ def plan_deploy(
             (state_by_xid[x] for x in d.external_ids if x in state_by_xid), None
         ) or state_by_id.get(lv.id)
         ls = st.linear_synced if st is not None else None
-        live_hash = content_hash_of(live_to_linear(lv))
+        live_hash = LINEAR_SCHEMA.live_hash(lv)
         # a stub is Linear-owned: a Linear edit to it is not drift
         if (
             ls is not None
@@ -256,7 +158,7 @@ def plan_deploy(
         if not d.linear_owned:
             d = _withhold_shared(d, lv, holders, plan)
         entry = (retire or {}).get(d.external_ids[0]) if d.external_ids else None
-        target, changes = plan_row(d, lv, entry)
+        target, changes = plan_row(d, lv, entry, schema=LINEAR_SCHEMA)
         plan.changes[lv.id] = changes
         plan.unacked += [
             f"{d.name}: {c.field} {c.kind} without retire"
@@ -273,9 +175,7 @@ def _persisted(lv: LiveCustomer) -> LinearCustomer:
     """The state-mirror row for a row we just wrote: built from what Linear
     RETURNED (not from desired), so its content_hash agrees with what
     `check`/`plan_deploy`/`sync-inbound` compute from live."""
-    rec = live_to_linear(lv)
-    rec.linear_synced = LinearSynced(lv.id, lv.updated_at, content_hash_of(rec))
-    return rec
+    return LINEAR_SCHEMA.mirror_row(lv)
 
 
 def _non_empty(**fields):

@@ -46,21 +46,25 @@ from gitops_engine.ignore import (
     partition_live,
     stale_ignore,
 )
+from gitops_engine.fieldplan import Untracked, stale_retire, untracked_values
 from gitops_engine.manifest import manifest_edits
+from gitops_engine.retire import RetireEntry
 
 from .datasets import DatasetRecord, datasets_errors, load_datasets, load_datasets_config
-from .deploy import DeployPlan, pair_rows, plan_deploy
-from .fieldplan import Untracked, stale_retire, untracked_values
+from .deploy import DeployPlan, plan_deploy
 from .generate import canonical_id_for, generate_from_dir, group_by_identity
 from .identity import (
     IDENTITIES_FILE,
+    IDENTITY_SPEC,
     SOURCE_LINEAR,
     Identity,
     IdentityTable,
     conflict,
+    implicit_identity,
     keys_for_live,
     keys_for_record,
     load_identities,
+    pair_rows,
     resolve,
     table_errors,
 )
@@ -69,7 +73,6 @@ from .linear_client import LiveCustomer
 from .linear_files import (
     IGNORE_FILE,
     IGNORE_FORMAT,
-    CuratedFields,
     ignore_conflicts,
 )
 from .linear_found import status_errors
@@ -265,7 +268,7 @@ def run_check(
     live: list[LiveCustomer],
     table: IdentityTable | None = None,
     *,
-    retire: dict[str, CuratedFields] | None = None,
+    retire: dict[str, RetireEntry] | None = None,
     ignore: IgnoreList | None = None,
     scope: str | None = None,
     entries: list[DatasetRecord] | None = None,
@@ -299,8 +302,9 @@ def run_check(
         retire=retire,
         other_live=[*ignored, *(other_live or [])],
     )
-    untracked = untracked_values(desired, managed, table, retire)
-    stale = stale_retire(desired, managed, table, retire)
+    bound = dict(schema=LINEAR_SCHEMA, spec=IDENTITY_SPEC, implicit=implicit_identity)
+    untracked = untracked_values(desired, managed, table, retire, **bound)
+    stale = stale_retire(desired, managed, table, retire, **bound)
     failures, reports = ignore_conflicts(
         ignored, ignore, entries or [], desired, table, scope=scope
     )

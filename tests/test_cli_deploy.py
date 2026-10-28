@@ -1,9 +1,13 @@
 from dataclasses import replace
 
 from customer_registry_sync import cli
-from customer_registry_sync.deploy import live_to_linear
 from customer_registry_sync.linear_client import LiveCustomer
-from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced, content_hash_of
+from customer_registry_sync.linear_schema import (
+    LINEAR_SCHEMA,
+    LinearCustomer,
+    LinearSynced,
+    content_hash_of,
+)
 from customer_registry_sync.writers import load_state, write_desired, write_state
 
 
@@ -67,7 +71,7 @@ def _live(lid, name, updated="2026-10-01T00:00:00.000Z", revenue=1, xids=("acme"
 
 
 def _state_from(lv):
-    s = live_to_linear(lv)
+    s = LINEAR_SCHEMA.mirror_row(lv)
     s.linear_synced = LinearSynced(lv.id, lv.updated_at, content_hash_of(s))
     return s
 

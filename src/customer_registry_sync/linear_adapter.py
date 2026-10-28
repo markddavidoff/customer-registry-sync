@@ -4,7 +4,7 @@
 exit codes off the engine's `EXIT_*`. Drift detection needs only `live_id`,
 `live_hash` and `state_mark`. Planning and writes do not go through the engine:
 `deploy.plan_deploy` / `apply_deploy` are local code (field-level changes,
-pairing by identity through `deploy.pair_rows`, snapshot, post-write
+pairing by identity through `identity.pair_rows`, snapshot, post-write
 verification), and `check` reports that same plan. So the adapter's matching,
 mark lookup and write methods refuse: there is one pairing, `pair_rows`, and no
 per-row second copy of it here to drift away from it.
@@ -14,9 +14,8 @@ from __future__ import annotations
 
 from gitops_engine import SyncMark
 
-from .deploy import live_to_linear
 from .linear_client import LiveCustomer
-from .linear_schema import LinearCustomer, LinearSynced, content_hash_of
+from .linear_schema import LINEAR_SCHEMA, LinearCustomer, LinearSynced, content_hash_of
 
 _PLANNING_REFUSED = "planning goes through deploy.plan_deploy (pairing: deploy.pair_rows)"
 _WRITES_REFUSED = "writes go through deploy.apply_deploy, not the engine adapter"
@@ -41,7 +40,7 @@ class LinearCustomersAdapter:
         return content_hash_of(d)
 
     def live_hash(self, lv: LiveCustomer) -> str:
-        return content_hash_of(live_to_linear(lv))
+        return LINEAR_SCHEMA.live_hash(lv)
 
     def live_id(self, lv: LiveCustomer) -> str:
         return lv.id

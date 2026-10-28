@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any
 
 from gitops_engine import identity as engine
 from gitops_engine import identity_store as engine_store
+from gitops_engine.pairing import Pairing
+from gitops_engine.pairing import pair_rows as engine_pair_rows
 from gitops_engine.identity import (  # noqa: F401 (re-export)
     Hit,
     Identity,
@@ -27,7 +29,7 @@ from gitops_engine.identity import (  # noqa: F401 (re-export)
 )
 
 from .datasets import LINEAR_FOUND, NOTION
-from .linear_schema import LinearCustomer
+from .linear_schema import LINEAR_SCHEMA, LinearCustomer
 from .schema import CustomerRecord
 
 if TYPE_CHECKING:
@@ -167,4 +169,14 @@ def with_implicit(table: IdentityTable, rows: list[LinearCustomer]) -> IdentityT
     """A copy of `table` plus one identity per row that resolves to nothing."""
     return engine.with_implicit(
         table, rows, IDENTITY_SPEC, keys=keys_for_row, implicit=implicit_identity
+    )
+
+
+def pair_rows(
+    desired: list[LinearCustomer], live: list[LiveCustomer], table: IdentityTable
+) -> Pairing[LinearCustomer, LiveCustomer]:
+    """Desired rows paired with their live customer by identity (the one pairing
+    `check` and `deploy` use)."""
+    return engine_pair_rows(
+        desired, live, table, schema=LINEAR_SCHEMA, spec=IDENTITY_SPEC, implicit=implicit_identity
     )

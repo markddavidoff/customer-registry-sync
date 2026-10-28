@@ -17,7 +17,6 @@ from customer_registry_sync.check import (
     run_check,
     unused_identities,
 )
-from customer_registry_sync.linear_files import CuratedFields
 from customer_registry_sync.datasets import (
     LINEAR_FOUND,
     NOTION,
@@ -25,8 +24,7 @@ from customer_registry_sync.datasets import (
     DatasetRecord,
     load_datasets,
 )
-from customer_registry_sync.deploy import live_to_linear
-from customer_registry_sync.fieldplan import FieldChange
+from gitops_engine.fieldplan import FieldChange
 from customer_registry_sync.generate import generate_from_dir, merge_datasets
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
 from customer_registry_sync.identity import IdentityStore
@@ -61,7 +59,7 @@ def _live(lid, name, updated="2026-10-01T00:00:00.000Z", revenue=1):
 
 
 def _state_from(lv):
-    s = live_to_linear(lv)
+    s = LINEAR_SCHEMA.mirror_row(lv)
     s.linear_synced = LinearSynced(lv.id, lv.updated_at, content_hash_of(s))
     return s
 
@@ -137,7 +135,7 @@ def test_check_reports_untracked_and_passes():
 
 def test_check_exits_3_on_stale_retire():
     lv = _live("lin_1", "Acme")
-    retire = {"acme": CuratedFields(domains=["gone.example.org"])}
+    retire = {"acme": {"domains": ["gone.example.org"]}}
     res = run_check([_desired_acme()], [_state_from(lv)], [lv], retire=retire)
     assert res.code == EXIT_DRIFT and res.stale == ["acme: domains gone.example.org not live"]
     assert not res.drift.any() and not res.untracked
@@ -146,7 +144,7 @@ def test_check_exits_3_on_stale_retire():
 def test_check_exits_3_on_unacked_destructive(monkeypatch):
     lv = _live("lin_1", "Acme")
     bad = FieldChange("revenue", 1, None, "clear")  # retire=False: a planner bug
-    monkeypatch.setattr(deploy, "plan_row", lambda d, live, retire: (d, [bad]))
+    monkeypatch.setattr(deploy, "plan_row", lambda d, live, retire, **_: (d, [bad]))
     res = run_check([_desired_acme()], [_state_from(lv)], [lv])
     assert res.plan.unacked and res.code == EXIT_DRIFT
     assert not res.drift.any() and not res.untracked and not res.stale
@@ -519,7 +517,7 @@ def test_ignored_not_in_stale_retire(tmp_path):
     own = _node(
         "lin_own", "Pied Piper", domains=["acme.example.test", "old.example.org"], xids=["acme"]
     )
-    retire = {"acme": CuratedFields(domains=["old.example.org"])}
+    retire = {"acme": {"domains": ["old.example.org"]}}
     res = run_check([_desired_acme()], [], [own, acme], retire=retire, ignore=ign)
     assert res.stale == ["acme: domains old.example.org not live"]  # only the ignored row has it
     # control: unpartitioned, both carry the canonical id, so the planner refuses

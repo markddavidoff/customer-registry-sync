@@ -1,20 +1,15 @@
 """The Linear sync's hand-curated files, declared on the engine's loaders.
 
 `linear-ignore.yaml` and `linear-retire.yaml` are read and written by `gitops_engine`
-(`ignore`, `retire`); this module names them for Linear customers, binds the engine's
-callbacks for `ignore_conflicts`, and adapts a retire entry to `CuratedFields` for the
-planner until the planner reads retire entries itself.
+(`ignore`, `retire`); this module names them for Linear customers and binds the
+engine's callbacks for `ignore_conflicts`.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
-
 from gitops_engine.datasets import DATASETS_FILE, DatasetRecord
 from gitops_engine.ignore import IgnoreFormat, IgnoreList
 from gitops_engine.ignore import ignore_conflicts as engine_ignore_conflicts
-from gitops_engine.retire import RetireEntry, load_retire
 
 from .datasets import LINEAR_FOUND
 from .generate import canonical_id_for
@@ -67,33 +62,3 @@ def ignore_conflicts(
         describe=lambda d: strip_status_suffix(d.name),
         scope=scope,
     )
-
-
-@dataclass
-class CuratedFields:
-    """A retire entry as the planner reads it. Task 6 deletes this with the planner's
-    per-field code; until then `load_retire_fields` converts to it."""
-
-    domains: list[str] = field(default_factory=list)
-    revenue: int | None = None
-    tier: str | None = None
-
-    def empty(self) -> bool:
-        return not self.domains and self.revenue is None and self.tier is None
-
-
-def retire_fields(entries: dict[str, RetireEntry]) -> dict[str, CuratedFields]:
-    """Each engine `RetireEntry` as the `CuratedFields` the planner takes."""
-    return {
-        ext_id: CuratedFields(
-            domains=list(entry.get("domains") or []),
-            revenue=entry.get("revenue"),
-            tier=entry.get("tier"),
-        )
-        for ext_id, entry in entries.items()
-    }
-
-
-def load_retire_fields(path: Path) -> dict[str, CuratedFields]:
-    """`linear-retire.yaml` as `CuratedFields` (a missing or empty file yields `{}`)."""
-    return retire_fields(load_retire(path, LINEAR_SCHEMA))
