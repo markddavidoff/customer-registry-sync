@@ -80,11 +80,11 @@ differ, and `sync-inbound` records a conservative `pending` entry holding Linear
 (the deploy's own write). That entry is spurious. Delete it by hand: the registry value
 wins. Merging the state PR first avoids it.
 
-The state PR stages only `<data_dir>/linear-state/` and `<data_dir>/linear-snapshots/`.
-The `sync-inbound` that the deploy job runs after the apply can also write
-`<data_dir>/linear-overrides.yaml` on the runner, but that file is not committed. An edit
-made in Linear in the short window between the deploy's plan and that read is therefore
-not recorded.
+The state PR stages all of `<data_dir>` (and the state and snapshot directories, if they
+lie elsewhere). The `sync-inbound` that the deploy job runs after the apply can also
+record an edit in `<data_dir>/linear-overrides.yaml`, and that change lands in the state
+PR. If the PR changes the overrides file, merging it starts a deploy run (the file is a
+deploy input), whose plan the reviewer may approve or reject. Fixed in v0.3.0.
 
 **Break-glass (laptop).** `deploy --apply --prod` outside GitHub Actions refuses unless
 `--break-glass` is passed. Use it only when the workflow is unavailable; it prints a

@@ -440,8 +440,10 @@ reviewer approves
     +-------------> main (state paths do not start a deploy)
 ```
 
-The state PR touches only `<data_dir>/linear-state/` and `<data_dir>/linear-snapshots/`,
-which are not deploy inputs.
+The state PR holds `<data_dir>/linear-state/` and `<data_dir>/linear-snapshots/`, which
+are not deploy inputs, plus any change the post-apply `sync-inbound` made elsewhere under
+`<data_dir>`, such as a recorded edit in `linear-overrides.yaml`. A PR that changes the
+overrides file starts a deploy run when it merges.
 
 **Merge a deploy's state PR before the next refresh PR.** The refresh compares the
 mirror on `main` with live Linear. Until the state PR merges, that mirror predates the

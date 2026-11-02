@@ -39,6 +39,7 @@ Some items defer to the engine's roadmap: [`gitops-engine/ROADMAP.md`](https://g
   - `linear-overrides.yaml` replaces `linear-ignore.yaml` and `linear-retire.yaml`. It holds pins, domain adds and removes, pending Linear edits, `hidden` and `deleted` entries and hidden name prefixes. This closes "Re-adding removed domains": a domain removed in Linear is absorbed as a `domains.remove` entry, not re-added.
   - `sync-inbound` records Linear edits: a cleared value or removed domain becomes an accepted override, and any other change becomes a pending entry that fails `check` and holds the customer until a PR pins the value or deletes the entry. A customer deleted in Linear is recorded as `deleted` after a second read by id. `sync-inbound` and `refresh` exit 2 on a Linear read error.
   - New commands: `hide` (replaces `ignore`) and `adopt-live` (one-time migration of a v0.2.0 data repository). A stub that hands over to a Notion record keeps its Linear values as pins and domain adds.
+  - The deploy job's state PR stages the whole data directory, so an override that its post-apply `sync-inbound` records is committed (fixed in the engine's reusable workflow in v0.3.0).
 
 ## Open
 
@@ -52,4 +53,3 @@ Some items defer to the engine's roadmap: [`gitops-engine/ROADMAP.md`](https://g
 - [ ] **Revisit the narrowed ruff rule set.** The repo lints with E4, E7, E9 and F only. The refactor onto the engine has landed, so widen the rule set.
 - [ ] **Publish v0.3.0 of both repositories.** Until the engine tag exists, this repository's `pyproject.toml` points at a local engine checkout. Tag `gitops-engine` v0.3.0, switch the dependency to its https git URL and tag, then tag this tool. The owner tags and publishes both releases.
 - [ ] **Move the existing data repository onto v0.3.0 (project 4).** Apply any `linear-retire.yaml` entries under v0.2.0 and empty the file, update its `registry-sync.yaml` and workflow for v0.2 (`source:` and the locked uv project), move to v0.3.0, run `adopt-live`, then `generate` and `check`. Runbook 8 in [`docs/runbooks/operations.md`](docs/runbooks/operations.md) has the steps.
-- [ ] **Commit overrides recorded by the deploy job.** The deploy job runs `sync-inbound` after its apply, but the state PR stages only the state and snapshot directories, so an edit that run records in `linear-overrides.yaml` is not committed. The window is short (an edit between the deploy's plan and its post-apply read). The fix lives in the engine's reusable workflow.
