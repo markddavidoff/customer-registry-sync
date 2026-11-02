@@ -430,11 +430,17 @@ def test_restore_stops_on_linear_error_and_reports_partial(
     assert [c[1] for c in fake2.updates()] == ["lin_1", "lin_2"]
 
 
-# ---- the ignore list in check and deploy ----
+# ---- hidden customers in check and deploy ----
 
-_IGNORE_OWN = (
-    "customers:\n  - linear_id: lin_own\n    name: Pied Piper\n    reason: our own company\n"
-)
+_HIDE_OWN = "customers:\n  own:\n    hidden: {reason: our own company}\n"
+# Pied Piper reaches the hidden `own` entry through its identity's Linear id.
+_OWN_ID = ("own", ["Pied Piper"], [], {"linear": "lin_own"})
+
+
+def _hide_own(tmp_path, text=_HIDE_OWN):
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE
+
+    (tmp_path / OVERRIDES_FILE).write_text(text)
 
 
 def _generated(tmp_path, recs, *identities):
@@ -469,26 +475,29 @@ def _mirror(tmp_path, live):
     write_manifest(tmp_path / "linear-state", "sync-inbound")
 
 
-def test_deploy_refuses_on_ignore_conflict(
+def test_deploy_refuses_on_hidden_conflict(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
-    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
-    _generated(
+    # The hidden Pied Piper carries the consulting record's canonical id as an external
+    # id, so it resolves to that record's identity, not its own: a hidden row the deploy
+    # would otherwise pair with a desired row.
+    _hide_own(tmp_path)
+    [d] = _generated(
         tmp_path,
         [
             CustomerRecord(
                 canonical_name="Pied Piper Consulting",
-                domains=["piedpiper.example.test"],
+                domains=["consulting.example.test"],
                 classification="real",
                 arr=5.0,
             )
         ],
+        _OWN_ID,
     )
-    (tmp_path / IGNORE_FILE).write_text(_IGNORE_OWN)
     own = recording_linear.node(
-        "lin_own", "Pied Piper", domains=["piedpiper.example.test"], revenue=1
+        "lin_own", "Pied Piper", domains=["piedpiper.example.test"], revenue=1, xids=d.external_ids
     )
     _mirror(tmp_path, [own])
     fake = recording_linear([own])
@@ -497,23 +506,23 @@ def test_deploy_refuses_on_ignore_conflict(
     assert run_cli(["deploy", "--apply", "--out-dir", str(tmp_path)]) == 3
     out = capsys.readouterr().out
     assert (
-        "ERROR: desired record 'Pied Piper Consulting' shares domain 'piedpiper.example.test' with ignored Linear "
-        "customer 'Pied Piper' (linear-ignore.yaml:2). Remove that entry or change Pied Piper Consulting."
-        in out
+        f"ERROR: desired record 'Pied Piper Consulting' shares source id '{d.external_ids[0]}' "
+        "with hidden Linear customer 'Pied Piper' (entry own, linear-overrides.yaml). "
+        "Remove that entry from linear-overrides.yaml or change Pied Piper Consulting." in out
     )
     assert "REFUSED" in out
     assert [c for c in fake.calls if c[0] != "get"] == []
     assert not (tmp_path / "linear-snapshots").exists()
 
 
-def test_deploy_withholds_domain_held_only_by_ignored_customer(
+def test_deploy_withholds_domain_held_only_by_hidden_customer(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
-    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
     # the identity lists only acme.example.test, so Pied Piper does not resolve to Acme (no conflict),
-    # yet the record also carries piedpiper.example.test, which only the ignored Pied Piper holds
+    # yet the record also carries piedpiper.example.test, which only the hidden Pied Piper holds
+    _hide_own(tmp_path)
     [d] = _generated(
         tmp_path,
         [
@@ -525,9 +534,9 @@ def test_deploy_withholds_domain_held_only_by_ignored_customer(
             )
         ],
         ("acme", ["Acme"], ["acme.example.test"], {"notion": "acme"}),
+        _OWN_ID,
     )
     assert d.domains == ["acme.example.test", "piedpiper.example.test"]
-    (tmp_path / IGNORE_FILE).write_text(_IGNORE_OWN)
     acme = recording_linear.node(
         "lin_1", d.name, domains=["acme.example.test"], revenue=1, xids=["acme"]
     )
@@ -545,11 +554,11 @@ def test_deploy_withholds_domain_held_only_by_ignored_customer(
 
 
 def _acme_and_own_holder(tmp_path, recording_linear):
-    """Acme's record carries piedpiper.example.test, which only the ignored Pied Piper holds; the
+    """Acme's record carries piedpiper.example.test, which only the hidden Pied Piper holds; the
     identity lists only acme.example.test, so Pied Piper does not resolve to Acme."""
-    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
+    _hide_own(tmp_path)
     [d] = _generated(
         tmp_path,
         [
@@ -561,8 +570,8 @@ def _acme_and_own_holder(tmp_path, recording_linear):
             )
         ],
         ("acme", ["Acme"], ["acme.example.test"], {"notion": "acme"}),
+        _OWN_ID,
     )
-    (tmp_path / IGNORE_FILE).write_text(_IGNORE_OWN)
     acme = recording_linear.node(
         "lin_1", d.name, domains=["acme.example.test"], revenue=1, xids=["acme"]
     )
@@ -580,7 +589,7 @@ _WITHHELD_OWN = (
 def test_scoped_deploy_withholds_domain_held_outside_the_scope(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
-    # the holder is ignored AND outside --scope: it is neither managed nor in the
+    # the holder is hidden AND outside --scope: it is neither managed nor in the
     # scoped live list, yet its domain still counts as held
     fake = _acme_and_own_holder(tmp_path, recording_linear)
     monkeypatch.setattr(cli, "_linear_client", lambda: fake)
@@ -600,10 +609,10 @@ def test_scoped_check_withholds_domain_held_outside_the_scope(
     assert "~ Acme [Active]" not in out  # no update planned that would add piedpiper.example.test
 
 
-def test_check_lists_ignored_customers(tmp_path, monkeypatch, capsys, recording_linear, run_cli):
-    from customer_registry_sync.linear_files import IGNORE_FILE
+def test_check_lists_hidden_customers(tmp_path, monkeypatch, capsys, recording_linear, run_cli):
     from customer_registry_sync.schema import CustomerRecord
 
+    _hide_own(tmp_path)
     [d] = _generated(
         tmp_path,
         [
@@ -611,9 +620,7 @@ def test_check_lists_ignored_customers(tmp_path, monkeypatch, capsys, recording_
                 canonical_name="Acme", domains=["acme.example.test"], classification="real", arr=1.0
             )
         ],
-    )
-    (tmp_path / IGNORE_FILE).write_text(
-        _IGNORE_OWN + "  - linear_id: lin_gone\n    reason: deleted test org\n"
+        _OWN_ID,
     )
     acme = recording_linear.node(
         "lin_1", d.name, domains=["acme.example.test"], revenue=1, xids=d.external_ids
@@ -622,22 +629,21 @@ def test_check_lists_ignored_customers(tmp_path, monkeypatch, capsys, recording_
     e2e = recording_linear.node("lin_e2e", "zzz-gitops-test-0000-Acme")
     _mirror(tmp_path, [acme])
     monkeypatch.setattr(cli, "_linear_client", lambda: recording_linear([acme, own, e2e]))
-    assert run_cli(["check", "--out-dir", str(tmp_path)]) == 0  # stale entries only warn
+    assert run_cli(["check", "--out-dir", str(tmp_path)]) == 0
     out = capsys.readouterr().out
-    assert "IGNORED: 'Pied Piper' (lin_own): our own company" in out
+    assert "HIDDEN: 'Pied Piper' (lin_own): our own company" in out
     assert (
-        "IGNORED: 'zzz-gitops-test-0000-Acme' (lin_e2e): live e2e harness throwaway "
+        "HIDDEN: 'zzz-gitops-test-0000-Acme' (lin_e2e): live e2e harness throwaway "
         "records (built in; always present)"
     ) in out
-    assert "IGNORED PREFIX: zzz-gitops-test- (built-in)" in out
-    assert "stale ignore entry: linear-ignore.yaml:5: lin_gone is not in Linear" in out
+    assert "HIDDEN PREFIX: zzz-gitops-test- (built-in)" in out
     assert "DRIFT added" not in out and "ORPHAN" not in out
 
 
 def test_check_orphan_lines_print_before_the_plan_and_reports_after(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
-    from customer_registry_sync.linear_files import IGNORE_FILE
+    from customer_registry_sync.identity import IDENTITIES_FILE, IdentityStore
     from customer_registry_sync.schema import CustomerRecord
 
     [d] = _generated(
@@ -673,9 +679,10 @@ def test_check_orphan_lines_print_before_the_plan_and_reports_after(
     # a scoped run sees only its own customers: no orphan, and no identity looks unused
     assert run_cli(["check", "--out-dir", str(tmp_path), "--scope", "Acme"]) == 0
     assert "unused identity" not in capsys.readouterr().out
-    # the printed ignore command clears the orphan
-    (tmp_path / IGNORE_FILE).write_text(
-        "customers:\n  - linear_id: lin_hooli\n    name: Hooli\n    reason: not a customer\n"
-    )
+    # hiding it clears the orphan: an identity carrying its Linear id, and a hidden entry
+    store = IdentityStore(tmp_path / IDENTITIES_FILE)
+    store.add_identity("hooli", names=["Hooli"], domains=[], sources={"linear": "lin_hooli"})
+    store.save()
+    _hide_own(tmp_path, "customers:\n  hooli:\n    hidden: {reason: not a customer}\n")
     assert run_cli(["check", "--out-dir", str(tmp_path)]) == 0
     assert "orphan:" not in capsys.readouterr().out

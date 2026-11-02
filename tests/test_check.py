@@ -3,7 +3,7 @@ from dataclasses import replace
 import pytest
 
 from gitops_engine.datasets import dataset_dir
-from gitops_engine.ignore import load_ignore
+from gitops_engine.hidden import hidden_from
 from gitops_engine.manifest import MANIFEST, write_manifest
 from gitops_engine.mirror import reconcile_mirror
 
@@ -32,8 +32,8 @@ from gitops_engine.fieldplan import FieldChange
 from customer_registry_sync.generate import generate_from_dir, merge_datasets
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
 from customer_registry_sync.identity import IdentityStore
-from customer_registry_sync.linear_files import IGNORE_FILE, IGNORE_FORMAT
 from customer_registry_sync.linear_client import LiveCustomer, parse_customer_node
+from customer_registry_sync.linear_overrides import OVERRIDES_FILE, load_overrides_file
 from customer_registry_sync.linear_schema import (
     LINEAR_SCHEMA,
     LinearCustomer,
@@ -278,10 +278,12 @@ def test_cli_generate_writes_rows_and_csvs_that_check_accepts(tmp_path, capsys, 
     assert offline_errors(tmp_path) == []
 
 
-def test_offline_errors_on_invalid_ignore_file(tmp_path):
+def test_offline_errors_no_longer_read_the_ignore_file(tmp_path):
+    # `check` and `deploy` refuse a legacy ignore file before planning
+    # (`deploy_plan.legacy_refused`); the offline errors no longer validate it
     _generated_tree(tmp_path)
-    (tmp_path / IGNORE_FILE).write_text("customers:\n  - linear_id: lin_a\n")
-    assert offline_errors(tmp_path) == ["linear-ignore.yaml:2: missing reason"]
+    (tmp_path / "linear-ignore.yaml").write_text("customers:\n  - linear_id: lin_a\n")
+    assert offline_errors(tmp_path) == []
 
 
 def test_offline_errors_on_stale_csv(tmp_path):
@@ -377,16 +379,17 @@ def test_identity_offline_errors_include_table_errors(tmp_path):
     ]
 
 
-# ---- the one managed/ignored partition ----
+# ---- the one managed/hidden partition ----
 
-_IGNORE_OWN = (
-    "customers:\n  - linear_id: lin_own\n    name: Pied Piper\n    reason: our own company\n"
-)
+_HIDE_OWN = "customers:\n  own:\n    hidden: {reason: our own company}\n"
 
 
-def _ignore_list(tmp_path, text=_IGNORE_OWN):
-    (tmp_path / IGNORE_FILE).write_text(text)
-    return load_ignore(tmp_path / IGNORE_FILE, IGNORE_FORMAT)
+def _hidden_own(tmp_path):
+    """(hidden, table): `own` is hidden in linear-overrides.yaml, and its identity
+    records Pied Piper's Linear id, through which the live row reaches it."""
+    table = _store(tmp_path, ("own", ["Pied Piper"], [], {"linear": "lin_own"}))
+    (tmp_path / OVERRIDES_FILE).write_text(_HIDE_OWN)
+    return hidden_from(load_overrides_file(tmp_path)), table
 
 
 def _node(
@@ -424,8 +427,8 @@ _TWO_STAMPED = (
 )
 
 
-def test_ignored_not_in_drift(tmp_path):
-    ign = _ignore_list(tmp_path)
+def test_hidden_not_in_drift(tmp_path):
+    hid, table = _hidden_own(tmp_path)
     acme = _managed_acme()
     own_then = _node("lin_own", "Pied Piper", domains=["piedpiper.example.test"])
     own_now = _node(
@@ -436,30 +439,30 @@ def test_ignored_not_in_drift(tmp_path):
         updated="2026-10-05T00:00:00.000Z",
     )
     state = [_state_from(acme), _state_from(own_then)]
-    res = run_check([_desired_acme()], state, [acme, own_now], ignore=ign)
+    res = run_check([_desired_acme()], state, [acme, own_now], table, hidden=hid)
     assert not res.drift.any() and res.code == EXIT_OK
     assert [lv.id for lv in res.ignored] == ["lin_own"]
-    # an ignored customer deleted from Linear is not "deleted" drift either
-    res = run_check([_desired_acme()], state, [acme], ignore=ign)
+    # a hidden customer deleted from Linear is not "deleted" drift either
+    res = run_check([_desired_acme()], state, [acme], table, hidden=hid)
     assert not res.drift.any()
-    # control: without the ignore entry the same edit is drift
-    assert run_check([_desired_acme()], state, [acme, own_now]).drift.changed
+    # control: without the hidden entry the same edit is drift
+    assert run_check([_desired_acme()], state, [acme, own_now], table).drift.changed
 
 
-def test_ignored_not_in_plan(tmp_path):
-    ign = _ignore_list(tmp_path)
+def test_hidden_not_in_plan(tmp_path):
+    hid, table = _hidden_own(tmp_path)
     acme, own = _managed_acme(), _node("lin_own", "Pied Piper", domains=["piedpiper.example.test"])
     state = [_state_from(acme), _state_from(own)]
-    res = run_check([_desired_acme()], state, [acme, own], ignore=ign)
+    res = run_check([_desired_acme()], state, [acme, own], table, hidden=hid)
     assert res.plan.orphans == [] and not res.plan.updates and not res.plan.creates
     assert [d.name for d in res.plan.unchanged] == ["Acme"]
-    assert run_check([_desired_acme()], state, [acme, own]).plan.orphans == [own]
+    assert run_check([_desired_acme()], state, [acme, own], table).plan.orphans == [own]
 
 
-def test_ignored_not_untracked(tmp_path):
-    # the ignored customer carries the canonical id too and comes first, so an
+def test_hidden_not_untracked(tmp_path):
+    # the hidden customer carries the canonical id too and comes first, so an
     # unpartitioned planner would pair it and report its extra domain
-    ign = _ignore_list(tmp_path)
+    hid, table = _hidden_own(tmp_path)
     acme = _managed_acme()
     own = _node(
         "lin_own",
@@ -467,19 +470,20 @@ def test_ignored_not_untracked(tmp_path):
         domains=["acme.example.test", "piedpiper.example.test"],
         xids=["acme"],
     )
-    res = run_check([_desired_acme()], [], [own, acme], ignore=ign)
+    res = run_check([_desired_acme()], [], [own, acme], table, hidden=hid)
     assert res.untracked == []
     assert [d.name for d in res.plan.unchanged] == ["Acme"]
-    # it resolves to Acme's identity, so it is an ignore conflict instead
+    # it shares Acme's canonical id, so it is a hidden conflict instead
     assert res.failures == [
         (
-            "desired record 'Acme' shares source id 'acme' with ignored Linear customer 'Pied Piper' "
-            "(linear-ignore.yaml:2). Remove that entry or change Acme."
+            "desired record 'Acme' shares source id 'acme' with hidden Linear customer "
+            "'Pied Piper' (entry own, linear-overrides.yaml). "
+            "Remove that entry from linear-overrides.yaml or change Acme."
         )
     ]
     assert res.code == EXIT_DRIFT
     # control: unpartitioned, both carry the canonical id, so the planner refuses
-    assert run_check([_desired_acme()], [], [own, acme]).plan.errors == [_TWO_STAMPED]
+    assert run_check([_desired_acme()], [], [own, acme], table).plan.errors == [_TWO_STAMPED]
 
 
 def test_linear_edit_to_stub_is_not_drift(tmp_path):
@@ -597,13 +601,13 @@ def test_record_with_no_identity_makes_its_live_customer_no_orphan(tmp_path):
     assert orphans([acme], load_identities(tmp_path / IDENTITIES_FILE), entries) == []
 
 
-def test_ignored_is_not_an_orphan(tmp_path):
-    ign = _ignore_list(tmp_path)
+def test_hidden_is_not_an_orphan(tmp_path):
+    hid, table = _hidden_own(tmp_path)
     own = _node("lin_own", "Pied Piper", domains=["piedpiper.example.test"])
-    res = run_check([], [], [own], ignore=ign, entries=[])
+    res = run_check([], [], [own], table, hidden=hid, entries=[])
     assert res.orphans == [] and res.code == EXIT_OK
-    # control: without the ignore entry the same customer is an orphan
-    assert run_check([], [], [own], entries=[]).orphans == [own]
+    # control: without the hidden entry the same customer is an orphan
+    assert run_check([], [], [own], table, entries=[]).orphans == [own]
 
 
 def test_live_only_revenue_tier_and_domain_are_planned_clears(tmp_path):

@@ -6,18 +6,19 @@ longer matches live, judged by `content_hash` of the deployable fields (NOT
 changed (state≠live), added (live row with no state row), deleted (state row
 with no live row). `check` also fails on unacknowledged destructive changes,
 planner errors (two desired rows on one identity, duplicates with no canonical or
-recorded Linear id), ignore conflicts, a Linear customer in no dataset (an orphan), a
+recorded Linear id), hidden conflicts, a Linear customer in no dataset (an orphan), a
 live customer resolving to two identities, a pending Linear edit in
 `linear-overrides.yaml`, and an override that cannot apply (`override_findings`). Exit 3
 on any of these or a plan-time abort; 0 when in sync.
 
-Known duplicates, withheld domains, unused identities, records with no identity, stale
-ignore entries, redundant pins, deleted customers and the ignored-customer list are
-reported, never failed. The registry owns every written field, so there are no
+Known duplicates, withheld domains, unused identities, records with no identity,
+redundant pins, deleted customers and the hidden-customer list are reported, never
+failed. The registry owns every written field, so there are no
 untracked values: a live value the registry lacks is a planned removal or clear.
 
-Live customers are split once into managed and ignored (`gitops_engine.ignore.partition_live`);
-drift and the plan see only the managed set. A Linear edit to a stub (a `linear_owned`
+Live customers are split once into managed and hidden (`gitops_engine.hidden.partition_hidden`,
+by the `hidden` entries and `hidden_name_prefixes` of `linear-overrides.yaml`); drift,
+the orphan check and the plan see only the managed set. A Linear edit to a stub (a `linear_owned`
 row) is not drift.
 
 The checks themselves are the engine's (`gitops_engine.check.run_check`, with drift
@@ -27,8 +28,7 @@ the customer schema, identity spec and dataset records, and keeps the orphan and
 pending lines, which name this tool's commands and files.
 
 `offline_errors` is the part of `check` that needs no Linear access: the
-generated directories must match their manifests (no hand edits), the ignore
-file must be valid, the identity table and datasets must resolve cleanly, and
+generated directories must match their manifests (no hand edits), the identity table and datasets must resolve cleanly, and
 `<data_dir>/linear/` and the two CSVs must equal what `generate` produces from
 the datasets and overrides now.
 """
@@ -44,7 +44,7 @@ from gitops_engine import check as engine
 from gitops_engine.check import CheckResult, DatasetHooks
 from gitops_engine.drift import detect_drift as engine_detect_drift
 from gitops_engine.datasets import DATASETS_SUBDIR
-from gitops_engine.ignore import IgnoreList, ignore_errors
+from gitops_engine.hidden import Hidden
 from gitops_engine.overrides import (
     PENDING_ADD,
     OverrideFindings,
@@ -72,7 +72,7 @@ from .identity import (
     load_identities,
 )
 from .linear_client import LiveCustomer
-from .linear_files import IGNORE_FILE, IGNORE_FORMAT
+from .linear_files import no_hidden
 from .linear_found import status_errors
 from .identity import strip_status_suffix
 from .linear_overrides import (
@@ -210,14 +210,14 @@ def run_check(
     live: list[LiveCustomer],
     table: IdentityTable | None = None,
     *,
-    ignore: IgnoreList | None = None,
+    hidden: Hidden | None = None,
     scope: str | None = None,
     entries: list[DatasetRecord] | None = None,
     other_live: list[LiveCustomer] | None = None,
     held: Mapping[str, str] | None = None,
 ) -> CheckResult:
     """The engine's `run_check` with the customer schema, identity spec and dataset
-    records bound. `ignore=None` is the built-in prefix only; `entries=None` skips the
+    records bound. `hidden=None` hides the built-in prefix only; `entries=None` skips the
     orphan, unused-identity and no-identity checks. `other_live` are further live
     customers outside this run (a scoped run's out-of-scope rows) whose domains still
     count as held. `held` names the rows a pending decision keeps from being written."""
@@ -230,7 +230,7 @@ def run_check(
         schema=LINEAR_SCHEMA,
         spec=IDENTITY_SPEC,
         implicit=implicit_identity,
-        ignore=ignore if ignore is not None else IgnoreList(IGNORE_FILE),
+        hidden=hidden if hidden is not None else no_hidden(),
         scope=scope,
         entries=entries,
         hooks=dataset_hooks(table),
@@ -279,7 +279,6 @@ def offline_errors(data_dir: Path) -> list[str]:
     status and a stale `generate` output (`linear/` and both CSVs); empty when clean."""
     root = Path(data_dir)
     errors: list[str] = datasets_errors(root)
-    errors += ignore_errors(root / IGNORE_FILE, IGNORE_FORMAT)
     errors += engine.manifest_errors(root, generated_dirs(root))
     table = load_identities(root / IDENTITIES_FILE)
     cfg = load_datasets_config(root)

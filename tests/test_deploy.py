@@ -855,19 +855,21 @@ def test_merge_by_hand_restamps_one_row(tmp_path):
     assert not plan.creates and not plan.orphans and not plan.errors
 
 
-# ---- ignore list at write time; apply guards ----
+# ---- hidden rows at write time; apply guards ----
 
 
-def _ignore_list(tmp_path, text):
-    from gitops_engine.ignore import load_ignore
+def _hidden(tmp_path, text):
+    from gitops_engine.hidden import hidden_from
 
-    from customer_registry_sync.linear_files import IGNORE_FILE, IGNORE_FORMAT
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE, load_overrides_file
 
-    (tmp_path / IGNORE_FILE).write_text(text)
-    return load_ignore(tmp_path / IGNORE_FILE, IGNORE_FORMAT)
+    (tmp_path / OVERRIDES_FILE).write_text(text)
+    return hidden_from(load_overrides_file(tmp_path))
 
 
-def test_apply_never_writes_ignored_row_unscoped(tmp_path, recording_linear):
+def test_apply_never_writes_hidden_row_unscoped(tmp_path, recording_linear):
+    from customer_registry_sync.linear_files import hidden_reason
+
     table = _table(tmp_path, ("acme", ["Acme"], ["acme.example.test"], {"notion": "acme"}))
     [d] = _rows(table, (NOTION, "acme", _acme(arr=9.0)))
     lv = recording_linear.node(
@@ -875,24 +877,27 @@ def test_apply_never_writes_ignored_row_unscoped(tmp_path, recording_linear):
     )
     plan = plan_deploy([d], [lv], table)
     assert len(plan.updates) == 1
-    # between plan and write, someone adds Acme to the ignore list
-    ign = _ignore_list(tmp_path, "customers:\n  - linear_id: lin_1\n    reason: now a test org\n")
+    # between plan and write, someone hides Acme; the re-read row resolves to it
+    # through the identity table
+    hidden = _hidden(tmp_path, "customers:\n  acme:\n    hidden: {reason: now a test org}\n")
     client = recording_linear([lv])
-    res = apply_deploy(plan, client, snapshot_dir=tmp_path / "snaps", ignore=ign)
+    res = apply_deploy(
+        plan,
+        client,
+        snapshot_dir=tmp_path / "snaps",
+        exclude=hidden_reason(hidden, table, scope=None),
+    )
     assert client.updates() == [] and res.failure is None
     assert [(t.name, why) for t, _, why in plan.aborts] == [
-        ("Acme [Active]", "ignored at write time: now a test org")
+        ("Acme [Active]", "hidden at write time: now a test org")
     ]
 
 
 def test_apply_writes_zzz_row_when_scoped(tmp_path, recording_linear):
-    from gitops_engine.ignore import BUILTIN_PREFIX, load_ignore
-
-    from customer_registry_sync.linear_files import IGNORE_FORMAT
+    from gitops_engine.ignore import BUILTIN_PREFIX
 
     scope = f"{BUILTIN_PREFIX}1a2b3c4d-"
     rows = generate_linear([_acme(canonical_name=f"{scope}Acme", arr=9.0)])
-    ign = load_ignore(tmp_path / "missing.yaml", IGNORE_FORMAT)  # the built-in prefix only
 
     def run(scope_arg):
         lv = recording_linear.node(
@@ -904,7 +909,8 @@ def test_apply_writes_zzz_row_when_scoped(tmp_path, recording_linear):
         )
         plan = plan_deploy(rows, [lv], IdentityTable())
         client = recording_linear([lv])
-        apply_deploy(plan, client, snapshot_dir=tmp_path / "snaps", ignore=ign, scope=scope_arg)
+        # no `exclude`: the built-in prefix only
+        apply_deploy(plan, client, snapshot_dir=tmp_path / "snaps", scope=scope_arg)
         return plan, client
 
     plan, client = run(scope)
@@ -913,7 +919,7 @@ def test_apply_writes_zzz_row_when_scoped(tmp_path, recording_linear):
     plan, client = run(None)  # an unscoped apply never writes the harness's rows
     assert client.updates() == []
     assert [why for _, _, why in plan.aborts] == [
-        "ignored at write time: live e2e harness throwaway records (built in; always present)"
+        "hidden at write time: live e2e harness throwaway records (built in; always present)"
     ]
 
 

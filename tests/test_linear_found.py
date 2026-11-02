@@ -4,7 +4,7 @@ import shutil
 from datetime import date
 
 from gitops_engine.datasets import dataset_dir
-from gitops_engine.ignore import BUILTIN_PREFIX, load_ignore, partition_live
+from gitops_engine.ignore import BUILTIN_PREFIX
 from gitops_engine.manifest import MANIFEST, write_manifest
 from gitops_engine.mirror import reconcile_mirror
 
@@ -19,7 +19,7 @@ from customer_registry_sync.deploy import plan_deploy
 from customer_registry_sync.generate import generate_from_dir
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
 from customer_registry_sync.identity import IdentityStore
-from customer_registry_sync.linear_files import IGNORE_FILE, IGNORE_FORMAT
+from customer_registry_sync.linear_files import no_hidden, partition_hidden
 from customer_registry_sync.linear_client import parse_customer_node
 from customer_registry_sync.linear_found import (
     STUB_NOTE,
@@ -70,12 +70,11 @@ def _mirror(tmp_path, *nodes):
     write_manifest(tmp_path / STATE_SUBDIR, "sync-inbound")
 
 
-def _managed(tmp_path):
-    ignore = load_ignore(tmp_path / IGNORE_FILE, IGNORE_FORMAT)
+def _managed(tmp_path, table):
     live = [
         LINEAR_SCHEMA.state_to_live(r) for r in load_state(tmp_path) if r.linear_synced is not None
     ]
-    return partition_live(live, ignore, LINEAR_SCHEMA, scope=None)[0]
+    return partition_hidden(live, no_hidden(), table, scope=None)[0]
 
 
 def _ingest(run_cli, tmp_path):
@@ -93,11 +92,11 @@ def _identities(tmp_path):
 
 
 def _build(tmp_path, today=DAY1):
-    """`build_linear_found` over the tree's mirror, as `ingest` calls it (no ignore file)."""
+    """`build_linear_found` over the tree's mirror, as `ingest` calls it (no overrides file)."""
     store = IdentityStore(tmp_path / IDENTITIES_FILE)
     entries = load_datasets(tmp_path, BOTH)
     append_record_identities(store, entries)
-    managed = sorted(_managed(tmp_path), key=lambda lv: lv.id)
+    managed = sorted(_managed(tmp_path, store.table), key=lambda lv: lv.id)
     return store, build_linear_found(
         managed, store, entries, load_datasets_config(tmp_path), today=today
     )
@@ -280,21 +279,30 @@ def test_linear_only_domain_appended_to_identity(tmp_path, run_cli):
     ]
 
 
-def test_ignored_customer_not_stubbed_and_gets_no_identity(tmp_path, run_cli):
+def test_hidden_customer_not_stubbed(tmp_path, run_cli):
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE
+
     _tree(
         tmp_path,
         nodes=[
             _node("lin_own", "Pied Piper", domains=["piedpiper.example.test"]),
             _node("lin_z", f"{BUILTIN_PREFIX}alpha", domains=["zzz.example.test"]),
+            _node("lin_s", "sandbox-lab", domains=["lab.example.test"]),
             _node("lin_b", "Beta Corp", domains=["beta.example.test"]),
         ],
     )
-    (tmp_path / IGNORE_FILE).write_text(
-        "customers:\n  - linear_id: lin_own\n    name: Pied Piper\n    reason: our own company\n"
+    # hidden by id: its identity (which `hide` appends) carries the Linear id
+    store = IdentityStore(tmp_path / IDENTITIES_FILE)
+    store.add_identity("own", names=["Pied Piper"], domains=[], sources={"linear": "lin_own"})
+    store.save()
+    (tmp_path / OVERRIDES_FILE).write_text(
+        "customers:\n  own:\n    hidden: {reason: our own company}\n"
+        "hidden_name_prefixes:\n  - {prefix: sandbox-, reason: manual experiments}\n"
     )
     assert _ingest(run_cli, tmp_path) == 0
     assert list(_stubs(tmp_path)) == ["beta"]
-    assert list(_identities(tmp_path)) == ["beta"]
+    # prefix-hidden customers get no identity either; the hidden one keeps its own
+    assert list(_identities(tmp_path)) == ["own", "beta"]
 
 
 def test_same_name_live_customers_make_one_stub(tmp_path, capsys, run_cli):
