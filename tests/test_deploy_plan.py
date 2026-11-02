@@ -127,3 +127,37 @@ def test_unreadable_ignore_file_raises(tmp_path, capsys):
     with pytest.raises(ValueError, match="cannot plan"):
         offline_plan(tmp_path)
     assert "ERROR:" in capsys.readouterr().err
+
+
+def test_pending_decision_holds_the_row_and_fails_the_check_exit(tmp_path):
+    _tree(tmp_path)
+    (tmp_path / "linear-overrides.yaml").write_text(
+        "customers:\n  acme:\n    pending: {revenue: 9}\n"
+    )
+    plan, code = offline_plan(tmp_path)
+    assert [(d.external_ids, why) for d, _, why in plan.aborts] == [
+        (["acme"], "pending decision in linear-overrides.yaml")
+    ]
+    assert len(plan.unchanged) == 2 and code == 3
+
+
+def test_override_failure_fails_the_check_exit(tmp_path):
+    _tree(tmp_path)
+    (tmp_path / "linear-overrides.yaml").write_text("customers:\n  ghost:\n    pin: {revenue: 9}\n")
+    plan, code = offline_plan(tmp_path)
+    assert len(plan.unchanged) == 3 and code == 3
+
+
+def test_invalid_overrides_file_or_retire_file_raises(tmp_path, capsys):
+    _tree(tmp_path)
+    (tmp_path / "linear-overrides.yaml").write_text(
+        "customers:\n  acme:\n    pin: {status: null}\n"
+    )
+    with pytest.raises(ValueError, match="cannot plan"):
+        offline_plan(tmp_path)
+    assert "status cannot be pinned empty" in capsys.readouterr().err
+    (tmp_path / "linear-overrides.yaml").unlink()
+    (tmp_path / "linear-retire.yaml").write_text("{}\n")
+    with pytest.raises(ValueError, match="cannot plan"):
+        offline_plan(tmp_path)
+    assert "run adopt-live" in capsys.readouterr().err

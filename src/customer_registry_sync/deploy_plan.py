@@ -2,10 +2,11 @@
 the state mirror standing in for live Linear.
 
 `load_inputs` reads what both commands plan from (the desired rows, the state
-mirror, `identities.yaml` and `linear-ignore.yaml`). `plan_for_deploy` is `deploy`'s
-plan: one partition of live, the ignore conflicts, then `plan_deploy`.
-`check_for` is `check`'s `run_check` call, and `check_exit` its exit code, offline
-errors included.
+mirror, `identities.yaml`, `linear-ignore.yaml` and `linear-overrides.yaml`), and
+refuses a data dir that still holds a legacy file or an invalid overrides file.
+`plan_for_deploy` is `deploy`'s plan: one partition of live, the ignore conflicts, then
+`plan_deploy`, with the rows a pending decision holds aborted. `check_for` is `check`'s
+`run_check` call, and `check_exit` its exit code, offline and override findings included.
 """
 
 from __future__ import annotations
@@ -16,22 +17,29 @@ from pathlib import Path
 
 from gitops_engine.check import CheckResult
 from gitops_engine.ignore import IgnoreList, load_ignore, partition_live
-from gitops_engine.retire import RetireEntry, load_retire
+from gitops_engine.overrides import OverrideFindings, Overrides, held_rows, override_errors
 
-from .check import EXIT_DRIFT, offline_errors, run_check
+from .check import EXIT_DRIFT, offline_errors, override_findings, run_check
 from .datasets import load_datasets, load_datasets_config
 from .deploy import DeployPlan, plan_deploy
 from .identity import IDENTITIES_FILE, IdentityTable, load_identities
 from .linear_client import LiveCustomer
 from .linear_files import IGNORE_FILE, IGNORE_FORMAT, RETIRE_FILE, ignore_conflicts
+from .linear_overrides import OVERRIDES_FILE, OVERRIDES_FORMAT, load_overrides_file
 from .linear_schema import LINEAR_SCHEMA, LinearCustomer
 from .writers import DESIRED_SUBDIR, load_desired, load_state
 
+# The legacy files (`linear_files.LEGACY_FILES`) whose presence refuses `check` and
+# `deploy`. `linear-ignore.yaml` is still read until hidden overrides replace it.
+LEGACY_GUARDED: tuple[str, ...] = (RETIRE_FILE,)
+
 __all__ = [
+    "LEGACY_GUARDED",
     "DeployPlanning",
     "PlanInputs",
     "check_exit",
     "check_for",
+    "legacy_refused",
     "load_inputs",
     "load_state",
     "offline_plan",
@@ -95,14 +103,42 @@ class PlanInputs:
     state: list[LinearCustomer]
     table: IdentityTable
     ignore: IgnoreList
+    overrides: Overrides
+
+
+def legacy_refused(data_dir: Path) -> bool:
+    """True, after printing why, when the data dir still holds a legacy file this
+    version no longer reads: running on would silently drop its decisions."""
+    present = [name for name in LEGACY_GUARDED if (Path(data_dir) / name).exists()]
+    for name in present:
+        print(f"ERROR: {name} is no longer read by v0.3.0: run adopt-live", file=sys.stderr)
+    return bool(present)
+
+
+def load_overrides_checked(data_dir: Path) -> Overrides | None:
+    """`linear-overrides.yaml` (missing = no entries); None after printing every error
+    when the file is invalid. A deploy cannot plan without its hidden and deleted
+    entries."""
+    errors = override_errors(Path(data_dir) / OVERRIDES_FILE, OVERRIDES_FORMAT, LINEAR_SCHEMA)
+    for e in errors:
+        print(f"ERROR: {e}", file=sys.stderr)
+    if errors:
+        return None
+    return load_overrides_file(data_dir)
 
 
 def load_inputs(
     data_dir: Path, scope: str | None, *, require_desired: bool = False
 ) -> PlanInputs | None:
-    """The desired rows and state mirror (in scope), the identity table and the ignore
-    list; None after printing why one cannot be read. With `require_desired`, an
-    unscoped run with no desired rows is refused too (`generate` has not run)."""
+    """The desired rows and state mirror (in scope), the identity table, the ignore
+    list and the overrides; None after printing why one cannot be read, or when a
+    legacy file is still present. With `require_desired`, an unscoped run with no
+    desired rows is refused too (`generate` has not run)."""
+    if legacy_refused(data_dir):
+        return None
+    overrides = load_overrides_checked(data_dir)
+    if overrides is None:
+        return None
     desired = scope_recs(load_desired(data_dir), scope)
     if require_desired and not desired and not scope:
         print(f"No {data_dir}/{DESIRED_SUBDIR}/* found — run `generate` first.", file=sys.stderr)
@@ -112,7 +148,7 @@ def load_inputs(
     ignore = load_ignore_file(data_dir)
     if table is None or ignore is None:
         return None
-    return PlanInputs(data_dir, desired, state, table, ignore)
+    return PlanInputs(data_dir, desired, state, table, ignore, overrides)
 
 
 @dataclass
@@ -122,37 +158,30 @@ class DeployPlanning:
     reports: list[str] = field(default_factory=list)  # stubs of ignored customers: note
 
 
-def load_retire_file(data_dir: Path) -> dict[str, RetireEntry]:
-    return load_retire(data_dir / RETIRE_FILE, LINEAR_SCHEMA)
-
-
 def plan_for_deploy(
     inp: PlanInputs,
     all_live: list[LiveCustomer],
     scope: str | None,
-    *,
-    retire: dict[str, RetireEntry] | None = None,
 ) -> DeployPlanning:
-    """`deploy`'s plan against `all_live`, every live customer Linear lists. `retire`
-    defaults to `linear-retire.yaml`."""
-    retire = retire if retire is not None else load_retire_file(inp.data_dir)
+    """`deploy`'s plan against `all_live`, every live customer Linear lists. A row with
+    a pending decision in the overrides file is aborted, not written."""
     managed, ignored, other = partitioned(all_live, inp.ignore, scope)
     conflicts, reports = ignore_conflicts(
         ignored, inp.ignore, entries(inp.data_dir), inp.desired, inp.table, scope=scope
     )
     plan = plan_deploy(
-        inp.desired, managed, inp.table, state=inp.state, retire=retire, other_live=other
+        inp.desired,
+        managed,
+        inp.table,
+        state=inp.state,
+        other_live=other,
+        held=held_rows(inp.overrides),
     )
     return DeployPlanning(plan, conflicts, reports)
 
 
 def check_for(inp: PlanInputs, all_live: list[LiveCustomer], scope: str | None) -> CheckResult:
     """`check`'s `run_check` against `all_live`, every live customer Linear lists."""
-    retire = load_retire_file(inp.data_dir)
-    if scope:
-        # a scoped run only sees its own rows; keep retire entries for those rows
-        in_scope = {d.external_ids[0] for d in inp.desired if d.external_ids}
-        retire = {k: v for k, v in retire.items() if k in in_scope}
     live = scope_live(all_live, scope)
     in_scope_ids = {lv.id for lv in live}
     return run_check(
@@ -160,17 +189,18 @@ def check_for(inp: PlanInputs, all_live: list[LiveCustomer], scope: str | None) 
         inp.state,
         live,
         inp.table,
-        retire=retire,
         ignore=inp.ignore,
         scope=scope,
         entries=entries(inp.data_dir),
         other_live=[lv for lv in all_live if lv.id not in in_scope_ids],
+        held=held_rows(inp.overrides),
     )
 
 
-def check_exit(res: CheckResult, offline: list[str]) -> int:
-    """`check`'s exit: the live checks' code, else EXIT_DRIFT on any offline error."""
-    return res.code or (EXIT_DRIFT if offline else 0)
+def check_exit(res: CheckResult, offline: list[str], findings: OverrideFindings) -> int:
+    """`check`'s exit: the live checks' code, else EXIT_DRIFT on any offline error, any
+    override failure or any pending decision."""
+    return res.code or (EXIT_DRIFT if offline or findings.failures or findings.pending else 0)
 
 
 def offline_plan(
@@ -182,7 +212,8 @@ def offline_plan(
     """`deploy`'s plan and `check`'s exit code, with no Linear access: `live` (default:
     every state-mirror row as the customer it records) stands in for Linear.
 
-    Raises ValueError when the identity table or ignore file cannot be read."""
+    Raises ValueError when the identity table, ignore file or overrides file cannot be
+    read, or a legacy file is present."""
     data_dir = Path(data_dir)
     inp = load_inputs(data_dir, scope)
     if inp is None:
@@ -191,4 +222,4 @@ def offline_plan(
         live = [state_to_live(r) for r in load_state(data_dir) if r.linear_synced is not None]
     planning = plan_for_deploy(inp, live, scope)
     res = check_for(inp, live, scope)
-    return planning.plan, check_exit(res, offline_errors(data_dir))
+    return planning.plan, check_exit(res, offline_errors(data_dir), override_findings(data_dir))

@@ -8,7 +8,8 @@ identity's extra domains. Each winner is projected to a `LinearCustomer`
 passthrough, and `external_ids` carrying the identity's canonical id as the
 stable dataset↔Linear link. `internal` records are not projected. A
 `linear-found` winner becomes a `linear_owned` row whose name keeps its Linear
-form. Produces desired config only; `linear_synced` is never emitted (state
+form. `linear-overrides.yaml` applies last (`linear_overrides`), so `linear/` holds the
+final desired rows. Produces desired config only; `linear_synced` is never emitted (state
 lives in `<data_dir>/linear-state/`).
 """
 
@@ -20,6 +21,7 @@ from pathlib import Path
 
 from gitops_engine.merge import group_by_identity as engine_group_by_identity
 from gitops_engine.merge import merge_by_identity
+from gitops_engine.overrides import Overrides, apply_overrides
 
 from .datasets import LINEAR_FOUND, DatasetRecord, load_datasets, load_datasets_config
 from .identity import (  # noqa: F401 (re-export)
@@ -31,7 +33,8 @@ from .identity import (  # noqa: F401 (re-export)
     resolve,
     strip_status_suffix,
 )
-from .linear_schema import LinearCustomer
+from .linear_overrides import load_overrides_file, pin_customer
+from .linear_schema import LINEAR_SCHEMA, LinearCustomer
 from .schema import CustomerRecord
 from .writers import slug_for
 
@@ -83,8 +86,9 @@ def generate_linear(dataset_recs: list[CustomerRecord]) -> list[LinearCustomer]:
 
 @dataclass
 class Generated:
-    rows: list[LinearCustomer]  # desired rows for linear/, sorted by name
+    rows: list[LinearCustomer]  # desired rows for linear/, overrides applied, sorted by name
     winners: list[DatasetRecord]  # one per identity, identity domains added; the CSV input
+    upstream: list[LinearCustomer]  # the rows before overrides, sorted by name
 
 
 def canonical_id_for(entry: DatasetRecord, table: IdentityTable) -> str:
@@ -124,8 +128,10 @@ def merge_datasets(
     entries: list[DatasetRecord],
     table: IdentityTable,
     priority: list[str],
+    overrides: Overrides | None = None,
 ) -> Generated:
-    """One row per identity; the highest-priority record wins whole."""
+    """One row per identity; the highest-priority record wins whole. `overrides` apply
+    last, to the rows only: the winners (the CSVs) stay as upstream has them."""
     rows: list[LinearCustomer] = []
     winners: list[DatasetRecord] = []
     for cid, winner in merge_by_identity(
@@ -145,12 +151,19 @@ def merge_datasets(
             rows.append(row)
     rows.sort(key=lambda x: x.name.lower())
     winners.sort(key=lambda w: w.record.canonical_name.lower())
-    return Generated(rows=rows, winners=winners)
+    final = rows
+    if overrides is not None:
+        final = apply_overrides(rows, overrides, schema=LINEAR_SCHEMA, pin=pin_customer)
+        final.sort(key=lambda x: x.name.lower())  # a pinned name may move a row
+    return Generated(rows=final, winners=winners, upstream=rows)
 
 
 def generate_from_dir(data_dir: Path) -> Generated:
-    """`merge_datasets` over `<data_dir>/datasets/*` and `<data_dir>/identities.yaml`."""
+    """`merge_datasets` over `<data_dir>/datasets/*`, `<data_dir>/identities.yaml` and
+    `<data_dir>/linear-overrides.yaml`. Raises `ValueError` on an overrides file that is
+    not the overrides shape."""
     root = Path(data_dir)
     cfg = load_datasets_config(root)
     table = load_identities(root / IDENTITIES_FILE)
-    return merge_datasets(load_datasets(root, cfg), table, cfg.names)
+    overrides = load_overrides_file(root)
+    return merge_datasets(load_datasets(root, cfg), table, cfg.names, overrides)

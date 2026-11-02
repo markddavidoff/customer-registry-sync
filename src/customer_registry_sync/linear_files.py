@@ -1,8 +1,9 @@
 """The Linear sync's hand-curated files, declared on the engine's loaders.
 
-`linear-ignore.yaml` and `linear-retire.yaml` are read and written by `gitops_engine`
-(`ignore`, `retire`); this module names them for Linear customers and binds the
-engine's callbacks for `ignore_conflicts`.
+`linear-overrides.yaml` is named in `linear_overrides`. `linear-ignore.yaml` is read and
+written by `gitops_engine.ignore`; this module names it for Linear customers and binds
+the engine's callbacks for `ignore_conflicts`. `linear-retire.yaml` is no longer read:
+`LEGACY_FILES` names the files a data repo must migrate away from (`adopt-live`).
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from .identity import (
     strip_status_suffix,
 )
 from .linear_client import LiveCustomer
+from .linear_overrides import OVERRIDES_FILE
 from .linear_schema import LINEAR_SCHEMA, LinearCustomer
 from .schema import CustomerRecord
 
@@ -35,7 +37,11 @@ SNAPSHOT_SUBDIR = "linear-snapshots"
 # The curated files `generate`, `check` and `deploy` read directly, as names relative
 # to the registry's `data_dir`. A change to any of them changes what `deploy` may
 # write, so each triggers the deploy workflow.
-CURATED_INPUTS: tuple[str, ...] = (IDENTITIES_FILE, IGNORE_FILE, DATASETS_FILE, RETIRE_FILE)
+CURATED_INPUTS: tuple[str, ...] = (IDENTITIES_FILE, OVERRIDES_FILE, DATASETS_FILE)
+
+# Files an earlier version read, which `linear-overrides.yaml` replaces. `check` and
+# `deploy` refuse to run while a guarded one exists (`deploy_plan.LEGACY_GUARDED`).
+LEGACY_FILES: tuple[str, ...] = (IGNORE_FILE, RETIRE_FILE)
 
 
 def ignore_conflicts(

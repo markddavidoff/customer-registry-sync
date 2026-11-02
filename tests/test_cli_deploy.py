@@ -312,9 +312,9 @@ def test_deploy_refuses_on_planner_errors_and_loads_identities(
     assert not (tmp_path / "linear-snapshots").exists()
 
 
-def test_deploy_passes_retire_file_to_planner(tmp_path, monkeypatch, recording_linear, run_cli):
-    from customer_registry_sync.linear_files import RETIRE_FILE
-
+def test_deploy_removes_a_domain_the_registry_lacks(
+    tmp_path, monkeypatch, recording_linear, run_cli
+):
     live = recording_linear.node(
         "lin_1", "Acme", domains=["acme.example.test", "old.example.org"], revenue=5, xids=["acme"]
     )
@@ -331,12 +331,34 @@ def test_deploy_passes_retire_file_to_planner(tmp_path, monkeypatch, recording_l
         ],
         [_state_from(live)],
     )
-    (tmp_path / RETIRE_FILE).write_text("acme:\n  domains: [old.example.org]\n")
     fake = recording_linear([live])
     monkeypatch.setattr(cli, "_linear_client", lambda: fake)
     assert run_cli(["deploy", "--apply", "--out-dir", str(tmp_path)]) == 0
     [(_, _, fields, retire, _)] = fake.updates()
     assert (fields, retire) == ({"domains": ["acme.example.test"]}, True)
+
+
+def test_deploy_holds_pending_row(tmp_path, monkeypatch, capsys, recording_linear, run_cli):
+    acme = recording_linear.node("lin_a", "Acme", revenue=1, xids=["acme"])
+    beta = recording_linear.node("lin_b", "Beta", revenue=1, xids=["beta"])
+    _seed(
+        tmp_path,
+        [
+            LinearCustomer(name="Acme", revenue=5, status="Active", external_ids=["acme"]),
+            LinearCustomer(name="Beta", revenue=5, status="Active", external_ids=["beta"]),
+        ],
+        [_state_from(acme), _state_from(beta)],
+    )
+    (tmp_path / "linear-overrides.yaml").write_text(
+        "customers:\n  acme:\n    pending: {revenue: 9}\n"
+    )
+    fake = recording_linear([acme, beta])
+    monkeypatch.setattr(cli, "_linear_client", lambda: fake)
+    assert run_cli(["deploy", "--apply", "--out-dir", str(tmp_path)]) == 3
+    out = capsys.readouterr().out
+    assert "ABORT: Acme — pending decision in linear-overrides.yaml" in out
+    assert [(c[1], c[2]) for c in fake.updates()] == [("lin_b", {"revenue": 5})]
+    assert (fake.rows["lin_a"].revenue, fake.rows["lin_b"].revenue) == (1, 5)
 
 
 def test_deploy_apply_reports_verification_failure(

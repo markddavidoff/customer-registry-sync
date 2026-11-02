@@ -15,7 +15,7 @@ import dataclasses
 from dataclasses import asdict, dataclass, field, fields
 from typing import TYPE_CHECKING, Any
 
-from gitops_engine.schema import Always, FieldSpec, KeepIfUnset, Nouns, SyncMark, Union
+from gitops_engine.schema import Always, FieldSpec, Nouns, SyncMark, Union
 
 from .linear_client import LiveCustomer
 
@@ -107,6 +107,10 @@ def content_hash_of(rec: LinearCustomer) -> str:
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
+# Optional scalar fields: an empty value clears Linear's.
+_OPTIONAL_SCALARS = ("revenue", "tier")
+
+
 class LinearSchema:
     """The engine's view of Linear customers (`RecordSchema[LinearCustomer, LiveCustomer]`).
 
@@ -117,16 +121,21 @@ class LinearSchema:
         FieldSpec("name", Always()),
         FieldSpec("status", Always(), required=True),
         FieldSpec("external_ids", Always(unordered=True)),
-        FieldSpec("domains", Union(exclusive=True, item="domain")),
-        FieldSpec("revenue", KeepIfUnset()),
-        FieldSpec("tier", KeepIfUnset()),
+        FieldSpec("domains", Union(exclusive=True, item="domain", clears=True)),
+        FieldSpec("revenue", Always(clears=True)),
+        FieldSpec("tier", Always(clears=True)),
     )
     id_field = "external_ids"
     snapshot_id_key = "linear_id"
     snapshot_version_key = "updated_at"
 
     def desired_value(self, d: LinearCustomer, field: str) -> Any:
-        return getattr(d, field)
+        """An empty optional scalar reads as None, the value Linear returns after a
+        clear, so a cleared row verifies against what Linear reads back."""
+        value = getattr(d, field)
+        if field in _OPTIONAL_SCALARS and value == "":
+            return None
+        return value
 
     def live_value(self, lv: LiveCustomer, field: str) -> Any:
         return getattr(lv, field)

@@ -169,6 +169,19 @@ def test_update_allows_null_with_retire():
     assert gql.calls[0]["input"] == {"revenue": None}
 
 
+@pytest.mark.parametrize(
+    ("field", "empty"),
+    [("name", ""), ("name", None), ("status_id", None), ("external_ids", [])],
+)
+def test_client_refuses_empty_name_even_with_retire(field, empty):
+    gql = _recording_gql()
+    with pytest.raises(LinearError, match=f"refusing to send empty {field}: Linear requires it"):
+        LinearClient(gql=gql).update_customer("c1", retire=True, **{field: empty})
+    with pytest.raises(LinearError, match=f"refusing to send empty {field}"):
+        LinearClient(gql=gql).create_customer(**{field: empty})
+    assert gql.calls == []
+
+
 def test_create_refuses_null():
     gql = _recording_gql()
     with pytest.raises(LinearError, match="refusing to send empty tier_id"):

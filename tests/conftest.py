@@ -148,7 +148,7 @@ def _live_teardown(request, run_prefix):
 class RecordingLinear:
     """In-memory Linear for apply/restore tests. Rows are built with the real
     `parse_customer_node`; writes apply the sent fields to the stored row, honour
-    the client's never-null rule, and log each call. When `snapshot_dir` is
+    the client's never-null rules, and log each call. When `snapshot_dir` is
     given, each write records which snapshot files existed at that moment."""
 
     STATUSES: ClassVar[dict[str, str]] = {"Active": "st_a", "Prospect": "st_p", "Churned": "st_c"}
@@ -239,6 +239,8 @@ class RecordingLinear:
         from customer_registry_sync.linear_client import LinearError
 
         for k, v in fields.items():
+            if k in ("name", "status_id", "external_ids") and v in (None, "", []):
+                raise LinearError(f"refusing to send empty {k}: Linear requires it")
             if (v is None or v == []) and not retire:
                 raise LinearError(f"refusing to send empty {k} without retire")
         self.calls.append(("update", cid, dict(fields), retire, self._snapshots()))

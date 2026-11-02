@@ -9,13 +9,13 @@ pre-apply snapshot, and verifies each written row (`gitops_engine.deploy`,
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from gitops_engine import deploy as engine
 from gitops_engine import snapshot as engine_snapshot
 from gitops_engine.deploy import ApplyResult, DeployPlan
 from gitops_engine.ignore import IgnoreList
-from gitops_engine.retire import RetireEntry
 from gitops_engine.snapshot import RestoreResult
 
 from .identity import IDENTITY_SPEC, IdentityTable, implicit_identity
@@ -33,11 +33,12 @@ def plan_deploy(
     table: IdentityTable | None = None,
     *,
     state: list[LinearCustomer] | None = None,
-    retire: dict[str, RetireEntry] | None = None,
     other_live: list[LiveCustomer] | None = None,
+    held: Mapping[str, str] | None = None,
 ) -> DeployPlan[LinearCustomer, LiveCustomer]:
     """Desired rows against live Linear customers (`gitops_engine.deploy.plan_deploy`).
-    `state` is the `linear-state/` mirror; `retire` is keyed by first external id."""
+    `state` is the `linear-state/` mirror; `held` maps a canonical id to why its row is
+    not written (`gitops_engine.overrides.held_rows`: a pending decision)."""
     return engine.plan_deploy(
         desired,
         live,
@@ -46,8 +47,8 @@ def plan_deploy(
         spec=IDENTITY_SPEC,
         implicit=implicit_identity,
         state=state,
-        retire=retire,
         other_live=other_live,
+        held=held,
     )
 
 

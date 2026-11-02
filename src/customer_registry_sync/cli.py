@@ -51,18 +51,26 @@ from gitops_engine.ignore import (
 )
 from gitops_engine.manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
 from gitops_engine.mirror import reconcile_mirror
+from gitops_engine.overrides import override_errors
 
 from .changed import deploy_inputs
-from .check import EXIT_OPERROR, offline_errors, orphan_lines
+from .check import (
+    EXIT_DRIFT,
+    EXIT_OPERROR,
+    offline_errors,
+    orphan_lines,
+    override_findings,
+    pending_lines,
+)
 from .config import DEFAULT_CONFIG_NAME, ConfigError, config_value, load_config
 from .datasets import LINEAR_FOUND, NOTION, load_datasets, load_datasets_config
 from .deploy import apply_deploy, restore
 from .deploy_plan import (
     check_exit,
     check_for,
+    legacy_refused,
     load_ignore_file,
     load_inputs,
-    load_retire_file,
     plan_for_deploy,
     scope_live,
 )
@@ -75,6 +83,12 @@ from .linear_files import (
     SNAPSHOT_SUBDIR,
 )
 from .linear_found import append_record_identities, build_linear_found
+from .linear_overrides import (
+    OVERRIDES_FILE,
+    OVERRIDES_FORMAT,
+    load_overrides_file,
+    value_type_failures,
+)
 from .linear_schema import LINEAR_SCHEMA
 from .sources import SourceError
 from .tool_source import ToolSourceError, tool_source
@@ -231,6 +245,14 @@ def _cmd_ingest(args) -> int:
 def _cmd_generate(args) -> int:
     """Datasets merged by identity → `linear/` (with its manifest) and both CSVs."""
     out_dir = _out_dir(args)
+    errors = override_errors(out_dir / OVERRIDES_FILE, OVERRIDES_FORMAT, LINEAR_SCHEMA)
+    if not errors:
+        errors = value_type_failures(load_overrides_file(out_dir))
+    if errors:
+        print(f"ERROR: {OVERRIDES_FILE} is invalid; nothing written:", file=sys.stderr)
+        for e in errors:
+            print(f"  {e}", file=sys.stderr)
+        return 2
     generated = generate_from_dir(out_dir)
     recs = generated.rows
     if not generated.winners:
@@ -440,8 +462,7 @@ def _cmd_deploy(args) -> int:
     inp = load_inputs(out_dir, args.scope, require_desired=True)
     if inp is None:
         return 2
-    retire = load_retire_file(out_dir)
-    planning = plan_for_deploy(inp, client.list_customers(), args.scope, retire=retire)
+    planning = plan_for_deploy(inp, client.list_customers(), args.scope)
     plan, conflicts, reports = planning.plan, planning.conflicts, planning.reports
     _print_plan(plan)
     for msg in reports:
@@ -463,7 +484,7 @@ def _cmd_deploy(args) -> int:
     if plan.unacked:
         for msg in plan.unacked:
             print(f"  UNACKNOWLEDGED DESTRUCTIVE: {msg}")
-        print("REFUSED — destructive change(s) without a retire entry; nothing written.")
+        print("REFUSED — unacknowledged destructive change(s); nothing written.")
         return 3
     if not args.apply:
         print(
@@ -538,17 +559,20 @@ def _print_drift(drift) -> None:
         print(f"  DRIFT deleted: {s.name} (state {s.linear_synced.linear_id}, not live)")
 
 
-def _print_untracked(untracked) -> None:
-    for u in untracked:
-        what = f"domains += {u.value}" if u.field == "domains" else f"{u.field} = {u.value}"
-        print(f"  UNTRACKED: {u.name}: {what}")
-
-
 def _cmd_check(args) -> int:
+    out_dir = _out_dir(args)
+    if legacy_refused(out_dir):
+        return EXIT_OPERROR
+    # a malformed overrides file fails check before Linear is read
+    malformed = override_errors(out_dir / OVERRIDES_FILE, OVERRIDES_FORMAT, LINEAR_SCHEMA)
+    if malformed:
+        for msg in malformed:
+            print(f"  OVERRIDE: {msg}")
+        print(f"check FAILED: {OVERRIDES_FILE} is invalid; fix the OVERRIDE lines above")
+        return EXIT_DRIFT
     client = _linear_client()
     if client is None:
         return EXIT_OPERROR
-    out_dir = _out_dir(args)
     inp = load_inputs(out_dir, args.scope)
     if inp is None:
         return EXIT_OPERROR
@@ -558,6 +582,7 @@ def _cmd_check(args) -> int:
         print(f"ERROR: Linear read failed: {e}", file=sys.stderr)
         return EXIT_OPERROR
     res = check_for(inp, all_live, args.scope)
+    findings = override_findings(out_dir)
     ignore = inp.ignore
     drift, plan = res.drift, res.plan
     for line in ignored_lines(res.ignored, ignore, LINEAR_SCHEMA, scope=args.scope):
@@ -568,8 +593,6 @@ def _cmd_check(args) -> int:
     )
     _print_drift(drift)
     # failure lines first, then the plan, then what is only reported
-    for msg in res.stale:
-        print(f"  STALE RETIRE: {msg}")
     for msg in plan.unacked:
         print(f"  UNACKNOWLEDGED DESTRUCTIVE: {msg}")
     for lv in res.orphans:
@@ -579,18 +602,22 @@ def _cmd_check(args) -> int:
             print(f"  {line}")
     for msg in res.failures:
         print(f"  ERROR: {msg}")
+    for p in findings.pending:
+        for line in pending_lines(p):
+            print(f"  {line}")
+    for msg in findings.failures:
+        print(f"  OVERRIDE: {msg}")
     _print_plan(plan)
-    _print_untracked(res.untracked)
-    for msg in res.reports:
+    for msg in [*res.reports, *findings.reports]:
         print(f"  NOTE: {msg}")
     offline = offline_errors(out_dir)
     for msg in offline:
         print(f"  OFFLINE: {msg}")
-    code = check_exit(res, offline)
+    code = check_exit(res, offline, findings)
     if code == 0:
         print("IN SYNC")
-    elif res.code:
-        print("check FAILED: see the ERROR, DRIFT and OFFLINE lines above")
+    elif res.code or findings.failures or findings.pending:
+        print("check FAILED: see the ERROR, DRIFT, PENDING, OVERRIDE and OFFLINE lines above")
     else:
         print("OFFLINE CHECK FAILED — run the named generator, commit, re-run")
     return code

@@ -26,6 +26,10 @@ _CUSTOMER_FIELDS = (
 )
 
 
+# Fields a write never empties, `retire` or not: the never-null rule.
+_REQUIRED_INPUTS = ("name", "status_id", "external_ids")
+
+
 @dataclass
 class LiveCustomer:
     id: str
@@ -144,11 +148,14 @@ class LinearClient:
         """Map python field names to Linear input keys.
 
         Refuses a null or empty-list value unless ``retire`` is set, so a sync
-        can never erase a value in Linear by accident.
+        can never erase a value in Linear by accident. A required field (`name`,
+        `status_id`, `external_ids`) is refused when empty even under ``retire``.
         """
         key = {"status_id": "statusId", "tier_id": "tierId", "external_ids": "externalIds"}
         out: dict[str, Any] = {}
         for k, v in fields.items():
+            if k in _REQUIRED_INPUTS and (v is None or v == "" or v == []):
+                raise LinearError(f"refusing to send empty {k}: Linear requires it")
             if (v is None or v == []) and not retire:
                 raise LinearError(f"refusing to send empty {k} without retire")
             out[key.get(k, k)] = v

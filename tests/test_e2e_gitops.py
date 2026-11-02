@@ -143,9 +143,9 @@ def _live_domains(client, cid):
     return sorted(d.lower() for d in client.get_customer(cid).domains)
 
 
-def test_runbook5_linear_only_domain_survives_apply(live_client, run_prefix, tmp_path):
-    """A domain that exists only in Linear is never dropped by an apply (union
-    rule) while the planned revenue change still lands."""
+def test_runbook5_linear_only_domain_is_removed_on_apply(live_client, run_prefix, tmp_path):
+    """The registry owns domains: a domain that exists only in Linear is removed by an
+    apply, and the planned revenue change lands with it."""
     name = f"{run_prefix}rb5"
     registry_domain = f"{name}.invalid"
     linear_only = f"{name}-linear-only.invalid"
@@ -160,7 +160,7 @@ def test_runbook5_linear_only_domain_survives_apply(live_client, run_prefix, tmp
     # the registry knows only one of the two domains, plus a revenue change
     _write_desired(tmp_path, run_prefix, "rb5", revenue=5, domains=[registry_domain])
     assert _run("deploy", "--apply", out_dir=tmp_path, prefix=run_prefix) == 0
-    assert _live_domains(live_client, lv.id) == sorted([registry_domain, linear_only])
+    assert _live_domains(live_client, lv.id) == [registry_domain]
     assert _live_revenue(live_client, lv.id) == 5
 
 
