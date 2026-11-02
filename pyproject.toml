@@ -17,7 +17,7 @@ dependencies = [
 customer-registry-sync = "customer_registry_sync.cli:main"
 
 [tool.uv.sources]
-gitops-engine = { git = "https://github.com/markddavidoff/gitops-engine.git", tag = "v0.2.0" }
+gitops-engine = { path = "../../../../gitops-engine/.claude/worktrees/registry-owns-fields", editable = true }
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
