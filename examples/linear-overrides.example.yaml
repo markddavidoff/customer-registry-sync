@@ -1,0 +1,50 @@
+# Every decision that differs from upstream (the Notion dataset, or Linear for a
+# customer only Linear knows), keyed by the customer's canonical id: the key in
+# identities.yaml, and the first external id in linear/<file>.yaml.
+#
+# `generate` applies this file last, so linear/ holds the final desired rows.
+# `sync-inbound` also writes to it: it records edits made in Linear, and a
+# customer deleted in Linear. Comments you add here survive those writes.
+customers:
+  acme-robotics:
+    # pin: values that win over upstream until you delete the pin. Pinnable
+    # fields: name, status, revenue, tier. `null` pins an empty value (revenue
+    # and tier only). A pinned name is the base name; the " [Status]" suffix is
+    # still added. external_ids can never be pinned.
+    pin:
+      revenue: 120000
+      tier: null
+      name: Acme Robotics Inc
+    # domains: add values to, or remove values from, what upstream carries. A
+    # remove must name a domain upstream carries.
+    domains:
+      add: [acme-robotics.example.test]
+      remove: [old.acme-robotics.example.test]
+    reason: pins reflect the signed order form
+
+  globex-labs:
+    # pending: a Linear edit that waits for a decision. `sync-inbound` writes it
+    # and `check` fails until you resolve it. To keep Linear's value, move it
+    # into `pin` (or, for domains_add, into `domains.add`). For upstream to win,
+    # delete it; the next deploy overwrites Linear.
+    pending:
+      revenue: 150000
+      domains_add: [globex.example.test]
+
+  initech-systems:
+    # hidden: out of the sync on both sides. No desired row, and the live
+    # customer is never stubbed, written or reported. A reason is required.
+    hidden: {reason: "our own organization, not a customer"}
+
+  umbrella-works:
+    # deleted: written by `sync-inbound` once Linear confirms the customer is
+    # gone. The sync never recreates it. Delete the entry to bring it back; the
+    # next deploy creates it.
+    deleted: {linear_id: 00000000-0000-4000-8000-0000000000aa, confirmed: 2026-10-28}
+
+# hidden_name_prefixes: hide every Linear customer whose name starts with the
+# prefix, at least four characters, each with a reason. The prefix
+# "zzz-gitops-test-" (the live e2e tests' throwaway records) is always hidden;
+# do not list it.
+hidden_name_prefixes:
+  - {prefix: "Sandbox-", reason: manual test records}

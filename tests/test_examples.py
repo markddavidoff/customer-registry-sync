@@ -4,13 +4,14 @@ import shutil
 from pathlib import Path
 
 from gitops_engine.datasets import dataset_dir
-from gitops_engine.ignore import BUILTIN_PREFIX, ignore_errors, load_ignore
-from gitops_engine.retire import load_retire
+from gitops_engine.ignore import BUILTIN_PREFIX
+from gitops_engine.overrides import load_overrides as load_override_entries
+from gitops_engine.overrides import override_errors
 
 from customer_registry_sync.config import load_config
 from customer_registry_sync.datasets import load_datasets, load_datasets_config
 from customer_registry_sync.identity import load_identities
-from customer_registry_sync.linear_files import IGNORE_FORMAT
+from customer_registry_sync.linear_overrides import OVERRIDES_FORMAT, value_type_failures
 from customer_registry_sync.linear_schema import LINEAR_SCHEMA
 from customer_registry_sync.sources.notion import load_overrides, load_self_managed_customers
 from customer_registry_sync.schema import VALID_CLASSIFICATIONS, CustomerRecord
@@ -52,16 +53,29 @@ def test_dataset_record_example_loads_through_the_dataset_reader(tmp_path):
     assert rec.classification in VALID_CLASSIFICATIONS
 
 
-def test_ignore_example_loads_without_errors():
-    path = EXAMPLES / "linear-ignore.example.yaml"
-    assert ignore_errors(path, IGNORE_FORMAT) == []
-    ignore = load_ignore(path, IGNORE_FORMAT)
-    assert [e.live_id for e in ignore.entries] == ["00000000-0000-4000-8000-0000000000aa"]
-    assert {p.prefix for p in ignore.prefixes} == {BUILTIN_PREFIX, "Sandbox-"}
+def test_overrides_example_is_valid():
+    path = EXAMPLES / "linear-overrides.example.yaml"
+    assert override_errors(path, OVERRIDES_FORMAT, LINEAR_SCHEMA) == []
+    ov = load_override_entries(path, OVERRIDES_FORMAT)
+    assert value_type_failures(ov) == []
+    entries = ov.entries
+    # one of each entry kind in the format
+    assert any(e.pin.get("revenue") is not None for e in entries.values())
+    assert any("tier" in e.pin and e.pin["tier"] is None for e in entries.values())
+    assert any(e.pin.get("name") for e in entries.values())
+    assert any("domains" in e.add for e in entries.values())
+    assert any("domains" in e.remove for e in entries.values())
+    assert any("revenue" in e.pending for e in entries.values())
+    assert any("domains_add" in e.pending for e in entries.values())
+    assert any(e.hidden for e in entries.values())
+    assert any(e.deleted is not None for e in entries.values())
+    assert any(e.reason for e in entries.values())
+    assert {p.prefix for p in ov.prefixes} == {BUILTIN_PREFIX, "Sandbox-"}
 
 
-def test_retire_example_is_comments_only():
-    assert load_retire(EXAMPLES / "linear-retire.example.yaml", LINEAR_SCHEMA) == {}
+def test_removed_example_files_are_gone():
+    assert not (EXAMPLES / "linear-ignore.example.yaml").exists()
+    assert not (EXAMPLES / "linear-retire.example.yaml").exists()
 
 
 def test_input_examples_load():

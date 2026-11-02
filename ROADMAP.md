@@ -33,27 +33,23 @@ Some items defer to the engine's roadmap: [`gitops-engine/ROADMAP.md`](https://g
   - [x] This repository keeps the declarations: `LINEAR_SCHEMA` (field policies and nouns), `IDENTITY_SPEC` (identity keys), `LinearDestination`, the file names, and the CLI. Tests of the moved mechanisms moved with them. The suite is 423 passed and 6 skipped (the live tests), against 420 passed and 6 skipped at v0.1.0; the new config, source-adapter and declaration tests outnumber the ones that moved.
   - [x] Source adapters: `registry-sync.yaml` picks one with `source.kind`, and `NotionSource` is the first. The v0.1 top-level `hub_page_id` and `buckets` are now an error that points to `source:`.
   - [x] The caller workflow installs from the caller's locked uv project (`project_dir`) with https git URLs and holds no deploy key. The two Linear tokens are environment secrets named `DESTINATION_TOKEN` and `DESTINATION_READONLY_TOKEN`.
+- [x] **Published v0.2.0 of both repositories.** The engine tag exists, this repository's dependency points at its https git URL and tag, and callers pin tags in their lock and in `uses:`.
+- [x] **Project 3: the registry owns every written field (v0.3.0, built 2026-11-02; the release is open below).** The shipped behavior, in short:
+  - Every written field, revenue, tier and domains included, comes from the registry. An empty revenue or tier clears Linear's value, and a domain the registry does not list is removed.
+  - `linear-overrides.yaml` replaces `linear-ignore.yaml` and `linear-retire.yaml`. It holds pins, domain adds and removes, pending Linear edits, `hidden` and `deleted` entries and hidden name prefixes. This closes "Re-adding removed domains": a domain removed in Linear is absorbed as a `domains.remove` entry, not re-added.
+  - `sync-inbound` records Linear edits: a cleared value or removed domain becomes an accepted override, and any other change becomes a pending entry that fails `check` and holds the customer until a PR pins the value or deletes the entry. A customer deleted in Linear is recorded as `deleted` after a second read by id. `sync-inbound` and `refresh` exit 2 on a Linear read error.
+  - New commands: `hide` (replaces `ignore`) and `adopt-live` (one-time migration of a v0.2.0 data repository). A stub that hands over to a Notion record keeps its Linear values as pins and domain adds.
 
 ## Open
 
 - [ ] **Ship a pull-request check workflow.** The reusable workflow covers deploy, restore, e2e and refresh. It does not run `check` on pull requests. Add a workflow that runs `check` with a read-only `LINEAR_API_TOKEN` on each pull request and in the merge queue, so it can be a required check.
 - [ ] **Close older refresh PRs.** Make the refresh job close its own older refresh PRs. Re-running an old refresh run replays its original commit and opens a PR that conflicts with the default branch.
 - [ ] **Adopt or replace foreign external ids.** Decide whether a stub adopts an external id another tool set. Today the sync replaces `externalIds` on every managed customer with the canonical id alone.
-- [ ] **Re-adding removed domains.** A domain removed in Linear is re-added from the identity table on the next apply. Project 3 (below) absorbs removals instead.
-- [ ] **Exit 2 on a Linear API error.** `sync-inbound`, `deploy` and `restore` exit 1 with a traceback on a Linear API error. Make them exit 2, as `check` does.
-- [ ] **Run the live e2e suite once.** The live end-to-end tests (`tests/test_e2e_gitops.py`) are skipped without credentials. Run them against a throwaway workspace, and verify the helper that writes the dummy config for them.
+- [ ] **Exit 2 on a Linear API error.** `deploy` and `restore` exit 1 with a traceback on a Linear API error. Make them exit 2, as `check`, `sync-inbound` and `refresh` do.
+- [ ] **Run the live e2e suite once.** The live end-to-end tests (`tests/test_e2e_gitops.py`) are skipped without credentials. Run them against a throwaway workspace, and verify the helper that writes the dummy config for them. The owner's run includes `test_get_after_delete_is_not_found`: until it passes, Linear's not-found response for a hard-deleted customer is unverified, and a hard-deleted customer makes `sync-inbound` and `refresh` exit 2. If it fails, its error text gives the shape the client must match.
 - [ ] **Require all six Notion bucket ids only for `ingest`.** The Linear-only commands (`deploy`, `check`, `generate`, `sync-inbound`) currently need a config with every Notion bucket id. Relax the config loader so only `ingest` needs them.
 - [ ] **Deployment enrichment from a self-managed environments database (config key removed until implemented).** Read deployment details from a Notion database of self-managed installs during `ingest`. The `self_managed_environments_data_source` config key was parsed but never used, so it was removed; add it back with the feature.
 - [ ] **Revisit the narrowed ruff rule set.** The repo lints with E4, E7, E9 and F only. The refactor onto the engine has landed, so widen the rule set.
-- [ ] **Publish v0.2.0 of both repositories.** Until the engine tag exists, this repository's `pyproject.toml` points at a local engine checkout. Tag `gitops-engine` v0.2.0, switch the dependency to its https git URL and tag, then tag this tool, so callers pin tags in their lock and in `uses:`.
-- [ ] **Move the existing data repository onto v0.2.** Its `registry-sync.yaml` needs `hub_page_id` and `buckets` under `source:` with `kind: notion`, and its workflow needs the locked uv project and environment-held tokens.
-
-## Project 3: the registry owns every written field (proposal)
-
-Not built. This replaces the rule that revenue and tier are owned only when set, and the ignore list. The points below are the proposal as recorded.
-
-- Every written field, including revenue and tier, lives in the registry, generated from the upstream dataset. The owned-when-set rule goes away.
-- A Linear edit to an upstream-derived field fails `check`; the refresh absorbs it, and a PR resolves it one of two ways: an **override** entry that pins the value regardless of upstream, or **upstream wins** (the next apply overwrites it). Later: a tool or reconcile app that pushes overrides back upstream.
-- An optional value removed in Linear is absorbed into the registry. A required field cleared in Linear is written back from git.
-- A customer deleted in Linear is double-confirmed (re-read, and Linear's trash or archive if the API exposes one), then recorded as a `deleted` override.
-- A `hidden` override excludes a record from sync; it replaces the ignore list.
+- [ ] **Publish v0.3.0 of both repositories.** Until the engine tag exists, this repository's `pyproject.toml` points at a local engine checkout. Tag `gitops-engine` v0.3.0, switch the dependency to its https git URL and tag, then tag this tool. The owner tags and publishes both releases.
+- [ ] **Move the existing data repository onto v0.3.0 (project 4).** Apply any `linear-retire.yaml` entries under v0.2.0 and empty the file, update its `registry-sync.yaml` and workflow for v0.2 (`source:` and the locked uv project), move to v0.3.0, run `adopt-live`, then `generate` and `check`. Runbook 8 in [`docs/runbooks/operations.md`](docs/runbooks/operations.md) has the steps.
+- [ ] **Commit overrides recorded by the deploy job.** The deploy job runs `sync-inbound` after its apply, but the state PR stages only the state and snapshot directories, so an edit that run records in `linear-overrides.yaml` is not committed. The window is short (an edit between the deploy's plan and its post-apply read). The fix lives in the engine's reusable workflow.
