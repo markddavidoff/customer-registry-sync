@@ -252,7 +252,7 @@ def test_name_only_and_alias_name_only_match_create_no_stub(tmp_path, run_cli):
     assert ids["dunder"].sources["linear"] == "lin_t"
 
 
-def test_linear_only_domain_appended_to_identity(tmp_path, run_cli):
+def test_linear_only_domain_appended_to_stub_identity_only(tmp_path, run_cli):
     _tree(
         tmp_path,
         records=[ACME],
@@ -262,10 +262,11 @@ def test_linear_only_domain_appended_to_identity(tmp_path, run_cli):
         ],
     )
     assert _ingest(run_cli, tmp_path) == 0
-    assert _identities(tmp_path)["acme"].values["domains"] == [
-        "acme.example.test",
-        "Acme-Alt.example.test",
-    ]
+    # a customer with a notion record learns only its Linear id: a domain added in
+    # Linear reaches the registry through linear-overrides.yaml, never the identity
+    acme = _identities(tmp_path)["acme"]
+    assert acme.values["domains"] == ["acme.example.test"]
+    assert acme.sources["linear"] == "lin_a"
     # a stub's later Linear-only domain lands on its identity too
     _mirror(
         tmp_path,
@@ -474,8 +475,6 @@ def test_recorded_linear_id_picks_the_primary_and_the_other_is_a_known_duplicate
     assert build.stubs == []
     assert build.reports == []
     assert build.duplicates == ["acme: 'Acme Inc' (lin_1) is a known duplicate; merge it in Linear"]
-    # only the primary contributes its Linear-only domain
-    assert store.table.entries["acme"].values["domains"] == [
-        "acme.example.test",
-        "acme-two.example.test",
-    ]
+    # a customer with a notion record learns no Linear-only domain, from either row
+    assert store.table.entries["acme"].values["domains"] == ["acme.example.test"]
+    assert store.table.entries["acme"].sources["linear"] == "lin_2"

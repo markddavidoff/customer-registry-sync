@@ -8,7 +8,8 @@ Phase A:  ``ingest``        — Notion hub pages → the ``notion`` dataset, the
                               ``linear-found`` stubs from the state mirror
                               (``--only linear-found``: offline); appends identities.
 Phase B:  ``generate``      — datasets → Layer-2 ``<data_dir>/linear/*`` and the CSVs.
-          ``sync-inbound``  — live Linear → Layer-2 mirror (refresh linear_synced).
+          ``sync-inbound``  — live Linear → Layer-2 mirror (refresh linear_synced);
+                              Linear edits → ``linear-overrides.yaml``.
           ``deploy``        — Layer-2 → Linear, per-customer check-and-set.
                               DRY-RUN by default; ``--apply`` performs live writes
                               after snapshotting the rows it touches.
@@ -39,10 +40,10 @@ from pathlib import Path
 
 from gitops_engine.changed import changed_since
 from gitops_engine.datasets import DATASETS_SUBDIR, dataset_dir
+from gitops_engine.destination import DestinationError
 from gitops_engine.fieldplan import DESTRUCTIVE, FieldChange
 from gitops_engine.hidden import hidden_from
 from gitops_engine.manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
-from gitops_engine.mirror import reconcile_mirror
 from gitops_engine.overrides import override_errors
 
 from .changed import deploy_inputs
@@ -64,11 +65,13 @@ from .deploy_plan import (
     load_inputs,
     load_overrides_checked,
     plan_for_deploy,
-    scope_live,
+    scope_recs,
 )
 from .generate import generate_from_dir
 from .identity import IDENTITIES_FILE, IdentityStore
+from .inbound import read_inbound, write_inbound
 from .linear_client import LinearError
+from .linear_destination import LinearDestination
 from .linear_files import (
     SNAPSHOT_SUBDIR,
     hidden_lines,
@@ -287,27 +290,39 @@ def _linear_client():
 
 
 def _cmd_sync_inbound(args) -> int:
-    if legacy_refused(_out_dir(args)):
+    """Live Linear → the state mirror; the Linear edits since the last mirror →
+    linear-overrides.yaml (`inbound`). `--dry-run` reads and counts, writes nothing."""
+    out_dir = _out_dir(args)
+    if legacy_refused(out_dir):
         return 2
     client = _linear_client()
     if client is None:
         return 2
-    out_dir = _out_dir(args)
-    existing = load_state(out_dir)
-    live = scope_live(client.list_customers(), args.scope)
-    recs = reconcile_mirror(live, LINEAR_SCHEMA)
-    if args.scope:
-        # Scoped run: replace only the in-scope rows; out-of-scope state is untouched.
-        recs = [r for r in existing if not r.name.startswith(args.scope)] + recs
-    print(f"sync-inbound: {len(live)} live Linear customers mirrored")
+    try:
+        result = read_inbound(out_dir, LinearDestination(client), scope=args.scope)
+    except ValueError as e:
+        for line in str(e).splitlines():
+            print(f"ERROR: {line}", file=sys.stderr)
+        return 2
+    except DestinationError as e:
+        print(f"ERROR: Linear read failed: {e}; nothing written.", file=sys.stderr)
+        return 2
+    mirrored = len(scope_recs(result.mirror, args.scope))
+    pending = sum(1 for e in result.edits if e.kind == "pending")
+    absorbed = len(result.edits) - pending
+    print(f"sync-inbound: {mirrored} mirrored; {absorbed} absorbed, {pending} pending")
+    for cid, name in result.settled:
+        print(f"  NOTE: {cid}: pending {name} dropped: Linear and the registry now agree")
     if args.dry_run:
-        print(f"DRY RUN — would write {len(recs)} files under {out_dir}/{STATE_SUBDIR}/.")
+        print(
+            f"DRY RUN — would write {len(result.mirror)} files under {out_dir}/{STATE_SUBDIR}/ "
+            f"and record {len(result.edits)} edits in {OVERRIDES_FILE}."
+        )
         return 0
     if not _guard_or_refuse(out_dir / STATE_SUBDIR, "sync-inbound", args):
         return 2
-    write_state(recs, out_dir)
-    write_manifest(out_dir / STATE_SUBDIR, "sync-inbound")
-    print(f"wrote {out_dir}/{STATE_SUBDIR}/*.yaml")
+    changed = write_inbound(out_dir, result, today=datetime.now(UTC).date().isoformat())
+    print(f"wrote {out_dir}/{STATE_SUBDIR}/*.yaml; {OVERRIDES_FILE}: {changed} changes")
     return 0
 
 

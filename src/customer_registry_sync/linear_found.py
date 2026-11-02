@@ -3,7 +3,9 @@
 `ingest` builds it offline from the state mirror. Each managed (non-ignored) Linear
 customer is resolved against the identity table. One that resolves to nothing gets a
 new identity first; one whose identity has no `notion` record becomes a stub. Every
-primary customer's Linear-only domains and its Linear id are appended to its identity.
+primary customer's Linear id is appended to its identity, and a stub's Linear-only
+domains too. A customer with a `notion` record learns no domain from Linear: a domain
+added in Linear reaches the registry only through `linear-overrides.yaml`.
 A stub's file stem is its canonical id, and a stub keeps that stem across runs, keyed
 by its Linear id, so the external id stamped into Linear never drifts when the
 customer's name or domain changes there.
@@ -114,6 +116,7 @@ def build_linear_found(
             "domains": list(lv.domains),
         },
         learned_values=lambda lv: {"domains": list(lv.domains)},
+        learn_with_record=False,
     )
 
 

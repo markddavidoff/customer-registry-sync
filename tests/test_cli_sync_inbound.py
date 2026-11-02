@@ -53,3 +53,33 @@ def test_sync_inbound_scope_preserves_out_of_scope_state(tmp_path, monkeypatch, 
     assert run_cli(["sync-inbound", "--out-dir", str(tmp_path), "--scope", "zzz-t-"]) == 0
     names = sorted(s.name for s in load_state(tmp_path))
     assert names == ["Acme", "zzz-t-new"]  # Acme untouched, zzz-t-old dropped, zzz-t-new added
+
+
+def test_cli_sync_inbound_dry_run_writes_nothing(tmp_path, monkeypatch, capsys, run_cli):
+    """An edit is detected and counted, but neither the mirror nor the overrides file
+    is written."""
+    from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced
+    from customer_registry_sync.writers import write_desired, write_state
+
+    old = LinearCustomer(
+        name="Acme [Active]",
+        domains=["acme.example.test"],
+        revenue=5,
+        status="Active",
+        external_ids=["acme"],
+    )
+    write_desired([old], tmp_path)
+    old.linear_synced = LinearSynced("lin_1", "2026-10-01T00:00:00.000Z", "h")
+    write_state([old], tmp_path)
+    before = sorted((p.name, p.read_bytes()) for p in (tmp_path / "linear-state").iterdir())
+    edited = _live(
+        "Acme [Active]", "lin_1", domains=["acme.example.test"], revenue=7, external_ids=["acme"]
+    )
+    monkeypatch.setattr(cli, "_linear_client", lambda: FakeClient([edited]))
+    assert run_cli(["sync-inbound", "--out-dir", str(tmp_path), "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "sync-inbound: 1 mirrored; 0 absorbed, 1 pending" in out
+    assert "DRY RUN" in out
+    after = sorted((p.name, p.read_bytes()) for p in (tmp_path / "linear-state").iterdir())
+    assert after == before
+    assert not (tmp_path / "linear-overrides.yaml").exists()
