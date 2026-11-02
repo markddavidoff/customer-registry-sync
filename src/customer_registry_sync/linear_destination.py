@@ -34,6 +34,8 @@ class LinearDestination:
         return self._client.list_customers()
 
     def get(self, live_id: str) -> LiveCustomer | None:
+        """`None` only when Linear reports the customer gone (deleted or archived);
+        a read failure raises `LinearError`, a `DestinationError`."""
         return self._client.get_customer(live_id)
 
     def preflight(self, writes: list[dict[str, Any]], *, restoring: bool = False) -> None:

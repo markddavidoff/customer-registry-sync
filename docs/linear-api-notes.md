@@ -21,8 +21,8 @@ header and no `Bearer` prefix.
 ## Operations
 
 - Read: `customers(first: 250, after: $cursor)`, paged until `hasNextPage` is false, and
-  `customer(id:)` for the write-time re-read. Fields read:
-  `id name domains revenue externalIds updatedAt status { id name } tier { id name }`.
+  `customer(id:)` for the write-time re-read and for confirming a deletion. Fields read:
+  `id name domains revenue externalIds updatedAt archivedAt status { id name } tier { id name }`.
 - `customerStatuses { nodes { id name } }` and `customerTiers { nodes { id name } }`: the
   status and tier name-to-id maps, read at the start of every apply and restore. Reading
   them from the workspace, not from current customers, includes statuses no customer
@@ -68,6 +68,36 @@ The client retries HTTP 429, sleeping for `Retry-After` when present, and transi
 and network errors with backoff `0.5 * 2**attempt`, up to 4 attempts. Other 4xx and
 GraphQL `errors` raise `LinearError` at once. Live 429 behavior has not been observed;
 the retry path is covered by unit tests only.
+
+`get_customer` returns `None` only when Linear reports the customer gone: a null node,
+an archived node, or a `LinearNotFound` (a `LinearError` that `_is_not_found` picks out
+of the `errors` list). Every other error raises, so `sync-inbound` exits 2 and writes
+nothing rather than record a deletion it did not confirm.
+
+## Deleted and archived customers
+
+Settled from Linear's published schema,
+`https://raw.githubusercontent.com/linear/linear/master/packages/sdk/src/schema.graphql`,
+fetched 2026-11-01 without a token (sha256 `99d9d750…62d1dce`), and the developer docs
+at `https://linear.app/developers/graphql`. No live call was made.
+
+- **(a) `type Customer` has `archivedAt: DateTime`**, "null if the entity has not been
+  archived". It has no `trashed` field. `customerMerge` archives the source customer,
+  so a merged-away customer is archived, not deleted.
+- **(b) `customers(...)` takes `includeArchived: Boolean`**, "default: false". The docs
+  say the same of every paginated query: archived resources are hidden unless
+  `includeArchived: true` is passed. The sync passes nothing, so the listing omits
+  archived customers, and `get_customer` returns `None` for a node with `archivedAt`
+  set: the sync treats an archived customer as deleted.
+- **(c) The not-found shape is not documented.** `customer(id: String!)` returns the
+  non-null `Customer!`, so an unknown id cannot come back as a null node; it must come
+  back as an entry in `errors` (with `data` null). Neither the schema, the GraphQL docs,
+  the SDK error docs, nor the SDK's `LinearErrorType` enum (which has no not-found type)
+  states that entry's `message` or `extensions`. Until it is observed, `_is_not_found`
+  matches no error, so a hard-deleted customer (`customerDelete`) makes `sync-inbound`
+  exit 2. The owner-run live test `test_get_after_delete_is_not_found` creates and
+  deletes a `zzz-gitops-test-` customer and asserts `get_customer` returns `None`; when
+  it fails, its error text gives the shape to match.
 
 ## Live-API findings
 

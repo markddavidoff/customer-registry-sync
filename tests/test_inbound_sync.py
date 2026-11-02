@@ -35,11 +35,22 @@ def live(**kw) -> LiveCustomer:
 
 
 class FakeClient:
-    def __init__(self, live):
+    """Linear as `LinearClient` reads it. `get` answers by id: `found` first (a row, or
+    `None` for not found), then the listing; any other id fails the test."""
+
+    def __init__(self, live, found=None):
         self._live = live
+        self._found = dict(found or {})
 
     def list_customers(self):
         return list(self._live)
+
+    def get_customer(self, customer_id):
+        if customer_id in self._found:
+            return self._found[customer_id]
+        listed = {lv.id: lv for lv in self._live}
+        assert customer_id in listed, f"unexpected get {customer_id}"
+        return listed[customer_id]
 
 
 def _sync_inbound(tmp_path, monkeypatch, run_cli, live_rows):
@@ -283,10 +294,10 @@ def _in_sync(tmp_path, run_cli, records=None, *, extra_live=()) -> LiveCustomer:
     return lv
 
 
-def _sync_with(tmp_path, monkeypatch, run_cli, live_rows, *extra) -> int:
+def _sync_with(tmp_path, monkeypatch, run_cli, live_rows, *extra, found=None) -> int:
     from customer_registry_sync import cli
 
-    monkeypatch.setattr(cli, "_linear_client", lambda: FakeClient(live_rows))
+    monkeypatch.setattr(cli, "_linear_client", lambda: FakeClient(live_rows, found))
     return run_cli(["sync-inbound", "--out-dir", str(tmp_path), "--no-input", *extra])
 
 
@@ -500,3 +511,44 @@ def test_only_the_carried_pending_add_is_dropped(tmp_path, monkeypatch, run_cli)
     _carry_upstream(tmp_path, run_cli, "Acme.dev")  # re-cased: compared by key
     assert _sync_with(tmp_path, monkeypatch, run_cli, [edited]) == 0
     assert _overrides(tmp_path) == {"acme": {"pending": {"domains_add": ["acme.io"]}}}
+
+
+def _today():
+    """The date `sync-inbound` confirms a deletion on, as the overrides file reads back."""
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC).date()
+
+
+def test_deleted_customer_is_recorded(tmp_path, monkeypatch, capsys, run_cli):
+    from customer_registry_sync.deploy_plan import offline_plan
+    from customer_registry_sync.writers import load_desired
+
+    _in_sync(tmp_path, run_cli)
+    assert _sync_with(tmp_path, monkeypatch, run_cli, [], found={"lin_acme": None}) == 0
+    assert _overrides(tmp_path) == {
+        "acme": {"deleted": {"linear_id": "lin_acme", "confirmed": _today()}}
+    }
+    assert "acme: deleted in Linear (lin_acme)" in capsys.readouterr().out
+    _offline_refresh(tmp_path, run_cli)
+    assert [r for r in load_desired(tmp_path) if "acme" in r.external_ids] == []
+    plan, _ = offline_plan(tmp_path, live=[])
+    assert plan.creates == []
+
+
+def test_unlisted_but_get_finds_writes_nothing_for_it(tmp_path, monkeypatch, capsys, run_cli):
+    lv = _in_sync(tmp_path, run_cli)
+    assert _sync_with(tmp_path, monkeypatch, run_cli, [], found={"lin_acme": lv}) == 0
+    assert _overrides(tmp_path) == {}
+    out = capsys.readouterr().out
+    assert "NOTE: acme: missing from the Linear listing but found by id (lin_acme)" in out
+
+
+def test_stub_deleted_in_linear_just_drops(tmp_path, monkeypatch, run_cli):
+    beta = live(id="lin_beta", name="Beta", domains=["beta.example.test"], revenue=3, tier=None)
+    lv = _in_sync(tmp_path, run_cli, extra_live=[beta])
+    # A stub never pairs, so no `get` is asked for it (FakeClient fails an unexpected get).
+    assert _sync_with(tmp_path, monkeypatch, run_cli, [lv]) == 0
+    assert _overrides(tmp_path) == {}
+    _offline_refresh(tmp_path, run_cli)
+    assert load_datasets(tmp_path, DatasetConfig(names=[LINEAR_FOUND])) == []

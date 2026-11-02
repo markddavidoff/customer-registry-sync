@@ -314,10 +314,18 @@ def _cmd_sync_inbound(args) -> int:
     for s in result.settled:
         what = f"{s.field}{PENDING_ADD} {', '.join(s.values)}" if s.values else s.field
         print(f"  NOTE: {s.canonical_id}: pending {what} dropped: the registry now agrees")
+    for cid, live_id in result.deletions.confirmed:
+        print(f"  {cid}: deleted in Linear ({live_id}); recorded as deleted")
+    for cid, live_id in result.deletions.still_live:
+        print(
+            f"  NOTE: {cid}: missing from the Linear listing but found by id ({live_id}); "
+            "nothing recorded"
+        )
     if args.dry_run:
         print(
             f"DRY RUN — would write {len(result.mirror)} files under {out_dir}/{STATE_SUBDIR}/ "
-            f"and record {len(result.edits)} edits in {OVERRIDES_FILE}."
+            f"and record {len(result.edits)} edits and "
+            f"{len(result.deletions.confirmed)} deletions in {OVERRIDES_FILE}."
         )
         return 0
     if not _guard_or_refuse(out_dir / STATE_SUBDIR, "sync-inbound", args):

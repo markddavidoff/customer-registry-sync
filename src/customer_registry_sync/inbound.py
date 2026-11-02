@@ -8,6 +8,11 @@ without their ` [Status]` suffix (`base_value`). Stubs are destination-owned and
 pair, so a stub's Linear edit records nothing. A pending entry whose decision is moot
 (Linear's value now equals the registry's) is `settled`, and `write_inbound` drops it.
 
+A managed customer in the old mirror that is missing from the full listing is a
+deletion only when a direct `get` by its Linear id also reports it gone
+(`gitops_engine.deletions.confirm_deletions`); `write_inbound` records it as `deleted`.
+A Linear error in the listing or in a `get` propagates, so nothing is written.
+
 `write_inbound` writes `linear-state/` and its manifest, then the overrides file.
 """
 
@@ -17,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from gitops_engine.deletions import Deletions
+from gitops_engine.deletions import Deletions, confirm_deletions
 from gitops_engine.destination import Destination
 from gitops_engine.edits import Edit, detect_edits, pair_old_state, record_edits
 from gitops_engine.hidden import hidden_from
@@ -109,7 +114,7 @@ def read_inbound(
 
     Reads the old mirror, `linear/`, `identities.yaml` and the overrides file; writes
     nothing. Raises `ValueError` when the overrides file or the identity table cannot
-    be read; a `DestinationError` from the listing propagates."""
+    be read; a `DestinationError` from the listing or a confirming `get` propagates."""
     data_dir = Path(data_dir)
     errors = override_errors(data_dir / OVERRIDES_FILE, OVERRIDES_FORMAT, LINEAR_SCHEMA)
     if errors:
@@ -117,7 +122,8 @@ def read_inbound(
     overrides = load_overrides_file(data_dir)
     table = load_identities(data_dir / IDENTITIES_FILE)
     existing = load_state(data_dir)
-    live = scope_live(dest.list_live(), scope)
+    listing = dest.list_live()
+    live = scope_live(listing, scope)
     mirror = reconcile_mirror(live, LINEAR_SCHEMA)
     if scope:
         # Scoped run: replace only the in-scope rows; out-of-scope state is untouched.
@@ -127,17 +133,17 @@ def read_inbound(
     desired = load_desired(data_dir)
     edits = detect_edits(old_state, managed, desired, schema=LINEAR_SCHEMA, base=base_value)
     settled = _settled(overrides, old_state, managed, desired)
-    return InboundResult(mirror, edits, Deletions(), settled)
+    # The full listing, not the scoped one: a customer renamed out of scope is not gone.
+    deletions = confirm_deletions(old_state, listing, desired, dest, schema=LINEAR_SCHEMA)
+    return InboundResult(mirror, edits, deletions, settled)
 
 
 def write_inbound(data_dir: Path, result: InboundResult, *, today: str) -> int:
     """Write `linear-state/` and its manifest, then drop the settled pending decisions
-    from the overrides file and record the edits. Settling goes first, so a pending add
+    from the overrides file, record the edits, and mark each confirmed deletion
+    `deleted` as of `today` (an ISO date). Settling goes first, so a pending add
     recorded in this run is never dropped with an older one. Returns the number of
-    override changes.
-
-    `today` (an ISO date) dates confirmed deletions; nothing fills `deletions` yet, so
-    it is unused for now."""
+    override changes."""
     data_dir = Path(data_dir)
     store = OverridesStore(data_dir / OVERRIDES_FILE, OVERRIDES_FORMAT)
     write_state(result.mirror, data_dir)
@@ -149,5 +155,7 @@ def write_inbound(data_dir: Path, result: InboundResult, *, today: str) -> int:
         else:
             changed += store.drop_pending(s.canonical_id, s.field)
     changed += record_edits(store, result.edits)
+    for cid, live_id in result.deletions.confirmed:
+        changed += store.mark_deleted(cid, live_id, today)
     store.save()
     return changed

@@ -179,3 +179,11 @@ def test_runbook6_restore_returns_row_exactly(live_client, run_prefix, tmp_path)
     assert _live_revenue(live_client, lv.id) == 1
     assert live_client.get_customer(lv.id).name == f"{run_prefix}rb6"
     assert _live_domains(live_client, lv.id) == [f"{run_prefix}rb6.invalid"]
+
+
+def test_get_after_delete_is_not_found(live_client, run_prefix):
+    """Settles the not-found shape `_is_not_found` matches: `customer(id:)` on a
+    hard-deleted customer must read as not found (`None`), not as a Linear error."""
+    lv = _mk(live_client, run_prefix, "deleted")
+    assert live_client.delete_customer(lv.id) is True
+    assert live_client.get_customer(lv.id) is None
