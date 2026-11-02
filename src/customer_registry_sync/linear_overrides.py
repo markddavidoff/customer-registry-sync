@@ -15,7 +15,7 @@ import dataclasses
 from pathlib import Path
 from typing import Any
 
-from gitops_engine.overrides import Overrides, OverridesFormat, load_overrides
+from gitops_engine.overrides import OverrideEntry, Overrides, OverridesFormat, load_overrides
 
 from .identity import strip_status_suffix
 from .linear_schema import LinearCustomer
@@ -53,6 +53,20 @@ def load_overrides_file(data_dir: Path) -> Overrides:
     """`<data_dir>/linear-overrides.yaml`; a missing file has no entries. Raises
     `ValueError` on a file that is not the overrides shape."""
     return load_overrides(Path(data_dir) / OVERRIDES_FILE, OVERRIDES_FORMAT)
+
+
+def uncurated(entry: OverrideEntry, current: OverrideEntry) -> OverrideEntry | None:
+    """`entry` (from `adopt_entry`) without what `current` already decides: a field
+    `current` pins, even to empty, and a domain it already adds or removes, compared
+    case-insensitively. The store matches list values exactly, so a case variant would
+    be written twice, and a curated remove stands. None when nothing is left."""
+    curated = {
+        d.lower() for d in [*current.add.get("domains", []), *current.remove.get("domains", [])]
+    }
+    pins = {k: v for k, v in entry.pin.items() if k not in current.pin}
+    domains = [d for d in entry.add.get("domains", []) if d.lower() not in curated]
+    adds = {"domains": domains} if domains else {}
+    return dataclasses.replace(entry, pin=pins, add=adds) if pins or adds else None
 
 
 def _type_failure(field: str, value: Any) -> str | None:

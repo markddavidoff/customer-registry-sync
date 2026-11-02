@@ -14,6 +14,8 @@ Phase B:  ``generate``      — datasets → Layer-2 ``<data_dir>/linear/*`` and
                               DRY-RUN by default; ``--apply`` performs live writes
                               after snapshotting the rows it touches.
           ``restore``       — write a pre-apply snapshot back to Linear.
+          ``adopt-live``    — migrate a v0.2.0 data dir, offline: keep Linear-only
+                              values as overrides, turn the ignore file into hidden.
 Phase C:  ``check``         — plan guard: drift (state vs live) + plan; exit 0/2/3.
 Workflow: ``changed --since SHA``, ``config-get KEY``, ``refresh --no-input`` (sync-inbound,
           ``ingest --only linear-found``, ``generate``) and ``tool-source`` complete the CLI
@@ -91,6 +93,7 @@ from .linear_overrides import (
     value_type_failures,
 )
 from .linear_schema import LINEAR_SCHEMA
+from .migrate import AdoptRefused, adopt_live
 from .sources import SourceError
 from .tool_source import ToolSourceError, tool_source
 from .writers import (
@@ -660,6 +663,29 @@ def _cmd_refresh(args) -> int:
     return 0
 
 
+def _cmd_adopt_live(args) -> int:
+    """Migrate a v0.2.0 data dir to full ownership, offline (`migrate.adopt_live`): keep
+    today's Linear-only values as overrides and turn the ignore file into hidden
+    entries. Exit 2, writing nothing, when the data dir cannot be migrated."""
+    out_dir = _out_dir(args)
+    try:
+        result = adopt_live(out_dir, dry_run=args.dry_run)
+    except AdoptRefused as e:
+        for line in str(e).splitlines():
+            print(f"ERROR: {line}", file=sys.stderr)
+        print("adopt-live refused; nothing written.", file=sys.stderr)
+        return 2
+    print(
+        f"adopt-live: {result.pins} pins, {result.adds} domain adds, {result.hidden} hidden, "
+        f"{result.prefixes} hidden prefixes, {result.identities_added} identities added"
+    )
+    if args.dry_run:
+        print(f"DRY RUN — nothing written under {out_dir}/.")
+        return 0
+    print("next: run generate, then check")
+    return 0
+
+
 def _cmd_changed(args) -> int:
     """Print `changed` or `unchanged` for the deploy inputs since a sha; always exit 0."""
     try:
@@ -795,6 +821,15 @@ def build_parser() -> tuple[argparse.ArgumentParser, dict]:
     )
     _no_input_arg(ref, "never prompt; refuse to overwrite hand-edited files")
     handlers["refresh"] = _cmd_refresh
+
+    adopt = sub.add_parser(
+        "adopt-live",
+        help="migrate a v0.2.0 data dir: keep Linear-only values, convert the ignore file",
+    )
+    adopt.add_argument("--dry-run", action="store_true")
+    _out_dir_arg(adopt)
+    _no_input_arg(adopt, "never prompt (adopt-live never does)")
+    handlers["adopt-live"] = _cmd_adopt_live
 
     chk = sub.add_parser("check", help="plan guard: drift (state vs live) + plan; exit 0/2/3")
     _out_dir_arg(chk)

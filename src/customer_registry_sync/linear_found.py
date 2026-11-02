@@ -18,7 +18,6 @@ nothing in Linear (the same comparison as `adopt-live`).
 
 from __future__ import annotations
 
-import dataclasses
 from datetime import date
 from pathlib import Path
 
@@ -38,7 +37,7 @@ from .identity import (
     strip_status_suffix,
 )
 from .linear_client import LiveCustomer
-from .linear_overrides import load_overrides_file
+from .linear_overrides import load_overrides_file, uncurated
 from .linear_schema import LINEAR_SCHEMA
 from .schema import VALID_CLASSIFICATIONS, CustomerRecord
 from .writers import load_state, slug_for
@@ -212,19 +211,7 @@ def handover_entries(
             continue
         entry = adopt_entry(row, lv, schema=LINEAR_SCHEMA)
         if entry is not None and current is not None:
-            entry = _uncurated(entry, current)
+            entry = uncurated(entry, current)
         if entry is not None:
             out[cid] = entry
     return out
-
-
-def _uncurated(entry: OverrideEntry, current: OverrideEntry) -> OverrideEntry | None:
-    """`entry` without the domains `current` already adds or removes, compared
-    case-insensitively: the store matches list values exactly, so a case variant would
-    be written twice, and a curated remove stands. None when nothing is left."""
-    curated = {
-        d.lower() for d in [*current.add.get("domains", []), *current.remove.get("domains", [])]
-    }
-    domains = [d for d in entry.add.get("domains", []) if d.lower() not in curated]
-    entry = dataclasses.replace(entry, add={"domains": domains} if domains else {})
-    return entry if entry.pin or entry.add else None

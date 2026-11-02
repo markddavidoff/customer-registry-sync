@@ -5,15 +5,7 @@ from typing import ClassVar
 
 import pytest
 import yaml
-
-BUCKET_NAMES = (
-    "Customers",
-    "Churned Customers",
-    "Archive",
-    "POCs",
-    "Prospects",
-    "Partner & Supporting Accounts",
-)
+from data_repo import BUCKET_NAMES
 
 
 @pytest.fixture
@@ -273,50 +265,10 @@ def fake_notion(monkeypatch):
 
     Replaces ``notion_client.Client`` and sets a dummy ``NOTION_API_TOKEN``. Returns
     the bucket name -> page id map to put in the config's ``source.buckets``."""
-    import json
-    from pathlib import Path
-
     import notion_client
+    from data_repo import fake_notion_client
 
-    fix = Path(__file__).parent / "fixtures"
-
-    def load(name):
-        return json.loads((fix / f"{name}.json").read_text())
-
-    pages = {
-        "Customers": [("Acme Robotics", "customer_acme_robotics")],
-        "Churned Customers": [("Soylent", "churned_soylent_metrics")],
-        "POCs": [("Globex Labs (US)", "poc_globex_labs")],
-        "Prospects": [
-            ("Initrode Systems", "prospect_initrode"),
-            ("Methodology", "prospect_initrode"),
-        ],
-        "Partner & Supporting Accounts": [("Vandelay Cyber", "partner_vandelay_cyber")],
-    }
-    tree: dict[str, list] = {}
-    for bucket, entries in pages.items():
-        kids = []
-        for i, (title, fixture) in enumerate(entries):
-            page_id = f"{bucket}-page-{i}"
-            kids.append({"type": "child_page", "id": page_id, "child_page": {"title": title}})
-            tree[page_id] = load(fixture)
-        if bucket == "Partner & Supporting Accounts":
-            kids.append({"type": "table", "id": "partner-table"})
-            tree["partner-table"] = load("partner_table_rows")
-        tree[f"{bucket}-bucket"] = kids
-
-    class _Children:
-        def list(self, block_id, start_cursor=None, page_size=100):
-            return {"results": tree.get(block_id, []), "has_more": False}
-
-    class _Blocks:
-        children = _Children()
-
-    class FakeClient:
-        def __init__(self, auth):
-            self.auth = auth
-            self.blocks = _Blocks()
-
-    monkeypatch.setattr(notion_client, "Client", FakeClient)
+    client, buckets = fake_notion_client()
+    monkeypatch.setattr(notion_client, "Client", client)
     monkeypatch.setenv("NOTION_API_TOKEN", "fake-token")
-    return {name: f"{name}-bucket" for name in BUCKET_NAMES}
+    return buckets

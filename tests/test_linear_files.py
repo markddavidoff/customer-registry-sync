@@ -42,11 +42,11 @@ def test_no_hidden_is_the_builtin_prefix_only():
 
 
 def test_nothing_reads_the_ignore_file_but_its_legacy_name():
-    # Only `IGNORE_FORMAT` (kept for `adopt-live`) still names the engine's ignore
+    # Only `IGNORE_FORMAT` and `migrate` (both for `adopt-live`) name the engine's ignore
     # module; no other module imports from it.
     src = Path(linear_files.__file__).parent
     users = sorted(p.name for p in src.rglob("*.py") if "gitops_engine.ignore" in p.read_text())
-    assert users == ["linear_files.py"]
+    assert users == ["linear_files.py", "migrate.py"]
     assert (
         "from gitops_engine.ignore import IgnoreFormat\n" in (src / "linear_files.py").read_text()
     )
