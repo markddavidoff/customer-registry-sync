@@ -3,6 +3,8 @@
 import shutil
 from datetime import date
 
+import pytest
+
 from gitops_engine.datasets import dataset_dir
 from gitops_engine.ignore import BUILTIN_PREFIX
 from gitops_engine.manifest import MANIFEST, write_manifest
@@ -478,3 +480,147 @@ def test_recorded_linear_id_picks_the_primary_and_the_other_is_a_known_duplicate
     # a customer with a notion record learns no Linear-only domain, from either row
     assert store.table.entries["acme"].values["domains"] == ["acme.example.test"]
     assert store.table.entries["acme"].sources["linear"] == "lin_2"
+
+
+# --- a stub handing over to Notion -------------------------------------------------
+
+BETA_NODE = _node("lin_b", "Beta Corp", domains=["a.test", "b.test"], revenue=5000, tier="Gold")
+BETA = CustomerRecord(canonical_name="Beta Corp", domains=["a.test"], classification="real")
+
+
+def _notion(tmp_path, *records):
+    write_dataset(list(records), tmp_path, dataset=NOTION)
+    write_manifest(dataset_dir(tmp_path, NOTION), "ingest")
+
+
+def _overrides(tmp_path):
+    from customer_registry_sync.linear_overrides import load_overrides_file
+
+    return load_overrides_file(tmp_path).entries
+
+
+def _plan_changes(tmp_path, run_cli, linear_id):
+    """`generate`, then the field changes `deploy` would plan for `linear_id`."""
+    from customer_registry_sync.deploy_plan import load_inputs, plan_for_deploy
+
+    assert run_cli(["generate", "--out-dir", str(tmp_path), "--no-input"]) == 0
+    inp = load_inputs(tmp_path, None, require_desired=True)
+    live = [LINEAR_SCHEMA.state_to_live(r) for r in load_state(tmp_path)]
+    plan = plan_for_deploy(inp, live, None).plan
+    assert plan.errors == []
+    return plan.changes[linear_id]
+
+
+def _stub_then_notion(tmp_path, run_cli):
+    """A real `ingest` makes Beta a stub; then a Notion record for it appears."""
+    _tree(tmp_path, nodes=[BETA_NODE])
+    assert _ingest(run_cli, tmp_path) == 0
+    assert list(_stubs(tmp_path)) == ["a"]
+    assert _identities(tmp_path)["a"].values["domains"] == ["a.test", "b.test"]
+    _notion(tmp_path, BETA)
+
+
+def test_handover_absorbs_stub_values(tmp_path, capsys, run_cli):
+    _stub_then_notion(tmp_path, run_cli)
+    capsys.readouterr()
+    assert _ingest(run_cli, tmp_path) == 0
+    assert _stubs(tmp_path) == {}
+    assert "handover: 1 customers kept their Linear values" in capsys.readouterr().out
+    entry = _overrides(tmp_path)["a"]
+    assert entry.pin == {"revenue": 5000, "tier": "Gold"}
+    # the identity already holds b.test, so the upstream row carries it: no add needed
+    assert entry.add == {}
+    changes = _plan_changes(tmp_path, run_cli, "lin_b")
+    assert [c for c in changes if c.kind in ("clear", "remove")] == []
+
+
+def test_handover_adds_a_stub_domain_the_identity_lacks(tmp_path, run_cli):
+    _stub_then_notion(tmp_path, run_cli)
+    # c.test reached Linear after the last ingest: the stub's identity never learned it
+    _mirror(
+        tmp_path,
+        _node(
+            "lin_b", "Beta Corp", domains=["a.test", "b.test", "c.test"], revenue=5000, tier="Gold"
+        ),
+    )
+    assert _ingest(run_cli, tmp_path) == 0
+    assert _overrides(tmp_path)["a"].add == {"domains": ["c.test"]}
+    changes = _plan_changes(tmp_path, run_cli, "lin_b")
+    assert [c for c in changes if c.kind in ("clear", "remove")] == []
+
+
+@pytest.mark.parametrize(
+    ("ops", "want_add", "want_remove"),
+    [
+        # a case variant already added is not written twice
+        ("{add: [C.test]}", {"domains": ["C.test"]}, {}),
+        # a curated remove stands: the handover adds nothing back
+        ("{remove: [C.test]}", {}, {"domains": ["C.test"]}),
+    ],
+)
+def test_handover_leaves_curated_domains(tmp_path, run_cli, ops, want_add, want_remove):
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE
+
+    _stub_then_notion(tmp_path, run_cli)
+    _mirror(
+        tmp_path,
+        _node(
+            "lin_b", "Beta Corp", domains=["a.test", "b.test", "c.test"], revenue=5000, tier="Gold"
+        ),
+    )
+    (tmp_path / OVERRIDES_FILE).write_text(f"customers:\n  a:\n    domains: {ops}\n")
+    assert _ingest(run_cli, tmp_path) == 0
+    entry = _overrides(tmp_path)["a"]
+    assert entry.pin == {"revenue": 5000, "tier": "Gold"}
+    assert entry.add == want_add
+    assert entry.remove == want_remove
+
+
+def test_handover_keeps_existing_pin(tmp_path, run_cli):
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE
+
+    _stub_then_notion(tmp_path, run_cli)
+    (tmp_path / OVERRIDES_FILE).write_text("customers:\n  a:\n    pin: {revenue: 7000}\n")
+    assert _ingest(run_cli, tmp_path) == 0
+    assert _overrides(tmp_path)["a"].pin == {"revenue": 7000, "tier": "Gold"}
+
+
+def test_handover_is_once(tmp_path, run_cli):
+    _stub_then_notion(tmp_path, run_cli)
+    assert _ingest(run_cli, tmp_path) == 0
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE
+
+    path = tmp_path / OVERRIDES_FILE
+    path.write_text("customers:\n  a:\n    pin: {revenue: 5000}\n")
+    # the stub is gone: a later run hands nothing over, so a hand edit stands
+    assert _ingest(run_cli, tmp_path) == 0
+    assert _overrides(tmp_path)["a"].pin == {"revenue": 5000}
+
+
+def test_handover_dry_run_writes_nothing(tmp_path, capsys, run_cli):
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE
+
+    _stub_then_notion(tmp_path, run_cli)
+    capsys.readouterr()
+    args = ["ingest", "--only", "linear-found", "--out-dir", str(tmp_path), "--dry-run"]
+    assert run_cli(args) == 0
+    assert "would keep the Linear values of 1 customers" in capsys.readouterr().out
+    assert not (tmp_path / OVERRIDES_FILE).exists()
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "hidden: {reason: test account}",
+        "deleted: {linear_id: lin_b, confirmed: '2026-10-30'}",
+    ],
+)
+def test_no_handover_when_stub_just_dropped(tmp_path, run_cli, entry):
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE
+
+    _stub_then_notion(tmp_path, run_cli)
+    (tmp_path / OVERRIDES_FILE).write_text(f"customers:\n  a:\n    {entry}\n")
+    assert _ingest(run_cli, tmp_path) == 0
+    got = _overrides(tmp_path)["a"]
+    assert got.pin == {}
+    assert got.add == {}

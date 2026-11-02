@@ -44,7 +44,7 @@ from gitops_engine.destination import DestinationError
 from gitops_engine.fieldplan import DESTRUCTIVE, FieldChange
 from gitops_engine.hidden import hidden_from
 from gitops_engine.manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
-from gitops_engine.overrides import PENDING_ADD, override_errors
+from gitops_engine.overrides import PENDING_ADD, OverridesStore, override_errors
 
 from .changed import deploy_inputs
 from .check import (
@@ -78,7 +78,12 @@ from .linear_files import (
     hidden_reason,
     partition_hidden,
 )
-from .linear_found import append_record_identities, build_linear_found
+from .linear_found import (
+    append_record_identities,
+    build_linear_found,
+    handover_entries,
+    stub_ids,
+)
 from .linear_overrides import (
     OVERRIDES_FILE,
     OVERRIDES_FORMAT,
@@ -156,9 +161,27 @@ def _ingest_source(args, out_dir: Path) -> int:
     return 0
 
 
+def _handover(args, out_dir: Path, store: IdentityStore, old: set[str], new: set[str], entries):
+    """Keep the Linear values of each stub handing over to Notion as accepted pins and
+    domain adds in `linear-overrides.yaml` (`linear_found.handover_entries`)."""
+    kept = handover_entries(out_dir, old, new, entries, store.table)
+    if not kept:
+        return
+    if args.dry_run:
+        print(f"DRY RUN — handover: would keep the Linear values of {len(kept)} customers")
+        return
+    overrides = OverridesStore(out_dir / OVERRIDES_FILE, OVERRIDES_FORMAT)
+    for cid, entry in kept.items():
+        overrides.adopt(cid, entry)
+    overrides.save()
+    print(f"handover: {len(kept)} customers kept their Linear values")
+
+
 def _ingest_linear_found(args, out_dir: Path, store: IdentityStore, hidden, entries) -> int:
     """State mirror → `datasets/linear-found/`; 2 when refused. Hidden customers get no
-    stub (and so no identity from one)."""
+    stub (and so no identity from one). A stub that a `notion` record now takes over
+    keeps its Linear values (`_handover`)."""
+    old_stubs = stub_ids(entries, store.table)
     managed, _ = partition_hidden(
         [
             LINEAR_SCHEMA.state_to_live(r)
@@ -178,8 +201,10 @@ def _ingest_linear_found(args, out_dir: Path, store: IdentityStore, hidden, entr
         print(f"  NOTE: {msg}")
     print(f"linear-found: {len(build.stubs)} stubs; known duplicates: {len(build.duplicates)}")
     target = dataset_dir(out_dir, LINEAR_FOUND)
+    new_stubs = {cid for cid, _ in build.stubs}
     if args.dry_run:
         print(f"DRY RUN — would write {len(build.stubs)} stub files under {target}/.")
+        _handover(args, out_dir, store, old_stubs, new_stubs, entries)
         return 0
     if not _guard_or_refuse(target, "ingest", args):
         return 2
@@ -191,12 +216,14 @@ def _ingest_linear_found(args, out_dir: Path, store: IdentityStore, hidden, entr
     )
     write_manifest(target, "ingest")
     print(f"wrote {target}/*.yaml")
+    _handover(args, out_dir, store, old_stubs, new_stubs, entries)
     return 0
 
 
 def _cmd_ingest(args) -> int:
     """Build `notion` (Notion) and then `linear-found` (state mirror, offline),
-    appending new identities and missing values to identities.yaml."""
+    appending new identities and missing values to identities.yaml. In every mode, a
+    stub a `notion` record now resolves to keeps its Linear values (`_handover`)."""
     out_dir = _out_dir(args)
     if legacy_refused(out_dir):
         return 2
@@ -230,6 +257,10 @@ def _cmd_ingest(args) -> int:
                 return code
         else:
             print(f"linear-found: skipped — {no_mirror}")
+    elif has_mirror:
+        # linear-found is not rebuilt: every stub a notion record now resolves to hands
+        # over here, so a `generate` before the next build clears nothing in Linear
+        _handover(args, out_dir, store, stub_ids(entries, store.table), set(), entries)
     for msg in store.reports:
         print(f"  NOTE: {msg}")
     added = len(store.table.entries) - before
