@@ -222,14 +222,13 @@ class LinearSchema:
 
     def snapshot_values(self, row: dict[str, Any]) -> dict[str, Any]:
         """What `restore` sends for a snapshot row: every managed field, except an empty
-        status (Linear cannot clear one)."""
-        send = {
-            "name": row["name"],
-            "domains": list(row["domains"]),
-            "external_ids": list(row["external_ids"]),
-            "revenue": row["revenue"],
-            "tier": row["tier"],
-        }
+        status or empty external ids (Linear cannot clear either, and the client refuses
+        them)."""
+        send: dict[str, Any] = {"name": row["name"], "domains": list(row["domains"])}
+        if row["external_ids"]:
+            send["external_ids"] = list(row["external_ids"])
+        send["revenue"] = row["revenue"]
+        send["tier"] = row["tier"]
         if row["status"]:
             send["status"] = row["status"]
         return send

@@ -98,3 +98,21 @@ def test_restore_stops_at_first_linear_error(tmp_path, recording_linear):
     out = restore(path, client)
     assert out.restored == [] and out.failure == "lin-a: boom"
     assert [c[1] for c in client.updates()] == ["lin-a"]  # lin-b was never attempted
+
+
+def test_restore_row_with_empty_external_ids_succeeds_and_later_rows_restore(
+    tmp_path, recording_linear
+):
+    """A snapshot taken before a deploy stamped external ids holds `[]`. Restore cannot
+    clear them (the client refuses an empty external_ids), so it leaves them as they are
+    and restores every other value, and the rows after it still restore."""
+    a = recording_linear.node("lin-a", "Acme", revenue=1, xids=[])
+    b = recording_linear.node("lin-b", "Beta", revenue=2, xids=["beta"])
+    path = write_snapshot([a, b], tmp_path)
+    client = recording_linear([a, b])
+    out = restore(path, client)
+    assert out.failure is None and out.skipped == []
+    assert out.restored == ["lin-a", "lin-b"]
+    [(_, _, fields_a, _, _), (_, _, fields_b, _, _)] = client.updates()
+    assert "external_ids" not in fields_a and fields_a["revenue"] == 1
+    assert fields_b["external_ids"] == ["beta"]
