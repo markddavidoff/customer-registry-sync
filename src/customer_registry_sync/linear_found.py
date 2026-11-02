@@ -1,6 +1,6 @@
 """The `linear-found` dataset: a stub for each Linear customer the Notion dataset lacks.
 
-`ingest` builds it offline from the state mirror. Each managed (non-ignored) Linear
+`ingest` builds it offline from the state mirror. Each managed (non-hidden) Linear
 customer is resolved against the identity table. One that resolves to nothing gets a
 new identity first; one whose identity has no `notion` record becomes a stub. Every
 primary customer's Linear id is appended to its identity, and a stub's Linear-only
@@ -94,7 +94,7 @@ def build_linear_found(
 ) -> FoundBuild[CustomerRecord]:
     """Stubs for the managed customers whose identity has no `notion` record.
 
-    `managed` must already exclude ignored customers. Customers are taken in Linear-id
+    `managed` must already exclude hidden customers. Customers are taken in Linear-id
     order. Of several on one identity, the primary is the one carrying the canonical id
     or the recorded Linear id (as the planner picks it); the others are known duplicates
     and contribute nothing. When neither id is on any of them, nothing is recorded on the
@@ -150,7 +150,7 @@ def status_errors(entries: list[DatasetRecord], cfg: DatasetConfig) -> list[str]
         errors.append(
             f"unmapped Linear status: '{rec.canonical_name}' ({lid}) has status '{status}'. "
             f"Add '{status}: prospect' (or the right class) to linear_status_classification "
-            f"in datasets.yaml, or ignore it: customer-registry-sync ignore "
+            f"in datasets.yaml, or hide it: customer-registry-sync hide "
             f'--linear-id {lid} --reason "<why>"'
         )
     return errors

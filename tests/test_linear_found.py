@@ -441,7 +441,7 @@ def test_status_errors_name_unmapped_and_unclassified_stubs(tmp_path):
     assert errors[0].startswith("stub 'Blank' has no classification")
     assert errors[1].startswith("unmapped Linear status: 'Odd' (lin_s) has status 'Paused'.")
     assert "linear_status_classification in datasets.yaml" in errors[1]
-    assert "ignore --linear-id lin_s" in errors[1]
+    assert "hide --linear-id lin_s" in errors[1]
 
 
 def test_two_customers_stamped_with_the_canonical_id_are_reported(tmp_path, capsys, run_cli):

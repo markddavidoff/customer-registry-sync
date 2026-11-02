@@ -14,6 +14,7 @@ Phase B:  ``generate``      — datasets → Layer-2 ``<data_dir>/linear/*`` and
                               DRY-RUN by default; ``--apply`` performs live writes
                               after snapshotting the rows it touches.
           ``restore``       — write a pre-apply snapshot back to Linear.
+          ``hide``          — take one mirrored Linear customer out of the sync, by Linear id.
           ``adopt-live``    — migrate a v0.2.0 data dir, offline: keep Linear-only
                               values as overrides, turn the ignore file into hidden.
 Phase C:  ``check``         — plan guard: drift (state vs live) + plan; exit 0/2/3.
@@ -70,7 +71,7 @@ from .deploy_plan import (
     scope_recs,
 )
 from .generate import generate_from_dir
-from .identity import IDENTITIES_FILE, IdentityStore
+from .identity import IDENTITIES_FILE, IdentityStore, keys_for_live, resolve
 from .inbound import read_inbound, write_inbound
 from .linear_client import LinearError
 from .linear_destination import LinearDestination
@@ -93,7 +94,7 @@ from .linear_overrides import (
     value_type_failures,
 )
 from .linear_schema import LINEAR_SCHEMA
-from .migrate import AdoptRefused, adopt_live
+from .migrate import AdoptRefused, adopt_live, identity_for_live
 from .sources import SourceError
 from .tool_source import ToolSourceError, tool_source
 from .writers import (
@@ -686,6 +687,60 @@ def _cmd_adopt_live(args) -> int:
     return 0
 
 
+EXIT_ALREADY_HIDDEN = 4
+
+
+def _cmd_hide(args) -> int:
+    """Hide the mirrored Linear customer `--linear-id` under `--reason`: its canonical id
+    comes from the identity table (a new identity is appended when none matches), and
+    `linear-overrides.yaml` gets a `hidden` entry. Exit 0 written, 4 already hidden (the
+    reason is kept), 2 for an id not in the mirror, an empty reason or an invalid file."""
+    out_dir = _out_dir(args)
+    if legacy_refused(out_dir):
+        return 2
+    reason = args.reason.strip()
+    if not reason:
+        print("ERROR: --reason must not be empty", file=sys.stderr)
+        return 2
+    errors = override_errors(out_dir / OVERRIDES_FILE, OVERRIDES_FORMAT, LINEAR_SCHEMA)
+    for e in errors:
+        print(f"ERROR: {e}", file=sys.stderr)
+    if errors:
+        return 2
+    try:
+        identities = IdentityStore(out_dir / IDENTITIES_FILE)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
+    rows = [
+        r
+        for r in load_state(out_dir)
+        if r.linear_synced and r.linear_synced.linear_id == args.linear_id
+    ]
+    if not rows:
+        print(
+            f"ERROR: Linear id '{args.linear_id}' is not in {out_dir / STATE_SUBDIR}: "
+            "run sync-inbound first",
+            file=sys.stderr,
+        )
+        return 2
+    lv = LINEAR_SCHEMA.state_to_live(rows[0])
+    hit = resolve(keys_for_live(lv), identities.table)
+    if hit is not None:
+        cid, created = hit.canonical_id, False
+    else:
+        cid, created = identity_for_live(identities, lv.id, lv.name)
+    store = OverridesStore(out_dir / OVERRIDES_FILE, OVERRIDES_FORMAT)
+    if not store.hide(cid, reason):
+        print(f"'{lv.name}' ({lv.id}) is already hidden as {cid}; its reason is kept")
+        return EXIT_ALREADY_HIDDEN
+    store.save()
+    if created:
+        identities.save()
+    print(f"hidden '{lv.name}' ({lv.id}) as {cid}; run generate, then check")
+    return 0
+
+
 def _cmd_changed(args) -> int:
     """Print `changed` or `unchanged` for the deploy inputs since a sha; always exit 0."""
     try:
@@ -830,6 +885,15 @@ def build_parser() -> tuple[argparse.ArgumentParser, dict]:
     _out_dir_arg(adopt)
     _no_input_arg(adopt, "never prompt (adopt-live never does)")
     handlers["adopt-live"] = _cmd_adopt_live
+
+    hide = sub.add_parser(
+        "hide",
+        help="take a mirrored Linear customer out of the sync (exit 0; 4 already hidden; 2 refused)",
+    )
+    hide.add_argument("--linear-id", required=True, help="the customer's id in linear-state/")
+    hide.add_argument("--reason", required=True, help="why it is hidden (recorded in the file)")
+    _out_dir_arg(hide)
+    handlers["hide"] = _cmd_hide
 
     chk = sub.add_parser("check", help="plan guard: drift (state vs live) + plan; exit 0/2/3")
     _out_dir_arg(chk)

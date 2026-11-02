@@ -539,7 +539,7 @@ def test_unmapped_status_fails_naming_customer_and_status(tmp_path, run_cli):
     assert (
         "unmapped Linear status: 'Pilot Co' (lin_p) has status 'POC'. Add 'POC: prospect' "
         "(or the right class) to linear_status_classification in datasets.yaml, "
-        'or ignore it: customer-registry-sync ignore --linear-id lin_p --reason "<why>"'
+        'or hide it: customer-registry-sync hide --linear-id lin_p --reason "<why>"'
     ) in offline_errors(tmp_path)
 
 
@@ -551,7 +551,7 @@ _ORPHAN_HOOLI = [
         "  Add it: dispatch the registry-sync workflow with mode=refresh (or run sync-inbound, "
         "ingest --only linear-found, generate) and merge the PR."
     ),
-    '  Or ignore it: customer-registry-sync ignore --linear-id lin_hooli --reason "<why>"',
+    '  Or hide it: customer-registry-sync hide --linear-id lin_hooli --reason "<why>"',
 ]
 
 

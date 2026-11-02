@@ -668,7 +668,7 @@ def test_check_orphan_lines_print_before_the_plan_and_reports_after(
         "  ERROR: orphan: Linear customer 'Hooli' (lin_hooli) is in no dataset.\n"
         "    Add it: dispatch the registry-sync workflow with mode=refresh (or run sync-inbound, "
         "ingest --only linear-found, generate) and merge the PR.\n"
-        "    Or ignore it: customer-registry-sync ignore --linear-id lin_hooli "
+        "    Or hide it: customer-registry-sync hide --linear-id lin_hooli "
         '--reason "<why>"\n'
     ) in out
     assert (

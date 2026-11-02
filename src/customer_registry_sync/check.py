@@ -183,7 +183,7 @@ def orphan_lines(lv: LiveCustomer) -> list[str]:
             "  Add it: dispatch the registry-sync workflow with mode=refresh (or run "
             "sync-inbound, ingest --only linear-found, generate) and merge the PR."
         ),
-        f'  Or ignore it: customer-registry-sync ignore --linear-id {lv.id} --reason "<why>"',
+        f'  Or hide it: customer-registry-sync hide --linear-id {lv.id} --reason "<why>"',
     ]
 
 
