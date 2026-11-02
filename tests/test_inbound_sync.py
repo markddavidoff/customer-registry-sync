@@ -463,3 +463,40 @@ def test_sync_inbound_twice_leaves_the_overrides_file_byte_identical(
     _offline_refresh(tmp_path, run_cli)
     assert _sync_with(tmp_path, monkeypatch, run_cli, [edited]) == 0
     assert (tmp_path / "linear-overrides.yaml").read_bytes() == first
+
+
+def _carry_upstream(tmp_path, run_cli, *domains) -> None:
+    """Upstream (Notion) now carries `domains` besides Acme's own; regenerate."""
+    write_dataset([_acme(domains=["acme.example.test", "alt.example.test", *domains])], tmp_path)
+    write_manifest(dataset_dir(tmp_path, NOTION), "ingest")
+    _offline_refresh(tmp_path, run_cli)
+
+
+def test_settled_pending_add_keeps_a_new_linear_add_from_the_same_run(
+    tmp_path, monkeypatch, run_cli
+):
+    """An old pending add settles in the same run that records a new Linear add: the new
+    domain stays pending (the mirror already holds it, so losing it would let the next
+    deploy remove it from Linear)."""
+    from dataclasses import replace
+
+    lv = _in_sync(tmp_path, run_cli)
+    first = replace(lv, domains=[*lv.domains, "acme.dev"])
+    assert _sync_with(tmp_path, monkeypatch, run_cli, [first]) == 0
+    assert _overrides(tmp_path) == {"acme": {"pending": {"domains_add": ["acme.dev"]}}}
+    _carry_upstream(tmp_path, run_cli, "acme.dev")
+    second = replace(first, domains=[*first.domains, "acme.io"])
+    assert _sync_with(tmp_path, monkeypatch, run_cli, [second]) == 0
+    assert _overrides(tmp_path) == {"acme": {"pending": {"domains_add": ["acme.io"]}}}
+
+
+def test_only_the_carried_pending_add_is_dropped(tmp_path, monkeypatch, run_cli):
+    from dataclasses import replace
+
+    lv = _in_sync(tmp_path, run_cli)
+    edited = replace(lv, domains=[*lv.domains, "acme.dev", "acme.io"])
+    assert _sync_with(tmp_path, monkeypatch, run_cli, [edited]) == 0
+    assert _overrides(tmp_path) == {"acme": {"pending": {"domains_add": ["acme.dev", "acme.io"]}}}
+    _carry_upstream(tmp_path, run_cli, "Acme.dev")  # re-cased: compared by key
+    assert _sync_with(tmp_path, monkeypatch, run_cli, [edited]) == 0
+    assert _overrides(tmp_path) == {"acme": {"pending": {"domains_add": ["acme.io"]}}}

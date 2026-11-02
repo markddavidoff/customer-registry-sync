@@ -40,17 +40,26 @@ from .linear_schema import LINEAR_SCHEMA, LinearCustomer
 from .writers import STATE_SUBDIR, load_desired, load_state, write_state
 
 
+@dataclass(frozen=True)
+class Settled:
+    """An existing pending decision that is moot. `field` is a scalar field, or a list
+    field's own name for pending adds; `values` are then the pending adds the registry
+    now carries (the others stay pending), and empty for a scalar."""
+
+    canonical_id: str
+    field: str
+    values: tuple[str, ...] = ()
+
+
 @dataclass
 class InboundResult:
     """What `sync-inbound` writes. `mirror` is the whole new mirror (out-of-scope rows
-    kept on a scoped run). `settled` lists the (canonical id, field) of each existing
-    pending entry whose decision is moot; `field` is the list field's own name for a
-    pending add."""
+    kept on a scoped run); `settled` lists the pending decisions that are moot."""
 
     mirror: list[LinearCustomer]
     edits: list[Edit] = field(default_factory=list)
     deletions: Deletions = field(default_factory=Deletions)
-    settled: list[tuple[str, str]] = field(default_factory=list)
+    settled: list[Settled] = field(default_factory=list)
 
 
 def _empty(value: Any) -> Any:
@@ -62,16 +71,16 @@ def _settled(
     old_state: list[LinearCustomer],
     managed: list[LiveCustomer],
     desired: list[LinearCustomer],
-) -> list[tuple[str, str]]:
-    """The pending entries whose decision is moot: a scalar whose live value now equals
-    the desired value, and a list field's pending adds when the desired row carries
-    every one (compared by the field's key)."""
+) -> list[Settled]:
+    """The pending decisions that are moot: a scalar whose live value now equals the
+    desired value, and each pending list add the desired row now carries (compared by
+    the field's key)."""
     pairs: dict[str, tuple[LinearCustomer, LiveCustomer]] = {}
     for p in pair_old_state(old_state, managed, desired, schema=LINEAR_SCHEMA):
         if p.live is not None and p.desired.external_ids:
             pairs.setdefault(p.desired.external_ids[0], (p.desired, p.live))
     keys = {f.name: f.policy.key for f in LINEAR_SCHEMA.fields if isinstance(f.policy, Union)}
-    out: list[tuple[str, str]] = []
+    out: list[Settled] = []
     for cid, entry in overrides.entries.items():
         pair = pairs.get(cid)
         if pair is None:
@@ -82,14 +91,15 @@ def _settled(
             if name.endswith(PENDING_ADD) and list_field in OVERRIDES_FORMAT.list_fields:
                 key = keys.get(list_field, str)
                 carried = {key(v) for v in LINEAR_SCHEMA.desired_value(d, list_field) or []}
-                if all(key(v) in carried for v in value):
-                    out.append((cid, list_field))
+                done = tuple(v for v in value if key(v) in carried)
+                if done:
+                    out.append(Settled(cid, list_field, done))
                 continue
             live_value = base_value(name, LINEAR_SCHEMA.live_value(lv, name))
             desired_value = base_value(name, LINEAR_SCHEMA.desired_value(d, name))
             if _empty(live_value) == _empty(desired_value):
-                out.append((cid, name))
-    return sorted(out)
+                out.append(Settled(cid, name))
+    return sorted(out, key=lambda s: (s.canonical_id, s.field))
 
 
 def read_inbound(
@@ -121,8 +131,10 @@ def read_inbound(
 
 
 def write_inbound(data_dir: Path, result: InboundResult, *, today: str) -> int:
-    """Write `linear-state/` and its manifest, then record the edits in the overrides
-    file and drop each settled pending entry. Returns the number of override changes.
+    """Write `linear-state/` and its manifest, then drop the settled pending decisions
+    from the overrides file and record the edits. Settling goes first, so a pending add
+    recorded in this run is never dropped with an older one. Returns the number of
+    override changes.
 
     `today` (an ISO date) dates confirmed deletions; nothing fills `deletions` yet, so
     it is unused for now."""
@@ -130,8 +142,12 @@ def write_inbound(data_dir: Path, result: InboundResult, *, today: str) -> int:
     store = OverridesStore(data_dir / OVERRIDES_FILE, OVERRIDES_FORMAT)
     write_state(result.mirror, data_dir)
     write_manifest(data_dir / STATE_SUBDIR, "sync-inbound")
-    changed = record_edits(store, result.edits)
-    for cid, name in result.settled:
-        changed += store.drop_pending(cid, name)
+    changed = 0
+    for s in result.settled:
+        if s.values:
+            changed += store.drop_pending_values(s.canonical_id, s.field, s.values)
+        else:
+            changed += store.drop_pending(s.canonical_id, s.field)
+    changed += record_edits(store, result.edits)
     store.save()
     return changed

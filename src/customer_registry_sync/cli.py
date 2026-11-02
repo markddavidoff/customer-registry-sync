@@ -44,7 +44,7 @@ from gitops_engine.destination import DestinationError
 from gitops_engine.fieldplan import DESTRUCTIVE, FieldChange
 from gitops_engine.hidden import hidden_from
 from gitops_engine.manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
-from gitops_engine.overrides import override_errors
+from gitops_engine.overrides import PENDING_ADD, override_errors
 
 from .changed import deploy_inputs
 from .check import (
@@ -311,8 +311,9 @@ def _cmd_sync_inbound(args) -> int:
     pending = sum(1 for e in result.edits if e.kind == "pending")
     absorbed = len(result.edits) - pending
     print(f"sync-inbound: {mirrored} mirrored; {absorbed} absorbed, {pending} pending")
-    for cid, name in result.settled:
-        print(f"  NOTE: {cid}: pending {name} dropped: Linear and the registry now agree")
+    for s in result.settled:
+        what = f"{s.field}{PENDING_ADD} {', '.join(s.values)}" if s.values else s.field
+        print(f"  NOTE: {s.canonical_id}: pending {what} dropped: the registry now agrees")
     if args.dry_run:
         print(
             f"DRY RUN — would write {len(result.mirror)} files under {out_dir}/{STATE_SUBDIR}/ "
