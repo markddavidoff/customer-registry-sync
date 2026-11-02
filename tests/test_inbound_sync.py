@@ -374,9 +374,18 @@ def test_name_suffix_only_change_is_not_an_edit(tmp_path, monkeypatch, run_cli, 
 
     lv = _in_sync(tmp_path, run_cli)
     assert lv.name == "Acme [Active]"
-    assert _sync_with(tmp_path, monkeypatch, run_cli, [replace(lv, name=renamed)]) == 0
+    edited = replace(lv, name=renamed)
+    assert _sync_with(tmp_path, monkeypatch, run_cli, [edited]) == 0
     assert _overrides(tmp_path) == {}
     assert not (tmp_path / "linear-overrides.yaml").exists()
+    # Review Focus 2: the next plan writes the registry's suffix back, and nothing else.
+    from customer_registry_sync.deploy_plan import offline_plan
+
+    plan, _ = offline_plan(tmp_path, live=[edited])
+    assert [(t.name, lv_.id) for t, lv_ in plan.updates] == [("Acme [Active]", "lin_acme")]
+    assert [(c.field, c.old, c.new) for c in plan.changes["lin_acme"]] == [
+        ("name", renamed, "Acme [Active]")
+    ]
 
 
 def test_name_change_pending_without_suffix(tmp_path, monkeypatch, run_cli):
@@ -552,3 +561,141 @@ def test_stub_deleted_in_linear_just_drops(tmp_path, monkeypatch, run_cli):
     assert _overrides(tmp_path) == {}
     _offline_refresh(tmp_path, run_cli)
     assert load_datasets(tmp_path, DatasetConfig(names=[LINEAR_FOUND])) == []
+
+
+# Final review Important 1: the deploy job runs `sync-inbound` after the apply and opens a
+# state PR with no `generate` step. That PR must carry a `linear/` consistent with the
+# overrides it records, and `deploy` must not write what it records.
+
+
+def _deploy(tmp_path, monkeypatch, run_cli, live_rows, client=None) -> int:
+    from customer_registry_sync import cli
+
+    monkeypatch.setattr(cli, "_linear_client", lambda: client or FakeClient(live_rows))
+    return run_cli(["deploy", "--out-dir", str(tmp_path)])
+
+
+class _NoListing(FakeClient):
+    def list_customers(self):
+        raise AssertionError("deploy listed Linear before refusing")
+
+
+def test_recorded_clear_regenerates_and_deploy_does_not_write_it_back(
+    tmp_path, monkeypatch, capsys, run_cli
+):
+    from dataclasses import replace
+
+    from customer_registry_sync.check import desired_out_of_date
+    from customer_registry_sync.writers import load_desired
+
+    lv = _in_sync(tmp_path, run_cli)
+    edited = replace(lv, revenue=None)
+    assert _sync_with(tmp_path, monkeypatch, run_cli, [edited]) == 0  # no generate after
+    assert _overrides(tmp_path) == {"acme": {"pin": {"revenue": None}}}
+    assert desired_out_of_date(tmp_path) == []
+    assert offline_errors(tmp_path) == []
+    [d] = [r for r in load_desired(tmp_path) if r.external_ids == ["acme"]]
+    assert d.revenue is None
+    capsys.readouterr()
+    assert _deploy(tmp_path, monkeypatch, run_cli, [edited]) == 0
+    out = capsys.readouterr().out
+    assert "revenue" not in out and "updates=0" in out
+    assert _check(tmp_path, monkeypatch, run_cli, [edited]) == 0
+
+
+def test_recorded_deletion_regenerates_and_deploy_plans_no_create(
+    tmp_path, monkeypatch, capsys, run_cli
+):
+    from customer_registry_sync.writers import load_desired
+
+    # Beta keeps `linear/` non-empty (deploy refuses an empty one); it is not in Linear.
+    beta = CustomerRecord(canonical_name="Beta", classification="real")
+    _in_sync(tmp_path, run_cli, [_acme(), beta])
+    assert _sync_with(tmp_path, monkeypatch, run_cli, [], found={"lin_acme": None}) == 0
+    assert "acme" in _overrides(tmp_path)
+    assert [r for r in load_desired(tmp_path) if "acme" in r.external_ids] == []
+    assert offline_errors(tmp_path) == []
+    capsys.readouterr()
+    assert _deploy(tmp_path, monkeypatch, run_cli, []) == 0
+    out = capsys.readouterr().out
+    assert "creates=1" in out and "+ Beta [Active]" in out and "+ Acme" not in out
+
+
+def _stale_after(tmp_path, monkeypatch, run_cli, live_rows, found=None) -> None:
+    """Record with `sync-inbound`, then put back the `linear/` from before it: the
+    state a v0.3.0-rc deploy job's state PR left."""
+    import shutil
+
+    before = tmp_path.parent / f"{tmp_path.name}-linear-before"
+    shutil.copytree(tmp_path / "linear", before)
+    assert _sync_with(tmp_path, monkeypatch, run_cli, live_rows, found=found) == 0
+    shutil.rmtree(tmp_path / "linear")
+    shutil.copytree(before, tmp_path / "linear")
+
+
+def test_deploy_refuses_stale_linear_before_listing(tmp_path, monkeypatch, capsys, run_cli):
+    from dataclasses import replace
+
+    lv = _in_sync(tmp_path, run_cli)
+    _stale_after(tmp_path, monkeypatch, run_cli, [replace(lv, revenue=None)])
+    capsys.readouterr()
+    assert _deploy(tmp_path, monkeypatch, run_cli, [], client=_NoListing([])) == 3
+    out = capsys.readouterr().out
+    assert "ERROR: linear out of date: acme: run generate" in out
+    assert "REFUSED" in out and "revenue" not in out
+
+
+def test_deploy_scoped_stale_guard_ignores_rows_outside_the_scope(
+    tmp_path, monkeypatch, capsys, run_cli
+):
+    from dataclasses import replace
+
+    lv = _in_sync(tmp_path, run_cli)
+    _stale_after(tmp_path, monkeypatch, run_cli, [replace(lv, revenue=None)])
+    from customer_registry_sync import cli
+
+    monkeypatch.setattr(cli, "_linear_client", lambda: FakeClient([]))
+    assert run_cli(["deploy", "--out-dir", str(tmp_path), "--scope", "Zeta"]) == 0
+    assert run_cli(["deploy", "--out-dir", str(tmp_path), "--scope", "Acme"]) == 3
+
+
+def test_plan_aborts_a_deleted_row_from_a_stale_linear(tmp_path, monkeypatch, run_cli):
+    from customer_registry_sync.deploy_plan import offline_plan
+
+    _in_sync(tmp_path, run_cli)
+    _stale_after(tmp_path, monkeypatch, run_cli, [], found={"lin_acme": None})
+    plan, code = offline_plan(tmp_path, live=[])
+    assert plan.creates == []
+    [(d, lv, reason)] = plan.aborts
+    assert (d.name, lv) == ("Acme [Active]", None)
+    assert reason.startswith("deleted in Linear (lin_acme, ") and "not recreated" in reason
+    assert code == 3
+
+
+def test_plan_aborts_a_hidden_row_from_a_stale_linear(tmp_path, monkeypatch, run_cli):
+    from customer_registry_sync.deploy_plan import offline_plan
+
+    lv = _in_sync(tmp_path, run_cli)
+    (tmp_path / "linear-overrides.yaml").write_text(
+        "customers:\n  acme:\n    hidden: {reason: test account}\n"
+    )
+    plan, code = offline_plan(tmp_path, live=[lv])
+    assert plan.creates == [] and plan.updates == []
+    [(d, _, reason)] = plan.aborts
+    assert d.name == "Acme [Active]" and reason.startswith("hidden in linear-overrides.yaml")
+    assert code == 3
+
+
+def test_sync_inbound_refuses_hand_edited_linear_before_writing(
+    tmp_path, monkeypatch, capsys, run_cli
+):
+    from dataclasses import replace
+
+    lv = _in_sync(tmp_path, run_cli)
+    [desired_file] = (tmp_path / "linear").glob("acme*.yaml")
+    desired_file.write_text(desired_file.read_text() + "# hand edit\n")
+    before = sorted((p.relative_to(tmp_path), p.read_bytes()) for p in tmp_path.rglob("*.*"))
+    assert _sync_with(tmp_path, monkeypatch, run_cli, [replace(lv, revenue=None)]) == 2
+    assert "REFUSED" in capsys.readouterr().err
+    after = sorted((p.relative_to(tmp_path), p.read_bytes()) for p in tmp_path.rglob("*.*"))
+    assert after == before

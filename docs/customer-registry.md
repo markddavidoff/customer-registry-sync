@@ -442,8 +442,14 @@ reviewer approves
 
 The state PR holds `<data_dir>/linear-state/` and `<data_dir>/linear-snapshots/`, which
 are not deploy inputs, plus any change the post-apply `sync-inbound` made elsewhere under
-`<data_dir>`, such as a recorded edit in `linear-overrides.yaml`. A PR that changes the
-overrides file starts a deploy run when it merges.
+`<data_dir>`: a recorded edit or deletion in `linear-overrides.yaml`, and then the
+`linear/` and CSVs that `sync-inbound` regenerates from it. A state PR that changes the
+overrides file starts a deploy run when it merges. That run's plan leaves an absorbed
+clear, removal or deletion alone, because the regenerated `linear/` already agrees with
+Linear; a pending entry aborts its row until someone resolves it. `deploy` refuses a
+`linear/` that is out of date with the overrides file, and never writes a row whose
+canonical id is `deleted` or `hidden`, so a stale `linear/` cannot write back what
+`sync-inbound` recorded.
 
 **Merge a deploy's state PR before the next refresh PR.** The refresh compares the
 mirror on `main` with live Linear. Until the state PR merges, that mirror predates the
@@ -535,10 +541,10 @@ sample of each curated file.
 | Command | What it does | Linear | Exit codes |
 |---|---|---|---|
 | `ingest [--only notion\|linear-found]` | Builds `datasets/notion/` from Notion (needs `NOTION_API_TOKEN`), then `datasets/linear-found/` from the mirror; appends to `identities.yaml`. `--only linear-found` needs a state mirror from an earlier `sync-inbound` and exits 2 without one; a plain `ingest` skips the `linear-found` step and says so. | none | 0 written or dry run; 2 refused or error |
-| `generate` | Merges the datasets into `linear/` and both CSVs. | none | 0; 2 refused (hand edits) |
-| `sync-inbound [--scope P]` | Rewrites `linear-state/` from live Linear, and records the Linear edits and confirmed deletions since the last mirror in `linear-overrides.yaml`. Prints `N mirrored; A absorbed, P pending`. | read | 0; 2 no token, refused, an invalid overrides file, a legacy file, or a Linear read error (nothing written) |
+| `generate` | Merges the datasets into `linear/` and both CSVs. | none | 0; 2 refused (hand edits) or an invalid overrides file |
+| `sync-inbound [--scope P]` | Rewrites `linear-state/` from live Linear, and records the Linear edits and confirmed deletions since the last mirror in `linear-overrides.yaml`. When that file changes, it then runs `generate` offline from the committed datasets, so `linear/` and both CSVs match the overrides they derive from. Prints `N mirrored; A absorbed, P pending`. | read | 0; 2 no token, refused (hand edits to `linear-state/` or, when the overrides file would change, to `linear/`), an invalid overrides file, a legacy file, or a Linear read error (nothing written); 2 after writing the mirror and overrides when `generate` then fails |
 | `check [--scope P]` | Drift, plan, pending entries and every offline check; prints the plan. Needs `LINEAR_API_TOKEN`. | read | 0 in sync; 2 no token, invalid curated file, a legacy file, or a Linear read error; 3 something to fix |
-| `deploy [--apply --prod [--break-glass]] [--scope P]` | Prints the plan; with `--apply`, writes it. Needs `LINEAR_API_TOKEN` even as a dry run. | read; write with `--apply` | 0 done; 2 no token, invalid curated file, guard refused, or apply refused before any write; 3 refused plan, aborted rows or a failed create/update; 1 with a traceback on a Linear API error while reading customers or the status and tier maps |
+| `deploy [--apply --prod [--break-glass]] [--scope P]` | Prints the plan; with `--apply`, writes it. Refuses, before reading Linear's customers, when `linear/` differs from what `generate` builds now (in `--scope`). Aborts a desired row whose canonical id has a `pending`, `deleted` or `hidden` entry. Needs `LINEAR_API_TOKEN` even as a dry run. | read; write with `--apply` | 0 done; 2 no token, invalid curated file, guard refused, or apply refused before any write; 3 `linear/` out of date, refused plan, aborted rows or a failed create/update; 1 with a traceback on a Linear API error while reading customers or the status and tier maps |
 | `restore --from <snapshot> [--rows ID...] --prod [--break-glass]` | Writes snapshot values back with check-and-set. | write | 0 all restored; 2 no token, guard refused, unreadable snapshot, or a write error that stopped it; 3 some rows skipped; 1 with a traceback on a Linear API error while reading the status and tier maps |
 | `hide --linear-id ID --reason TEXT` | Adds a `hidden` entry for a mirrored Linear customer to `linear-overrides.yaml`. The id must be in the state mirror, so run `sync-inbound` first. | none | 0 hidden; 4 already hidden (its reason is kept); 2 refused |
 | `refresh` | Runs `sync-inbound`, `ingest --only linear-found` and `generate` with `--no-input`, and stops at the first non-zero exit. Never runs `check` and never writes to Linear. The workflow's refresh job calls it. | read | the first failing step's code, else 0 |

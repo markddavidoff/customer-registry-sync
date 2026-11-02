@@ -9,8 +9,10 @@ Phase A:  ``ingest``        — Notion hub pages → the ``notion`` dataset, the
                               (``--only linear-found``: offline); appends identities.
 Phase B:  ``generate``      — datasets → Layer-2 ``<data_dir>/linear/*`` and the CSVs.
           ``sync-inbound``  — live Linear → Layer-2 mirror (refresh linear_synced);
-                              Linear edits → ``linear-overrides.yaml``.
-          ``deploy``        — Layer-2 → Linear, per-customer check-and-set.
+                              Linear edits → ``linear-overrides.yaml``, then an
+                              offline ``generate`` when that file changed.
+          ``deploy``        — Layer-2 → Linear, per-customer check-and-set; refuses
+                              a ``linear/`` that ``generate`` would change.
                               DRY-RUN by default; ``--apply`` performs live writes
                               after snapshotting the rows it touches.
           ``restore``       — write a pre-apply snapshot back to Linear.
@@ -53,6 +55,7 @@ from .changed import deploy_inputs
 from .check import (
     EXIT_DRIFT,
     EXIT_OPERROR,
+    desired_out_of_date,
     offline_errors,
     orphan_lines,
     override_findings,
@@ -308,11 +311,16 @@ def _cmd_generate(args) -> int:
         return 0
     if not _guard_or_refuse(out_dir / DESIRED_SUBDIR, "generate", args):
         return 2
-    write_desired(recs, out_dir)
+    _write_generated(generated, out_dir)
+    return 0
+
+
+def _write_generated(generated, out_dir: Path) -> None:
+    """`generate`'s output: `linear/` with its manifest, and both CSVs."""
+    write_desired(generated.rows, out_dir)
     write_manifest(out_dir / DESIRED_SUBDIR, "generate")
     write_csvs(generated.winners, out_dir)
     print(f"wrote {out_dir}/{DESIRED_SUBDIR}/*.yaml + {REGISTRY_CSV} + {REAL_CUSTOMERS_CSV}")
-    return 0
 
 
 def _linear_client():
@@ -365,8 +373,43 @@ def _cmd_sync_inbound(args) -> int:
         return 0
     if not _guard_or_refuse(out_dir / STATE_SUBDIR, "sync-inbound", args):
         return 2
+    # A changed overrides file changes what `generate` builds; ask about hand edits to
+    # `linear/` before writing anything, so a refusal leaves the data dir as it was.
+    may_change = bool(result.edits or result.settled or result.deletions.confirmed)
+    if may_change and not _guard_or_refuse(out_dir / DESIRED_SUBDIR, "generate", args):
+        return 2
     changed = write_inbound(out_dir, result, today=datetime.now(UTC).date().isoformat())
     print(f"wrote {out_dir}/{STATE_SUBDIR}/*.yaml; {OVERRIDES_FILE}: {changed} changes")
+    if changed:
+        return _regenerate(out_dir)
+    return 0
+
+
+def _regenerate(out_dir: Path) -> int:
+    """After `sync-inbound` changed the overrides file: `generate`, offline, from the
+    committed datasets, so `linear/` and the CSVs never lag the overrides they derive
+    from (the deploy job's state PR carries all three). 2 when `generate` cannot run."""
+    try:
+        failures = value_type_failures(load_overrides_file(out_dir))
+        if failures:
+            raise ValueError("; ".join(failures))
+        generated = generate_from_dir(out_dir)
+    except ValueError as e:
+        print(
+            f"ERROR: {OVERRIDES_FILE} written but generate failed: {e}; "
+            f"{DESIRED_SUBDIR}/ is out of date: fix it and run generate.",
+            file=sys.stderr,
+        )
+        return 2
+    if not generated.winners:
+        print(
+            f"WARNING: no dataset records under {out_dir}/{DATASETS_SUBDIR}/; "
+            f"{DESIRED_SUBDIR}/ left as is: run ingest, then generate.",
+            file=sys.stderr,
+        )
+        return 0
+    print(f"generate: {len(generated.rows)} Linear projections (overrides changed)")
+    _write_generated(generated, out_dir)
     return 0
 
 
@@ -469,6 +512,19 @@ def _cmd_deploy(args) -> int:
     inp = load_inputs(out_dir, args.scope, require_desired=True)
     if inp is None:
         return 2
+    try:
+        stale = desired_out_of_date(out_dir, args.scope)
+    except ValueError as e:
+        print(f"ERROR: cannot compare {DESIRED_SUBDIR}/ with generate: {e}", file=sys.stderr)
+        return 2
+    if stale:
+        for msg in stale:
+            print(f"  ERROR: {msg}")
+        print(
+            f"REFUSED — {out_dir}/{DESIRED_SUBDIR}/ is out of date with {OVERRIDES_FILE} "
+            "and the datasets; nothing planned or written. Run generate and commit it."
+        )
+        return 3
     planning = plan_for_deploy(inp, client.list_customers(), args.scope)
     plan, conflicts, reports = planning.plan, planning.conflicts, planning.reports
     _print_plan(plan)

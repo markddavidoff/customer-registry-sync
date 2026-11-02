@@ -233,6 +233,23 @@ def test_adopt_refuses_unreadable_files(tmp_path, run_cli, name, text):
     assert _files(data) == before
 
 
+@pytest.mark.parametrize(
+    "text", ["- not a mapping\n", "canonical_name: Acme\nclassification: bogus\n"]
+)
+def test_adopt_refuses_unreadable_dataset(tmp_path, run_cli, capsys, text):
+    data = _repo(tmp_path, run_cli, records=[ACME], nodes=[_node("lin_a", "Acme", **ACME_LIVE)])
+    from gitops_engine.manifest import MANIFEST
+
+    [record] = [p for p in dataset_dir(data, NOTION).glob("*.yaml") if p.name != MANIFEST]
+    record.write_text(text)
+    before = _files(data)
+    assert _adopt(run_cli, data) == 2
+    err = capsys.readouterr().err
+    assert "datasets under" in err and "cannot be read" in err and "Traceback" not in err
+    assert "adopt-live refused; nothing written." in err
+    assert _files(data) == before
+
+
 def test_adopt_refuses_without_mirror(tmp_path, run_cli):
     data = tmp_path / "data"
     data.mkdir()

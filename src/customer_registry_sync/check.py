@@ -258,6 +258,37 @@ def _stable_dict(rec: LinearCustomer) -> dict:
     return d
 
 
+def _stale_desired(
+    expected_rows: list[LinearCustomer],
+    actual_rows: list[LinearCustomer],
+    scope: str | None = None,
+) -> list[str]:
+    """One line per desired row in `linear/` that differs from what `generate` builds
+    (missing, extra or changed); with `scope`, only rows whose name starts with it."""
+
+    def keyed(rows: list[LinearCustomer]) -> dict[str, LinearCustomer]:
+        return {_row_key(r): r for r in rows}
+
+    expected, actual = keyed(expected_rows), keyed(actual_rows)
+    stale = []
+    for xid in sorted(expected.keys() | actual.keys()):
+        rows = [r for r in (expected.get(xid), actual.get(xid)) if r is not None]
+        if scope and not any(r.name.startswith(scope) for r in rows):
+            continue
+        want, have = expected.get(xid), actual.get(xid)
+        if (_stable_dict(want) if want else None) != (_stable_dict(have) if have else None):
+            stale.append(f"{DESIRED_SUBDIR} out of date: {xid}: run generate")
+    return stale
+
+
+def desired_out_of_date(data_dir: Path, scope: str | None = None) -> list[str]:
+    """The rows of `<data_dir>/linear/` that differ from what `generate` builds now from
+    the datasets and overrides (in `scope`, when given); empty when current. Raises
+    ValueError when `generate` cannot run (an invalid overrides or identity file)."""
+    root = Path(data_dir)
+    return _stale_desired(generate_from_dir(root).rows, load_desired(root), scope)
+
+
 def identity_offline_errors(entries: list[DatasetRecord], table: IdentityTable) -> list[str]:
     """Identity problems that change generated output; empty when clean."""
     return engine.identity_offline_errors(
@@ -289,13 +320,7 @@ def offline_errors(data_dir: Path) -> list[str]:
         generated = generate_from_dir(root)
     except ValueError as e:  # an overrides file that is not the overrides shape
         return [*errors, str(e)]
-    expected = {_row_key(r): _stable_dict(r) for r in generated.rows}
-    actual = {_row_key(r): _stable_dict(r) for r in load_desired(root)}
-    errors += [
-        f"{DESIRED_SUBDIR} out of date: {xid}: run generate"
-        for xid in sorted(expected.keys() | actual.keys())
-        if expected.get(xid) != actual.get(xid)
-    ]
+    errors += _stale_desired(generated.rows, load_desired(root))
     for name, csv_entries in (
         (REGISTRY_CSV, generated.winners),
         (REAL_CUSTOMERS_CSV, real_entries(generated.winners)),

@@ -77,18 +77,47 @@ def _state_from(lv):
 
 
 def _seed(tmp_path, desired, state):
-    write_desired(desired, tmp_path)
+    """`linear/` as the real `generate` builds it, plus the state mirror `state`. Each
+    `desired` row becomes a Notion dataset record; the rows `generate` then builds must
+    equal `desired`, so a test's explicit rows are what deploy really reads."""
+    from gitops_engine.datasets import dataset_dir
+    from gitops_engine.manifest import write_manifest
+
+    from customer_registry_sync.datasets import NOTION
+    from customer_registry_sync.generate import generate_from_dir, strip_status_suffix
+    from customer_registry_sync.schema import CustomerRecord
+    from customer_registry_sync.writers import write_csvs, write_dataset
+
+    records = [
+        CustomerRecord(
+            canonical_name=strip_status_suffix(d.name),
+            domains=list(d.domains),
+            classification="real",
+            arr=None if d.revenue is None else float(d.revenue),
+            tier=d.tier,
+        )
+        for d in desired
+    ]
+    write_dataset(records, tmp_path)
+    write_manifest(dataset_dir(tmp_path, NOTION), "ingest")
+    gen = generate_from_dir(tmp_path)
+    assert [r.to_dict() for r in gen.rows] == [
+        d.to_dict() for d in sorted(desired, key=lambda d: d.name.lower())
+    ]
+    write_desired(gen.rows, tmp_path)
+    write_csvs(gen.winners, tmp_path)
+    write_manifest(tmp_path / "linear", "generate")
     write_state(state, tmp_path)
 
 
 def test_deploy_dry_run_returns_3_on_abort(tmp_path, monkeypatch, run_cli):
-    recorded = _live("lin_1", "Acme")
-    live_now = _live("lin_1", "Acme", updated="2026-10-02T00:00:00.000Z", revenue=99)
+    recorded = _live("lin_1", "Acme [Active]")
+    live_now = _live("lin_1", "Acme [Active]", updated="2026-10-02T00:00:00.000Z", revenue=99)
     _seed(
         tmp_path,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -106,7 +135,7 @@ def test_deploy_apply_refuses_prod_dir_without_prod_flag(tmp_path, monkeypatch, 
         tmp_path,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -130,7 +159,7 @@ def test_apply_prod_guard_resolves_symlinked_dir(tmp_path, monkeypatch, run_cli)
         real,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -148,12 +177,12 @@ def test_apply_prod_guard_resolves_symlinked_dir(tmp_path, monkeypatch, run_cli)
 
 
 def test_deploy_apply_writes_and_refreshes_state(tmp_path, monkeypatch, run_cli):
-    live = _live("lin_1", "Acme")
+    live = _live("lin_1", "Acme [Active]")
     _seed(
         tmp_path,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -171,12 +200,12 @@ def test_deploy_apply_writes_and_refreshes_state(tmp_path, monkeypatch, run_cli)
 
 
 def test_scope_no_match_is_empty_plan(tmp_path, monkeypatch, run_cli):
-    live = _live("lin_1", "Acme")
+    live = _live("lin_1", "Acme [Active]")
     _seed(
         tmp_path,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -195,13 +224,13 @@ def test_scope_no_match_is_empty_plan(tmp_path, monkeypatch, run_cli):
 
 def _seed_acme(tmp_path, recording_linear):
     live = recording_linear.node(
-        "lin_1", "Acme", domains=["acme.example.test"], revenue=1, xids=["acme"]
+        "lin_1", "Acme [Active]", domains=["acme.example.test"], revenue=1, xids=["acme"]
     )
     _seed(
         tmp_path,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -293,7 +322,7 @@ def test_deploy_refuses_on_planner_errors_and_loads_identities(
         tmp_path,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -316,13 +345,17 @@ def test_deploy_removes_a_domain_the_registry_lacks(
     tmp_path, monkeypatch, recording_linear, run_cli
 ):
     live = recording_linear.node(
-        "lin_1", "Acme", domains=["acme.example.test", "old.example.org"], revenue=5, xids=["acme"]
+        "lin_1",
+        "Acme [Active]",
+        domains=["acme.example.test", "old.example.org"],
+        revenue=5,
+        xids=["acme"],
     )
     _seed(
         tmp_path,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -339,13 +372,13 @@ def test_deploy_removes_a_domain_the_registry_lacks(
 
 
 def test_deploy_holds_pending_row(tmp_path, monkeypatch, capsys, recording_linear, run_cli):
-    acme = recording_linear.node("lin_a", "Acme", revenue=1, xids=["acme"])
-    beta = recording_linear.node("lin_b", "Beta", revenue=1, xids=["beta"])
+    acme = recording_linear.node("lin_a", "Acme [Active]", revenue=1, xids=["acme"])
+    beta = recording_linear.node("lin_b", "Beta [Active]", revenue=1, xids=["beta"])
     _seed(
         tmp_path,
         [
-            LinearCustomer(name="Acme", revenue=5, status="Active", external_ids=["acme"]),
-            LinearCustomer(name="Beta", revenue=5, status="Active", external_ids=["beta"]),
+            LinearCustomer(name="Acme [Active]", revenue=5, status="Active", external_ids=["acme"]),
+            LinearCustomer(name="Beta [Active]", revenue=5, status="Active", external_ids=["beta"]),
         ],
         [_state_from(acme), _state_from(beta)],
     )
@@ -356,7 +389,7 @@ def test_deploy_holds_pending_row(tmp_path, monkeypatch, capsys, recording_linea
     monkeypatch.setattr(cli, "_linear_client", lambda: fake)
     assert run_cli(["deploy", "--apply", "--out-dir", str(tmp_path)]) == 3
     out = capsys.readouterr().out
-    assert "ABORT: Acme — pending decision in linear-overrides.yaml" in out
+    assert "ABORT: Acme [Active] — pending decision in linear-overrides.yaml" in out
     assert [(c[1], c[2]) for c in fake.updates()] == [("lin_b", {"revenue": 5})]
     assert (fake.rows["lin_a"].revenue, fake.rows["lin_b"].revenue) == (1, 5)
 
@@ -369,7 +402,7 @@ def test_deploy_apply_reports_verification_failure(
     monkeypatch.setattr(cli, "_linear_client", lambda: fake)
     assert run_cli(["deploy", "--apply", "--out-dir", str(tmp_path)]) == 3
     out = capsys.readouterr().out
-    assert "Acme: tier expected None got Tier 2" in out and "restore: " in out
+    assert "Acme [Active]: tier expected None got Tier 2" in out and "restore: " in out
 
 
 def test_restore_cli_round_trip_and_break_glass(

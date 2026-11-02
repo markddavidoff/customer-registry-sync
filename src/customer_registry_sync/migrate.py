@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+from gitops_engine.datasets import DATASETS_SUBDIR
 from gitops_engine.hidden import hidden_from
 from gitops_engine.ignore import ignore_errors, load_ignore
 from gitops_engine.manifest import MANIFEST
@@ -60,7 +61,8 @@ def identity_for_live(store: IdentityStore, live_id: str, name: str) -> tuple[st
 
 def _refusals(data_dir: Path) -> list[str]:
     """Why `data_dir` cannot be migrated: a retire file with entries, no state mirror,
-    or an identity, ignore, overrides or retire file that cannot be read."""
+    or an identity, ignore, overrides or retire file or a dataset record that cannot be
+    read."""
     out: list[str] = []
     try:
         if load_retire(data_dir / RETIRE_FILE, LINEAR_SCHEMA):
@@ -78,6 +80,10 @@ def _refusals(data_dir: Path) -> list[str]:
         IdentityStore(data_dir / IDENTITIES_FILE)
     except ValueError as e:
         out.append(str(e))
+    try:
+        load_datasets(data_dir, load_datasets_config(data_dir))
+    except ValueError as e:
+        out.append(f"the datasets under {data_dir / DATASETS_SUBDIR} cannot be read: {e}")
     return out
 
 
@@ -85,7 +91,8 @@ def adopt_live(data_dir: Path, *, dry_run: bool = False) -> AdoptResult:
     """Migrate `data_dir` (see the module docstring); with `dry_run`, write nothing.
 
     Raises `AdoptRefused`, before writing anything, when `linear-retire.yaml` has
-    entries, the state mirror is missing, or a curated file cannot be read."""
+    entries, the state mirror is missing, or a curated file or dataset record cannot be
+    read."""
     data_dir = Path(data_dir)
     refusals = _refusals(data_dir)
     if refusals:

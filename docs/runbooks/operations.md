@@ -82,9 +82,15 @@ wins. Merging the state PR first avoids it.
 
 The state PR stages all of `<data_dir>` (and the state and snapshot directories, if they
 lie elsewhere). The `sync-inbound` that the deploy job runs after the apply can also
-record an edit in `<data_dir>/linear-overrides.yaml`, and that change lands in the state
-PR. If the PR changes the overrides file, merging it starts a deploy run (the file is a
-deploy input), whose plan the reviewer may approve or reject. Fixed in v0.3.0.
+record an edit or a deletion in `<data_dir>/linear-overrides.yaml`. When it does, it
+regenerates `<data_dir>/linear/` and the CSVs from the committed datasets, and all of it
+lands in the state PR. Merging a PR that changes the overrides file starts a deploy run
+(the file is a deploy input). Its plan does not write back an absorbed clear or removal
+and does not recreate a deleted customer, because the regenerated `linear/` already
+agrees with Linear. A pending entry aborts its row, so resolve it (see
+[A pending Linear edit](#a-pending-linear-edit)) before approving. If `deploy` prints `linear out of date: <id>: run generate`
+and `REFUSED`, the `linear/` on the branch lags the overrides file: run `generate`,
+commit the result, and re-run.
 
 **Break-glass (laptop).** `deploy --apply --prod` outside GitHub Actions refuses unless
 `--break-glass` is passed. Use it only when the workflow is unavailable; it prints a
@@ -361,11 +367,12 @@ snapshot, so it never overwrites newer work.
    (step 3) and merge its state PR, then revert the registry change in a PR. Reverting
    first fails: merging a revert triggers a deploy that redoes the change and bumps
    `updatedAt`, so `restore` then skips every row. After a restore, Linear holds values
-   the registry no longer wants, so a refresh before the revert merges records them as
-   Linear edits: a cleared value or removed domain is absorbed as a pin or
-   `domains.remove`, and anything else becomes a pending entry. Reverting the registry
-   change makes the registry agree with Linear again; delete any pin, removal or pending
-   entry the refresh recorded for the same value.
+   the registry no longer wants, so the `sync-inbound` the restore job runs records them
+   as Linear edits in the restore's state PR: a cleared value or removed domain is
+   absorbed as a pin or `domains.remove` (with `linear/` regenerated to match), and
+   anything else becomes a pending entry. Reverting the registry change makes the
+   registry agree with Linear again; in the revert PR, delete any pin, removal or pending
+   entry the restore's state PR recorded for the same value, then run `generate`.
 
    Do not approve any deploy run that starts between the restore and the registry
    revert; it would re-apply the change.

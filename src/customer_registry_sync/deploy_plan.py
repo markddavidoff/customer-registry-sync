@@ -38,6 +38,7 @@ __all__ = [
     "LEGACY_GUARDED",
     "DeployPlanning",
     "PlanInputs",
+    "barred_rows",
     "check_exit",
     "check_for",
     "legacy_refused",
@@ -154,20 +155,49 @@ def plan_for_deploy(
     scope: str | None,
 ) -> DeployPlanning:
     """`deploy`'s plan against `all_live`, every live customer Linear lists. A row with
-    a pending decision in the overrides file is aborted, not written."""
+    a pending decision in the overrides file is aborted, not written. So is a desired
+    row whose canonical id the overrides file marks `deleted` or `hidden`: `generate`
+    never emits one, so it comes from a stale `linear/`, and writing it would recreate a
+    deleted customer or write a hidden one."""
     managed, hidden_live, other = partitioned(all_live, inp.hidden, inp.table, scope)
     conflicts, reports = hidden_conflicts(
         hidden_live, inp.hidden, entries(inp.data_dir), inp.desired, inp.table, scope=scope
     )
+    barred = barred_rows(inp.overrides)
+    planned = [d for d in inp.desired if _canonical(d) not in barred]
     plan = plan_deploy(
-        inp.desired,
+        planned,
         managed,
         inp.table,
         state=inp.state,
         other_live=other,
         held=held_rows(inp.overrides),
     )
+    plan.aborts[:0] = [
+        (d, None, barred[cid])  # type: ignore[list-item]  # never planned, so never paired
+        for d in inp.desired
+        if (cid := _canonical(d)) in barred
+    ]
     return DeployPlanning(plan, conflicts, reports)
+
+
+def _canonical(rec: LinearCustomer) -> str | None:
+    return rec.external_ids[0] if rec.external_ids else None
+
+
+def barred_rows(ov: Overrides) -> dict[str, str]:
+    """Canonical id -> why `deploy` must never write a desired row with that id: the
+    overrides file marks it `deleted` or `hidden`."""
+    barred: dict[str, str] = {}
+    for cid, e in ov.entries.items():
+        if e.deleted is not None:
+            barred[cid] = (
+                f"deleted in Linear ({e.deleted.live_id}, {e.deleted.confirmed}) per "
+                f"{ov.file}: not recreated; run generate"
+            )
+        elif e.hidden is not None:
+            barred[cid] = f"hidden in {ov.file}: not written; run generate"
+    return barred
 
 
 def check_for(inp: PlanInputs, all_live: list[LiveCustomer], scope: str | None) -> CheckResult:
