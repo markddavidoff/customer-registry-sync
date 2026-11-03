@@ -5,8 +5,8 @@ pin the declarations and the customer-specific cases: domain casing, the
 `linear-found` stub built by the real merge, and the mirror's live view.
 """
 
-from gitops_engine.fieldplan import FieldChange, plan_row, stale_retire, untracked_values
-from gitops_engine.schema import Always, KeepIfUnset, Union
+from gitops_engine.fieldplan import FieldChange, plan_row, untracked_values
+from gitops_engine.schema import Always, Union
 
 from customer_registry_sync.datasets import LINEAR_FOUND, NOTION, DatasetRecord
 from customer_registry_sync.generate import merge_datasets
@@ -64,9 +64,9 @@ def test_linear_field_policies():
         ("name", Always(), False),
         ("status", Always(), True),
         ("external_ids", Always(unordered=True), False),
-        ("domains", Union(exclusive=True, item="domain"), False),
-        ("revenue", KeepIfUnset(), False),
-        ("tier", KeepIfUnset(), False),
+        ("domains", Union(exclusive=True, item="domain", clears=True), False),
+        ("revenue", Always(clears=True), False),
+        ("tier", Always(clears=True), False),
     ]
     assert LINEAR_SCHEMA.id_field == "external_ids"
     assert (LINEAR_SCHEMA.nouns.record, LINEAR_SCHEMA.nouns.records) == ("customer", "customers")
@@ -82,16 +82,19 @@ def test_domain_case_is_not_a_change():
     assert changes == []
 
 
-def test_retire_domain_removes_and_tier_clears():
+def test_registry_domain_removes_and_empty_tier_clears():
+    """No retire entry: the registry's values are the target, so a live-only domain is
+    removed (by key, so a re-cased domain stays) and an empty tier clears Linear's."""
     target, changes = plan_row(
-        want(domains=["a.com"]),
-        live(domains=["a.com", "b.io"], tier="Tier 1"),
-        {"domains": ["B.IO"], "revenue": None, "tier": "Tier 1"},
+        want(domains=["A.com"], revenue=5),
+        live(domains=["a.com", "b.io"], revenue=7, tier="Tier 1"),
+        None,
         schema=LINEAR_SCHEMA,
     )
-    assert (target.domains, target.tier) == (["a.com"], None)
+    assert (target.domains, target.revenue, target.tier) == (["a.com"], 5, None)
     assert changes == [
         FieldChange("domains", "b.io", None, "remove", retire=True),
+        FieldChange("revenue", 7, 5, "change"),
         FieldChange("tier", "Tier 1", None, "clear", retire=True),
     ]
 
@@ -176,14 +179,9 @@ def test_linear_edit_to_stub_is_not_reverted():
     assert changes == [FieldChange("external_ids", [], ["initech"], "change")]
 
 
-def test_untracked_and_stale_retire_skip_linear_owned_rows():
-    d = _initech_stub_row(arr=None)
-    lv = _initech_live(
-        domains=["initech.example.test", "initech.example.org"],
-        revenue=7,
-        tier={"id": "t1", "name": "Tier 1"},
-    )
+def test_clears_fields_report_no_untracked_values():
+    """Every value the sync writes is tracked: a live-only domain, revenue or tier is a
+    planned removal or clear, never an untracked report."""
+    d = want(domains=["a.com"])
+    lv = live(domains=["a.com", "b.io"], revenue=7, tier="Tier 1")
     assert untracked_values([d], [lv], IdentityTable(), {}, **BOUND) == []
-    assert stale_retire([d], [lv], IdentityTable(), {"initech": {"revenue": 7}}, **BOUND) == [
-        "initech: Linear-owned stub (retire does not apply)"
-    ]

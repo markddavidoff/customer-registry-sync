@@ -17,7 +17,7 @@ from customer_registry_sync.deploy_plan import load_state, offline_plan, state_t
 from customer_registry_sync.datasets import NOTION
 from customer_registry_sync.generate import generate_from_dir
 from customer_registry_sync.linear_client import LiveCustomer
-from customer_registry_sync.linear_files import IGNORE_FILE
+from customer_registry_sync.linear_files import LEGACY_FILES
 from customer_registry_sync.linear_schema import LINEAR_SCHEMA
 from customer_registry_sync.schema import CustomerRecord
 from customer_registry_sync.writers import write_csvs, write_dataset, write_desired, write_state
@@ -121,9 +121,47 @@ def test_scope_plans_only_in_scope_rows(tmp_path):
     assert [d.name for d in plan.unchanged] == ["Globex [Active]"] and code == 0
 
 
-def test_unreadable_ignore_file_raises(tmp_path, capsys):
+@pytest.mark.parametrize("legacy", LEGACY_FILES)
+def test_legacy_file_raises_whatever_it_holds(tmp_path, capsys, legacy):
+    # the file is refused unread: an unparseable one names the same remedy
     _tree(tmp_path)
-    (tmp_path / IGNORE_FILE).write_text("customers: [")
+    (tmp_path / legacy).write_text("customers: [")
     with pytest.raises(ValueError, match="cannot plan"):
         offline_plan(tmp_path)
-    assert "ERROR:" in capsys.readouterr().err
+    assert f"ERROR: {legacy} is no longer read by v0.3.0: run adopt-live" in (
+        capsys.readouterr().err
+    )
+
+
+def test_pending_decision_holds_the_row_and_fails_the_check_exit(tmp_path):
+    _tree(tmp_path)
+    (tmp_path / "linear-overrides.yaml").write_text(
+        "customers:\n  acme:\n    pending: {revenue: 9}\n"
+    )
+    plan, code = offline_plan(tmp_path)
+    assert [(d.external_ids, why) for d, _, why in plan.aborts] == [
+        (["acme"], "pending decision in linear-overrides.yaml")
+    ]
+    assert len(plan.unchanged) == 2 and code == 3
+
+
+def test_override_failure_fails_the_check_exit(tmp_path):
+    _tree(tmp_path)
+    (tmp_path / "linear-overrides.yaml").write_text("customers:\n  ghost:\n    pin: {revenue: 9}\n")
+    plan, code = offline_plan(tmp_path)
+    assert len(plan.unchanged) == 3 and code == 3
+
+
+def test_invalid_overrides_file_or_retire_file_raises(tmp_path, capsys):
+    _tree(tmp_path)
+    (tmp_path / "linear-overrides.yaml").write_text(
+        "customers:\n  acme:\n    pin: {status: null}\n"
+    )
+    with pytest.raises(ValueError, match="cannot plan"):
+        offline_plan(tmp_path)
+    assert "status cannot be pinned empty" in capsys.readouterr().err
+    (tmp_path / "linear-overrides.yaml").unlink()
+    (tmp_path / "linear-retire.yaml").write_text("{}\n")
+    with pytest.raises(ValueError, match="cannot plan"):
+        offline_plan(tmp_path)
+    assert "run adopt-live" in capsys.readouterr().err

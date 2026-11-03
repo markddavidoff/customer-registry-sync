@@ -9,7 +9,7 @@
 # linear_status_classification: the classification a `linear-found` stub gets
 #   from its Linear status (real, prospect, churned, partner or internal). A
 #   Linear status missing here yields a stub with no classification, and `check`
-#   fails until you map it or ignore the customer.
+#   fails until you map it or hide the customer.
 datasets:
   - notion
   - linear-found

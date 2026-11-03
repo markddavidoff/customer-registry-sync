@@ -1,5 +1,5 @@
 """Deploy and restore for Linear customers: the engine's `plan_deploy`,
-`apply_deploy` and `restore` with the customer schema, identity spec, ignore file and
+`apply_deploy` and `restore` with the customer schema, identity spec, hidden rows and
 `LinearDestination` bound.
 
 The engine plans by identity and field policy, applies under check-and-set with a
@@ -9,19 +9,18 @@ pre-apply snapshot, and verifies each written row (`gitops_engine.deploy`,
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from gitops_engine import deploy as engine
 from gitops_engine import snapshot as engine_snapshot
 from gitops_engine.deploy import ApplyResult, DeployPlan
-from gitops_engine.ignore import IgnoreList
-from gitops_engine.retire import RetireEntry
 from gitops_engine.snapshot import RestoreResult
 
 from .identity import IDENTITY_SPEC, IdentityTable, implicit_identity
 from .linear_client import LiveCustomer
 from .linear_destination import LinearDestination
-from .linear_files import IGNORE_FILE
+from .linear_files import hidden_reason, no_hidden
 from .linear_schema import LINEAR_SCHEMA, LinearCustomer
 
 __all__ = ["ApplyResult", "DeployPlan", "RestoreResult", "apply_deploy", "plan_deploy", "restore"]
@@ -33,11 +32,12 @@ def plan_deploy(
     table: IdentityTable | None = None,
     *,
     state: list[LinearCustomer] | None = None,
-    retire: dict[str, RetireEntry] | None = None,
     other_live: list[LiveCustomer] | None = None,
+    held: Mapping[str, str] | None = None,
 ) -> DeployPlan[LinearCustomer, LiveCustomer]:
     """Desired rows against live Linear customers (`gitops_engine.deploy.plan_deploy`).
-    `state` is the `linear-state/` mirror; `retire` is keyed by first external id."""
+    `state` is the `linear-state/` mirror; `held` maps a canonical id to why its row is
+    not written (`gitops_engine.overrides.held_rows`: a pending decision)."""
     return engine.plan_deploy(
         desired,
         live,
@@ -46,8 +46,8 @@ def plan_deploy(
         spec=IDENTITY_SPEC,
         implicit=implicit_identity,
         state=state,
-        retire=retire,
         other_live=other_live,
+        held=held,
     )
 
 
@@ -56,18 +56,22 @@ def apply_deploy(
     client,
     *,
     snapshot_dir: Path,
-    ignore: IgnoreList | None = None,
+    exclude: Callable[[LiveCustomer], str | None] | None = None,
     scope: str | None = None,
 ) -> ApplyResult[LinearCustomer]:
     """Execute the plan's creates and updates against Linear
-    (`gitops_engine.deploy.apply_deploy`). `ignore` defaults to the built-in prefix."""
+    (`gitops_engine.deploy.apply_deploy`). An update whose re-read row `exclude` gives
+    a reason for is aborted (`linear_files.hidden_reason`); the default hides only the
+    built-in prefix, under `scope`'s exemption."""
+    if exclude is None:
+        exclude = hidden_reason(no_hidden(), IdentityTable(), scope=scope)
     return engine.apply_deploy(
         plan,
         LinearDestination(client),
         schema=LINEAR_SCHEMA,
         snapshot_dir=snapshot_dir,
-        ignore=ignore if ignore is not None else IgnoreList(IGNORE_FILE),
         scope=scope,
+        exclude=exclude,
     )
 
 

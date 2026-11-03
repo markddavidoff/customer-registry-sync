@@ -8,13 +8,17 @@ Phase A:  ``ingest``        — Notion hub pages → the ``notion`` dataset, the
                               ``linear-found`` stubs from the state mirror
                               (``--only linear-found``: offline); appends identities.
 Phase B:  ``generate``      — datasets → Layer-2 ``<data_dir>/linear/*`` and the CSVs.
-          ``sync-inbound``  — live Linear → Layer-2 mirror (refresh linear_synced).
-          ``deploy``        — Layer-2 → Linear, per-customer check-and-set.
+          ``sync-inbound``  — live Linear → Layer-2 mirror (refresh linear_synced);
+                              Linear edits → ``linear-overrides.yaml``, then an
+                              offline ``generate`` when that file changed.
+          ``deploy``        — Layer-2 → Linear, per-customer check-and-set; refuses
+                              a ``linear/`` that ``generate`` would change.
                               DRY-RUN by default; ``--apply`` performs live writes
                               after snapshotting the rows it touches.
           ``restore``       — write a pre-apply snapshot back to Linear.
-          ``ignore``        — add a Linear customer to linear-ignore.yaml (offline;
-                              exit 0 appended / 4 already listed / 2 refused).
+          ``hide``          — take one mirrored Linear customer out of the sync, by Linear id.
+          ``adopt-live``    — migrate a v0.2.0 data dir, offline: keep Linear-only
+                              values as overrides, turn the ignore file into hidden.
 Phase C:  ``check``         — plan guard: drift (state vs live) + plan; exit 0/2/3.
 Workflow: ``changed --since SHA``, ``config-get KEY``, ``refresh --no-input`` (sync-inbound,
           ``ingest --only linear-found``, ``generate``) and ``tool-source`` complete the CLI
@@ -41,41 +45,59 @@ from pathlib import Path
 
 from gitops_engine.changed import changed_since
 from gitops_engine.datasets import DATASETS_SUBDIR, dataset_dir
+from gitops_engine.destination import DestinationError
 from gitops_engine.fieldplan import DESTRUCTIVE, FieldChange
-from gitops_engine.ignore import (
-    append_ignore,
-    ignore_errors,
-    ignored_lines,
-    load_ignore,
-    partition_live,
-)
+from gitops_engine.hidden import hidden_from
 from gitops_engine.manifest import MANIFEST, guard_overwrite, manifest_edits, write_manifest
-from gitops_engine.mirror import reconcile_mirror
+from gitops_engine.overrides import PENDING_ADD, OverridesStore, override_errors
 
 from .changed import deploy_inputs
-from .check import EXIT_OPERROR, offline_errors, orphan_lines
+from .check import (
+    EXIT_DRIFT,
+    EXIT_OPERROR,
+    desired_out_of_date,
+    offline_errors,
+    orphan_lines,
+    override_findings,
+    pending_lines,
+)
 from .config import DEFAULT_CONFIG_NAME, ConfigError, config_value, load_config
 from .datasets import LINEAR_FOUND, NOTION, load_datasets, load_datasets_config
 from .deploy import apply_deploy, restore
 from .deploy_plan import (
     check_exit,
     check_for,
-    load_ignore_file,
+    legacy_refused,
     load_inputs,
-    load_retire_file,
+    load_overrides_checked,
     plan_for_deploy,
-    scope_live,
+    scope_recs,
 )
 from .generate import generate_from_dir
-from .identity import IDENTITIES_FILE, IdentityStore
+from .identity import IDENTITIES_FILE, IdentityStore, keys_for_live, resolve
+from .inbound import read_inbound, write_inbound
 from .linear_client import LinearError
+from .linear_destination import LinearDestination
 from .linear_files import (
-    IGNORE_FILE,
-    IGNORE_FORMAT,
     SNAPSHOT_SUBDIR,
+    hidden_lines,
+    hidden_reason,
+    partition_hidden,
 )
-from .linear_found import append_record_identities, build_linear_found
+from .linear_found import (
+    append_record_identities,
+    build_linear_found,
+    handover_entries,
+    stub_ids,
+)
+from .linear_overrides import (
+    OVERRIDES_FILE,
+    OVERRIDES_FORMAT,
+    load_overrides_file,
+    value_type_failures,
+)
 from .linear_schema import LINEAR_SCHEMA
+from .migrate import AdoptRefused, adopt_live, identity_for_live
 from .sources import SourceError
 from .tool_source import ToolSourceError, tool_source
 from .writers import (
@@ -146,16 +168,35 @@ def _ingest_source(args, out_dir: Path) -> int:
     return 0
 
 
-def _ingest_linear_found(args, out_dir: Path, store: IdentityStore, ignore, entries) -> int:
-    """State mirror → `datasets/linear-found/`; 2 when refused."""
-    managed, _ = partition_live(
+def _handover(args, out_dir: Path, store: IdentityStore, old: set[str], new: set[str], entries):
+    """Keep the Linear values of each stub handing over to Notion as accepted pins and
+    domain adds in `linear-overrides.yaml` (`linear_found.handover_entries`)."""
+    kept = handover_entries(out_dir, old, new, entries, store.table)
+    if not kept:
+        return
+    if args.dry_run:
+        print(f"DRY RUN — handover: would keep the Linear values of {len(kept)} customers")
+        return
+    overrides = OverridesStore(out_dir / OVERRIDES_FILE, OVERRIDES_FORMAT)
+    for cid, entry in kept.items():
+        overrides.adopt(cid, entry)
+    overrides.save()
+    print(f"handover: {len(kept)} customers kept their Linear values")
+
+
+def _ingest_linear_found(args, out_dir: Path, store: IdentityStore, hidden, entries) -> int:
+    """State mirror → `datasets/linear-found/`; 2 when refused. Hidden customers get no
+    stub (and so no identity from one). A stub that a `notion` record now takes over
+    keeps its Linear values (`_handover`)."""
+    old_stubs = stub_ids(entries, store.table)
+    managed, _ = partition_hidden(
         [
             LINEAR_SCHEMA.state_to_live(r)
             for r in load_state(out_dir)
             if r.linear_synced is not None
         ],
-        ignore,
-        LINEAR_SCHEMA,
+        hidden,
+        store.table,
         scope=None,
     )
     build = build_linear_found(
@@ -167,8 +208,10 @@ def _ingest_linear_found(args, out_dir: Path, store: IdentityStore, ignore, entr
         print(f"  NOTE: {msg}")
     print(f"linear-found: {len(build.stubs)} stubs; known duplicates: {len(build.duplicates)}")
     target = dataset_dir(out_dir, LINEAR_FOUND)
+    new_stubs = {cid for cid, _ in build.stubs}
     if args.dry_run:
         print(f"DRY RUN — would write {len(build.stubs)} stub files under {target}/.")
+        _handover(args, out_dir, store, old_stubs, new_stubs, entries)
         return 0
     if not _guard_or_refuse(target, "ingest", args):
         return 2
@@ -180,21 +223,26 @@ def _ingest_linear_found(args, out_dir: Path, store: IdentityStore, ignore, entr
     )
     write_manifest(target, "ingest")
     print(f"wrote {target}/*.yaml")
+    _handover(args, out_dir, store, old_stubs, new_stubs, entries)
     return 0
 
 
 def _cmd_ingest(args) -> int:
     """Build `notion` (Notion) and then `linear-found` (state mirror, offline),
-    appending new identities and missing values to identities.yaml."""
+    appending new identities and missing values to identities.yaml. In every mode, a
+    stub a `notion` record now resolves to keeps its Linear values (`_handover`)."""
     out_dir = _out_dir(args)
+    if legacy_refused(out_dir):
+        return 2
     try:
         store = IdentityStore(out_dir / IDENTITIES_FILE)
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
-    ignore = load_ignore_file(out_dir)
-    if ignore is None:
+    overrides = load_overrides_checked(out_dir)
+    if overrides is None:
         return 2
+    hidden = hidden_from(overrides)
     has_mirror = (out_dir / STATE_SUBDIR / MANIFEST).is_file()
     no_mirror = f"no state mirror at {out_dir / STATE_SUBDIR}: run sync-inbound first"
     if args.only == LINEAR_FOUND and not has_mirror:
@@ -211,11 +259,15 @@ def _cmd_ingest(args) -> int:
     append_record_identities(store, entries)
     if args.only != NOTION:
         if has_mirror:
-            code = _ingest_linear_found(args, out_dir, store, ignore, entries)
+            code = _ingest_linear_found(args, out_dir, store, hidden, entries)
             if code:
                 return code
         else:
             print(f"linear-found: skipped — {no_mirror}")
+    elif has_mirror:
+        # linear-found is not rebuilt: every stub a notion record now resolves to hands
+        # over here, so a `generate` before the next build clears nothing in Linear
+        _handover(args, out_dir, store, stub_ids(entries, store.table), set(), entries)
     for msg in store.reports:
         print(f"  NOTE: {msg}")
     added = len(store.table.entries) - before
@@ -231,6 +283,14 @@ def _cmd_ingest(args) -> int:
 def _cmd_generate(args) -> int:
     """Datasets merged by identity → `linear/` (with its manifest) and both CSVs."""
     out_dir = _out_dir(args)
+    errors = override_errors(out_dir / OVERRIDES_FILE, OVERRIDES_FORMAT, LINEAR_SCHEMA)
+    if not errors:
+        errors = value_type_failures(load_overrides_file(out_dir))
+    if errors:
+        print(f"ERROR: {OVERRIDES_FILE} is invalid; nothing written:", file=sys.stderr)
+        for e in errors:
+            print(f"  {e}", file=sys.stderr)
+        return 2
     generated = generate_from_dir(out_dir)
     recs = generated.rows
     if not generated.winners:
@@ -251,11 +311,16 @@ def _cmd_generate(args) -> int:
         return 0
     if not _guard_or_refuse(out_dir / DESIRED_SUBDIR, "generate", args):
         return 2
-    write_desired(recs, out_dir)
+    _write_generated(generated, out_dir)
+    return 0
+
+
+def _write_generated(generated, out_dir: Path) -> None:
+    """`generate`'s output: `linear/` with its manifest, and both CSVs."""
+    write_desired(generated.rows, out_dir)
     write_manifest(out_dir / DESIRED_SUBDIR, "generate")
     write_csvs(generated.winners, out_dir)
     print(f"wrote {out_dir}/{DESIRED_SUBDIR}/*.yaml + {REGISTRY_CSV} + {REAL_CUSTOMERS_CSV}")
-    return 0
 
 
 def _linear_client():
@@ -268,76 +333,83 @@ def _linear_client():
 
 
 def _cmd_sync_inbound(args) -> int:
+    """Live Linear → the state mirror; the Linear edits since the last mirror →
+    linear-overrides.yaml (`inbound`). `--dry-run` reads and counts, writes nothing."""
+    out_dir = _out_dir(args)
+    if legacy_refused(out_dir):
+        return 2
     client = _linear_client()
     if client is None:
         return 2
-    out_dir = _out_dir(args)
-    existing = load_state(out_dir)
-    live = scope_live(client.list_customers(), args.scope)
-    recs = reconcile_mirror(live, LINEAR_SCHEMA)
-    if args.scope:
-        # Scoped run: replace only the in-scope rows; out-of-scope state is untouched.
-        recs = [r for r in existing if not r.name.startswith(args.scope)] + recs
-    print(f"sync-inbound: {len(live)} live Linear customers mirrored")
+    try:
+        result = read_inbound(out_dir, LinearDestination(client), scope=args.scope)
+    except ValueError as e:
+        for line in str(e).splitlines():
+            print(f"ERROR: {line}", file=sys.stderr)
+        return 2
+    except DestinationError as e:
+        print(f"ERROR: Linear read failed: {e}; nothing written.", file=sys.stderr)
+        return 2
+    mirrored = len(scope_recs(result.mirror, args.scope))
+    pending = sum(1 for e in result.edits if e.kind == "pending")
+    absorbed = len(result.edits) - pending
+    print(f"sync-inbound: {mirrored} mirrored; {absorbed} absorbed, {pending} pending")
+    for s in result.settled:
+        what = f"{s.field}{PENDING_ADD} {', '.join(s.values)}" if s.values else s.field
+        print(f"  NOTE: {s.canonical_id}: pending {what} dropped: the registry now agrees")
+    for cid, live_id in result.deletions.confirmed:
+        print(f"  {cid}: deleted in Linear ({live_id}); recorded as deleted")
+    for cid, live_id in result.deletions.still_live:
+        print(
+            f"  NOTE: {cid}: missing from the Linear listing but found by id ({live_id}); "
+            "nothing recorded"
+        )
     if args.dry_run:
-        print(f"DRY RUN — would write {len(recs)} files under {out_dir}/{STATE_SUBDIR}/.")
+        print(
+            f"DRY RUN — would write {len(result.mirror)} files under {out_dir}/{STATE_SUBDIR}/ "
+            f"and record {len(result.edits)} edits and "
+            f"{len(result.deletions.confirmed)} deletions in {OVERRIDES_FILE}."
+        )
         return 0
     if not _guard_or_refuse(out_dir / STATE_SUBDIR, "sync-inbound", args):
         return 2
-    write_state(recs, out_dir)
-    write_manifest(out_dir / STATE_SUBDIR, "sync-inbound")
-    print(f"wrote {out_dir}/{STATE_SUBDIR}/*.yaml")
+    # A changed overrides file changes what `generate` builds; ask about hand edits to
+    # `linear/` before writing anything, so a refusal leaves the data dir as it was.
+    may_change = bool(result.edits or result.settled or result.deletions.confirmed)
+    if may_change and not _guard_or_refuse(out_dir / DESIRED_SUBDIR, "generate", args):
+        return 2
+    changed = write_inbound(out_dir, result, today=datetime.now(UTC).date().isoformat())
+    print(f"wrote {out_dir}/{STATE_SUBDIR}/*.yaml; {OVERRIDES_FILE}: {changed} changes")
+    if changed:
+        return _regenerate(out_dir)
     return 0
 
 
-EXIT_ALREADY_IGNORED = 4  # `ignore` found the id already listed (file untouched)
-
-
-def _cmd_ignore(args) -> int:
-    """Append a Linear customer to `linear-ignore.yaml`, offline: 0 appended,
-    4 already listed (reason kept), 2 refused (id not in the mirror, empty reason,
-    or an invalid file)."""
-    out_dir = _out_dir(args)
-    path = out_dir / IGNORE_FILE
-    linear_id, reason = args.linear_id.strip(), args.reason.strip()
-    if not reason:
-        print("ERROR: --reason must not be empty (each entry needs a reason).", file=sys.stderr)
-        return EXIT_OPERROR
-    if path.exists():
-        errors = ignore_errors(path, IGNORE_FORMAT)
-        if errors:
-            print(f"ERROR: {IGNORE_FILE} is invalid; fix it first:", file=sys.stderr)
-            for e in errors:
-                print(f"  {e}", file=sys.stderr)
-            return EXIT_OPERROR
-        # an id already listed is idempotent even after it has left the mirror
-        if any(e.live_id == linear_id for e in load_ignore(path, IGNORE_FORMAT).entries):
-            print(f"{linear_id} is already in {IGNORE_FILE}; left as is.")
-            return EXIT_ALREADY_IGNORED
-    mirrored = {
-        r.linear_synced.linear_id: r.name
-        for r in load_state(out_dir)
-        if r.linear_synced is not None
-    }
-    if linear_id not in mirrored:
+def _regenerate(out_dir: Path) -> int:
+    """After `sync-inbound` changed the overrides file: `generate`, offline, from the
+    committed datasets, so `linear/` and the CSVs never lag the overrides they derive
+    from (the deploy job's state PR carries all three). 2 when `generate` cannot run."""
+    try:
+        failures = value_type_failures(load_overrides_file(out_dir))
+        if failures:
+            raise ValueError("; ".join(failures))
+        generated = generate_from_dir(out_dir)
+    except ValueError as e:
         print(
-            f"ERROR: Linear id {linear_id} is not in {out_dir / STATE_SUBDIR}: "
-            "run sync-inbound first.",
+            f"ERROR: {OVERRIDES_FILE} written but generate failed: {e}; "
+            f"{DESIRED_SUBDIR}/ is out of date: fix it and run generate.",
             file=sys.stderr,
         )
-        return EXIT_OPERROR
-    try:
-        appended = append_ignore(
-            path, IGNORE_FORMAT, live_id=linear_id, name=mirrored[linear_id], reason=reason
+        return 2
+    if not generated.winners:
+        print(
+            f"WARNING: no dataset records under {out_dir}/{DATASETS_SUBDIR}/; "
+            f"{DESIRED_SUBDIR}/ left as is: run ingest, then generate.",
+            file=sys.stderr,
         )
-    except ValueError as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        return EXIT_OPERROR
-    if not appended:  # listed with the id padded or quoted differently
-        print(f"{linear_id} is already in {IGNORE_FILE}; left as is.")
-        return EXIT_ALREADY_IGNORED
-    print(f"ignored '{mirrored[linear_id]}' ({linear_id}) in {path}")
-    print("run check: it lists ignored customers, and the next refresh drops any stub for it")
+        return 0
+    print(f"generate: {len(generated.rows)} Linear projections (overrides changed)")
+    _write_generated(generated, out_dir)
     return 0
 
 
@@ -440,8 +512,20 @@ def _cmd_deploy(args) -> int:
     inp = load_inputs(out_dir, args.scope, require_desired=True)
     if inp is None:
         return 2
-    retire = load_retire_file(out_dir)
-    planning = plan_for_deploy(inp, client.list_customers(), args.scope, retire=retire)
+    try:
+        stale = desired_out_of_date(out_dir, args.scope)
+    except ValueError as e:
+        print(f"ERROR: cannot compare {DESIRED_SUBDIR}/ with generate: {e}", file=sys.stderr)
+        return 2
+    if stale:
+        for msg in stale:
+            print(f"  ERROR: {msg}")
+        print(
+            f"REFUSED — {out_dir}/{DESIRED_SUBDIR}/ is out of date with {OVERRIDES_FILE} "
+            "and the datasets; nothing planned or written. Run generate and commit it."
+        )
+        return 3
+    planning = plan_for_deploy(inp, client.list_customers(), args.scope)
     plan, conflicts, reports = planning.plan, planning.conflicts, planning.reports
     _print_plan(plan)
     for msg in reports:
@@ -450,7 +534,7 @@ def _cmd_deploy(args) -> int:
         for msg in conflicts:
             print(f"  ERROR: {msg}")
         print(
-            f"REFUSED — ignore conflict(s) above; nothing written. Fix {IGNORE_FILE} "
+            f"REFUSED — hidden conflict(s) above; nothing written. Fix {OVERRIDES_FILE} "
             "or the desired record, then re-run."
         )
         return 3
@@ -463,7 +547,7 @@ def _cmd_deploy(args) -> int:
     if plan.unacked:
         for msg in plan.unacked:
             print(f"  UNACKNOWLEDGED DESTRUCTIVE: {msg}")
-        print("REFUSED — destructive change(s) without a retire entry; nothing written.")
+        print("REFUSED — unacknowledged destructive change(s); nothing written.")
         return 3
     if not args.apply:
         print(
@@ -482,7 +566,7 @@ def _cmd_deploy(args) -> int:
             plan,
             client,
             snapshot_dir=out_dir / SNAPSHOT_SUBDIR,
-            ignore=inp.ignore,
+            exclude=hidden_reason(inp.hidden, inp.table, scope=args.scope),
             scope=args.scope,
         )
     except (OSError, ValueError) as e:
@@ -538,17 +622,20 @@ def _print_drift(drift) -> None:
         print(f"  DRIFT deleted: {s.name} (state {s.linear_synced.linear_id}, not live)")
 
 
-def _print_untracked(untracked) -> None:
-    for u in untracked:
-        what = f"domains += {u.value}" if u.field == "domains" else f"{u.field} = {u.value}"
-        print(f"  UNTRACKED: {u.name}: {what}")
-
-
 def _cmd_check(args) -> int:
+    out_dir = _out_dir(args)
+    if legacy_refused(out_dir):
+        return EXIT_OPERROR
+    # a malformed overrides file fails check before Linear is read
+    malformed = override_errors(out_dir / OVERRIDES_FILE, OVERRIDES_FORMAT, LINEAR_SCHEMA)
+    if malformed:
+        for msg in malformed:
+            print(f"  OVERRIDE: {msg}")
+        print(f"check FAILED: {OVERRIDES_FILE} is invalid; fix the OVERRIDE lines above")
+        return EXIT_DRIFT
     client = _linear_client()
     if client is None:
         return EXIT_OPERROR
-    out_dir = _out_dir(args)
     inp = load_inputs(out_dir, args.scope)
     if inp is None:
         return EXIT_OPERROR
@@ -558,9 +645,9 @@ def _cmd_check(args) -> int:
         print(f"ERROR: Linear read failed: {e}", file=sys.stderr)
         return EXIT_OPERROR
     res = check_for(inp, all_live, args.scope)
-    ignore = inp.ignore
+    findings = override_findings(out_dir)
     drift, plan = res.drift, res.plan
-    for line in ignored_lines(res.ignored, ignore, LINEAR_SCHEMA, scope=args.scope):
+    for line in hidden_lines(res.ignored, inp.hidden, inp.table, scope=args.scope):
         print(f"  {line}")
     print(
         f"check: drift changed={len(drift.changed)} added={len(drift.added)} "
@@ -568,8 +655,6 @@ def _cmd_check(args) -> int:
     )
     _print_drift(drift)
     # failure lines first, then the plan, then what is only reported
-    for msg in res.stale:
-        print(f"  STALE RETIRE: {msg}")
     for msg in plan.unacked:
         print(f"  UNACKNOWLEDGED DESTRUCTIVE: {msg}")
     for lv in res.orphans:
@@ -579,18 +664,22 @@ def _cmd_check(args) -> int:
             print(f"  {line}")
     for msg in res.failures:
         print(f"  ERROR: {msg}")
+    for p in findings.pending:
+        for line in pending_lines(p):
+            print(f"  {line}")
+    for msg in findings.failures:
+        print(f"  OVERRIDE: {msg}")
     _print_plan(plan)
-    _print_untracked(res.untracked)
-    for msg in res.reports:
+    for msg in [*res.reports, *findings.reports]:
         print(f"  NOTE: {msg}")
     offline = offline_errors(out_dir)
     for msg in offline:
         print(f"  OFFLINE: {msg}")
-    code = check_exit(res, offline)
+    code = check_exit(res, offline, findings)
     if code == 0:
         print("IN SYNC")
-    elif res.code:
-        print("check FAILED: see the ERROR, DRIFT and OFFLINE lines above")
+    elif res.code or findings.failures or findings.pending:
+        print("check FAILED: see the ERROR, DRIFT, PENDING, OVERRIDE and OFFLINE lines above")
     else:
         print("OFFLINE CHECK FAILED — run the named generator, commit, re-run")
     return code
@@ -611,7 +700,10 @@ def _cmd_refresh(args) -> int:
     stops the run and is returned. Reads Linear only (never `check`, never a write).
 
     Only `sync-inbound` talks to Linear, so the token is withdrawn from the environment
-    for the offline steps and restored afterwards."""
+    for the offline steps and restored afterwards. A legacy file refuses the run before
+    any step."""
+    if legacy_refused(args.registry.data_dir):
+        return 2
     parser, handlers = build_parser()
     token = os.environ.get(LINEAR_TOKEN_ENV)
     try:
@@ -625,6 +717,83 @@ def _cmd_refresh(args) -> int:
     finally:
         if token is not None:
             os.environ[LINEAR_TOKEN_ENV] = token
+    return 0
+
+
+def _cmd_adopt_live(args) -> int:
+    """Migrate a v0.2.0 data dir to full ownership, offline (`migrate.adopt_live`): keep
+    today's Linear-only values as overrides and turn the ignore file into hidden
+    entries. Exit 2, writing nothing, when the data dir cannot be migrated."""
+    out_dir = _out_dir(args)
+    try:
+        result = adopt_live(out_dir, dry_run=args.dry_run)
+    except AdoptRefused as e:
+        for line in str(e).splitlines():
+            print(f"ERROR: {line}", file=sys.stderr)
+        print("adopt-live refused; nothing written.", file=sys.stderr)
+        return 2
+    print(
+        f"adopt-live: {result.pins} pins, {result.adds} domain adds, {result.hidden} hidden, "
+        f"{result.prefixes} hidden prefixes, {result.identities_added} identities added"
+    )
+    if args.dry_run:
+        print(f"DRY RUN — nothing written under {out_dir}/.")
+        return 0
+    print("next: run generate, then check")
+    return 0
+
+
+EXIT_ALREADY_HIDDEN = 4
+
+
+def _cmd_hide(args) -> int:
+    """Hide the mirrored Linear customer `--linear-id` under `--reason`: its canonical id
+    comes from the identity table (a new identity is appended when none matches), and
+    `linear-overrides.yaml` gets a `hidden` entry. Exit 0 written, 4 already hidden (the
+    reason is kept), 2 for an id not in the mirror, an empty reason or an invalid file."""
+    out_dir = _out_dir(args)
+    if legacy_refused(out_dir):
+        return 2
+    reason = args.reason.strip()
+    if not reason:
+        print("ERROR: --reason must not be empty", file=sys.stderr)
+        return 2
+    errors = override_errors(out_dir / OVERRIDES_FILE, OVERRIDES_FORMAT, LINEAR_SCHEMA)
+    for e in errors:
+        print(f"ERROR: {e}", file=sys.stderr)
+    if errors:
+        return 2
+    try:
+        identities = IdentityStore(out_dir / IDENTITIES_FILE)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
+    rows = [
+        r
+        for r in load_state(out_dir)
+        if r.linear_synced and r.linear_synced.linear_id == args.linear_id
+    ]
+    if not rows:
+        print(
+            f"ERROR: Linear id '{args.linear_id}' is not in {out_dir / STATE_SUBDIR}: "
+            "run sync-inbound first",
+            file=sys.stderr,
+        )
+        return 2
+    lv = LINEAR_SCHEMA.state_to_live(rows[0])
+    hit = resolve(keys_for_live(lv), identities.table)
+    if hit is not None:
+        cid, created = hit.canonical_id, False
+    else:
+        cid, created = identity_for_live(identities, lv.id, lv.name)
+    store = OverridesStore(out_dir / OVERRIDES_FILE, OVERRIDES_FORMAT)
+    if not store.hide(cid, reason):
+        print(f"'{lv.name}' ({lv.id}) is already hidden as {cid}; its reason is kept")
+        return EXIT_ALREADY_HIDDEN
+    store.save()
+    if created:
+        identities.save()
+    print(f"hidden '{lv.name}' ({lv.id}) as {cid}; run generate, then check")
     return 0
 
 
@@ -757,20 +926,30 @@ def build_parser() -> tuple[argparse.ArgumentParser, dict]:
     _no_input_arg(rst, "never prompt (restore never does)")
     handlers["restore"] = _cmd_restore
 
-    ign = sub.add_parser("ignore", help="add a Linear customer to linear-ignore.yaml (offline)")
-    ign.add_argument(
-        "--linear-id", required=True, help="the customer's Linear id (from the mirror)"
-    )
-    ign.add_argument("--reason", required=True, help="why the sync must not touch it")
-    _out_dir_arg(ign)
-    handlers["ignore"] = _cmd_ignore
-
     ref = sub.add_parser(
         "refresh",
         help="sync-inbound, ingest --only linear-found, generate (reads Linear; no Linear writes)",
     )
     _no_input_arg(ref, "never prompt; refuse to overwrite hand-edited files")
     handlers["refresh"] = _cmd_refresh
+
+    adopt = sub.add_parser(
+        "adopt-live",
+        help="migrate a v0.2.0 data dir: keep Linear-only values, convert the ignore file",
+    )
+    adopt.add_argument("--dry-run", action="store_true")
+    _out_dir_arg(adopt)
+    _no_input_arg(adopt, "never prompt (adopt-live never does)")
+    handlers["adopt-live"] = _cmd_adopt_live
+
+    hide = sub.add_parser(
+        "hide",
+        help="take a mirrored Linear customer out of the sync (exit 0; 4 already hidden; 2 refused)",
+    )
+    hide.add_argument("--linear-id", required=True, help="the customer's id in linear-state/")
+    hide.add_argument("--reason", required=True, help="why it is hidden (recorded in the file)")
+    _out_dir_arg(hide)
+    handlers["hide"] = _cmd_hide
 
     chk = sub.add_parser("check", help="plan guard: drift (state vs live) + plan; exit 0/2/3")
     _out_dir_arg(chk)

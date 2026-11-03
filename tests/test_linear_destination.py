@@ -181,3 +181,57 @@ def test_snapshot_row_keeps_v010_key_order():
         "external_ids",
         "updated_at",
     ]
+
+
+@pytest.mark.parametrize("empty_tier", [None, ""])
+def test_clearing_revenue_and_tier_verifies_against_linear_readback(tmp_path, empty_tier):
+    """The registry clears revenue and tier through the real client: Linear reads both
+    back as null, and post-write verification passes, a desired "" tier included."""
+    from customer_registry_sync.deploy import apply_deploy, plan_deploy
+    from customer_registry_sync.linear_client import LinearClient, parse_customer_node
+    from customer_registry_sync.linear_schema import LinearCustomer
+
+    node = {
+        "id": "lin_a",
+        "name": "Acme",
+        "domains": ["acme.example.test"],
+        "revenue": 120000,
+        "externalIds": ["acme"],
+        "updatedAt": "v1",
+        "status": {"id": "s-act", "name": "Active"},
+        "tier": {"id": "t-gold", "name": "Gold"},
+    }
+    sent = []
+
+    def gql(query, variables=None):
+        if "customerUpdate" in query:
+            inp = variables["input"]
+            sent.append(inp)
+            if "revenue" in inp:
+                node["revenue"] = inp["revenue"]
+            if "tierId" in inp:
+                node["tier"] = None if inp["tierId"] is None else {"id": inp["tierId"]}
+            node["updatedAt"] = "v2"
+            return {"data": {"customerUpdate": {"success": True, "customer": dict(node)}}}
+        if "customerStatuses" in query:
+            return {"data": {"customerStatuses": {"nodes": [{"id": "s-act", "name": "Active"}]}}}
+        if "customerTiers" in query:
+            return {"data": {"customerTiers": {"nodes": [{"id": "t-gold", "name": "Gold"}]}}}
+        if "customer(id" in query:
+            return {"data": {"customer": dict(node)}}
+        raise AssertionError(query)
+
+    desired = LinearCustomer(
+        name="Acme",
+        domains=["acme.example.test"],
+        revenue=None,
+        tier=empty_tier,
+        status="Active",
+        external_ids=["acme"],
+    )
+    plan = plan_deploy([desired], [parse_customer_node(dict(node))])
+    res = apply_deploy(plan, LinearClient(gql=gql), snapshot_dir=tmp_path)
+    assert sent == [{"revenue": None, "tierId": None}]
+    assert res.failure is None
+    [row] = res.persisted
+    assert (row.revenue, row.tier) == (None, None)

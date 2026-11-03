@@ -50,9 +50,9 @@ def test_render_create():
     assert cli.render_plan(plan) == ["+ New Co"]
 
 
-def test_render_retire_domain_remove_marks_header():
+def test_render_domain_remove_marks_header():
     lv = livec(domains=["globex.example.test", "old.example.org"])
-    plan = plan_deploy([desired()], [lv], retire={"globex": {"domains": ["old.example.org"]}})
+    plan = plan_deploy([desired()], [lv])
     assert cli.render_plan(plan) == ["~ Globex (retire)", "    domains: - old.example.org"]
 
 
@@ -63,7 +63,7 @@ def test_render_domain_add():
 
 def test_render_clear_and_external_ids():
     lv = livec(external_ids=["old-slug"])
-    plan = plan_deploy([desired()], [lv], retire={"globex": {"tier": "Tier 1"}})
+    plan = plan_deploy([desired(tier=None)], [lv])
     assert cli.render_plan(plan) == [
         "~ Globex (retire)",
         "    external_ids: [old-slug] -> [globex]",
@@ -73,7 +73,7 @@ def test_render_clear_and_external_ids():
 
 def test_print_plan_summary_counts_destructive(capsys):
     lv = livec(domains=["globex.example.test", "old.example.org"])
-    plan = plan_deploy([desired()], [lv], retire={"globex": {"domains": ["old.example.org"]}})
+    plan = plan_deploy([desired()], [lv])
     cli._print_plan(plan)
     out = capsys.readouterr().out.splitlines()
     assert out[0] == (

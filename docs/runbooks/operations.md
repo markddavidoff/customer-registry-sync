@@ -13,22 +13,28 @@ the environment: `LINEAR_API_TOKEN`, and `NOTION_API_TOKEN` for `ingest`. `check
 data_dir` prints the absolute path of `<data_dir>`.
 
 Notion ingest is manual: run `ingest` on your machine, run `generate`, and open a PR. The
-workflow never reads Notion. `ignore` and `ingest --only linear-found` read the state
+workflow never reads Notion. `hide` and `ingest --only linear-found` read the state
 mirror, so run `sync-inbound` before either.
 
-- `check`: drift, plan, orphans (a Linear customer in no dataset), identity and
-  ignore-list conflicts, stale retire entries, hand-edited or out-of-date generated
-  files. Exit 0 ok, 2 error, 3 any of those found. Untracked values and known duplicates
-  are reported without failing.
-- `sync-inbound`: refresh `<data_dir>/linear-state/` from live Linear.
+- `check`: drift, plan, pending Linear edits, orphans (a Linear customer in no dataset),
+  identity and hidden-customer conflicts, overrides-file errors, hand-edited or
+  out-of-date generated files. Exit 0 ok, 2 error, 3 any of those found. Known
+  duplicates and redundant pins are reported without failing.
+- `sync-inbound`: refresh `<data_dir>/linear-state/` from live Linear, and record in
+  `<data_dir>/linear-overrides.yaml` the Linear edits and confirmed deletions since the
+  last mirror. Exit 2 on a Linear read error, with nothing written.
+- `refresh`: `sync-inbound`, `ingest --only linear-found` and `generate`, in that order.
+  The workflow's refresh job runs it.
 - `ingest`: build `<data_dir>/datasets/notion/` from Notion (needs `NOTION_API_TOKEN`),
   then `<data_dir>/datasets/linear-found/` from the mirror; appends to
   `<data_dir>/identities.yaml`. `ingest --only linear-found` skips Notion and reads only
   the mirror.
 - `generate`: merge the datasets through `<data_dir>/identities.yaml`, then write
   `<data_dir>/linear/`, `<data_dir>/registry.csv` and `<data_dir>/real-customers.csv`.
-- `ignore --linear-id <id> --reason "<why>"`: add a Linear customer to
-  `<data_dir>/linear-ignore.yaml` (offline; exit 0 added, 4 already listed, 2 refused).
+- `hide --linear-id <id> --reason "<why>"`: hide a Linear customer by adding a `hidden`
+  entry to `<data_dir>/linear-overrides.yaml` (offline; exit 0 hidden, 4 already hidden,
+  2 refused).
+- `adopt-live`: one-time migration of a v0.2.0 data repository (see Runbook 8).
 - `deploy`: dry-run plan with field-level changes. Applies run from the workflow, not a
   laptop (see "Applying").
 - `restore --from <snapshot>`: put snapshot values back (see Runbook 7).
@@ -39,9 +45,11 @@ overwrite one that was edited by hand: they prompt in a terminal and exit 2 with
 `--no-input` or without a terminal. The curated and generated files are listed in
 [`../customer-registry.md`](../customer-registry.md#files-in-data_dir).
 
-`<data_dir>/linear-retire.yaml` is keyed by the customer's external id: the
+`<data_dir>/linear-overrides.yaml` is keyed by the customer's canonical id: the
 `external_ids[0]` value in `<data_dir>/linear/<file>.yaml`. That id is also the
-customer's key in `<data_dir>/identities.yaml`.
+customer's key in `<data_dir>/identities.yaml`. A data repository that still has
+`linear-ignore.yaml` or `linear-retire.yaml` exits 2 on `check`, `deploy`, `ingest`,
+`sync-inbound`, `refresh` and `hide` until `adopt-live` has run (Runbook 8).
 
 ## Applying
 
@@ -50,8 +58,8 @@ requires a reviewer's approval before anything touches Linear.
 
 1. A push to the default branch that changes a deploy input starts the workflow: any file
    under `<data_dir>/linear/`, `<data_dir>/identities.yaml`,
-   `<data_dir>/linear-ignore.yaml`, `<data_dir>/datasets.yaml`,
-   `<data_dir>/linear-retire.yaml`, or `registry-sync.yaml`. To start it by hand:
+   `<data_dir>/linear-overrides.yaml`, `<data_dir>/datasets.yaml`, or
+   `registry-sync.yaml`. To start it by hand:
    Actions, `registry-sync`, Run workflow, `mode: deploy`.
 2. The reviewer reads the field-level plan in the job log and approves.
 3. The job runs `check`, then `deploy --apply --prod --no-input`. Before the first write
@@ -59,10 +67,30 @@ requires a reviewer's approval before anything touches Linear.
    verifies the row Linear returned and aborts the remaining rows on any unplanned
    change.
 4. The job refreshes `<data_dir>/linear-state/` and opens a state PR (branch
-   `linear-state/<run-id>-<attempt>`) with the new mirror and the snapshot. Merge it. The
-   job summary carries the apply report and the exact `restore` command.
+   `sync-state/<run-id>-<attempt>`) with the new mirror and the snapshot. Merge it, and
+   merge it before any refresh PR (see "Merge order" below). The job summary carries the
+   apply report and the exact `restore` command.
 
 A failed apply still opens the state PR, and the run is marked failed.
+
+**Merge order.** Merge a deploy's state PR before the refresh PR. The refresh compares
+the mirror on the default branch with live Linear. If the registry changed again after
+the deploy and the state PR is still open, the mirror, Linear and the desired row all
+differ, and `sync-inbound` records a conservative `pending` entry holding Linear's value
+(the deploy's own write). That entry is spurious. Delete it by hand: the registry value
+wins. Merging the state PR first avoids it.
+
+The state PR stages all of `<data_dir>` (and the state and snapshot directories, if they
+lie elsewhere). The `sync-inbound` that the deploy job runs after the apply can also
+record an edit or a deletion in `<data_dir>/linear-overrides.yaml`. When it does, it
+regenerates `<data_dir>/linear/` and the CSVs from the committed datasets, and all of it
+lands in the state PR. Merging a PR that changes the overrides file starts a deploy run
+(the file is a deploy input). Its plan does not write back an absorbed clear or removal
+and does not recreate a deleted customer, because the regenerated `linear/` already
+agrees with Linear. A pending entry aborts its row, so resolve it (see
+[A pending Linear edit](#a-pending-linear-edit)) before approving. If `deploy` prints `linear out of date: <id>: run generate`
+and `REFUSED`, the `linear/` on the branch lags the overrides file: run `generate`,
+commit the result, and re-run.
 
 **Break-glass (laptop).** `deploy --apply --prod` outside GitHub Actions refuses unless
 `--break-glass` is passed. Use it only when the workflow is unavailable; it prints a
@@ -92,8 +120,10 @@ customer-registry-sync deploy --apply --prod --break-glass
 1. A PR is open. Between the last `sync-inbound` and CI, someone edited Linear.
 2. `check`: recorded state differs from live (content hash mismatch), so **exit 3 and the
    PR is red**; the log names the drifted rows (changed, added, deleted).
-3. **Resolution:** `sync-inbound` refreshes `linear-state/`; `generate` re-projects the
-   desired rows; resolve conflicts in the PR; push. CI re-runs and goes green.
+3. **Resolution:** `sync-inbound` refreshes `linear-state/` and records the edit in
+   `linear-overrides.yaml` (an accepted pin or removal, or a pending entry to resolve, see
+   [A pending Linear edit](#a-pending-linear-edit)); `generate` re-projects the desired
+   rows; resolve conflicts in the PR; push. CI re-runs and goes green.
 
 ## Runbook 3: Out of sync at deploy (post-merge)
 
@@ -118,27 +148,28 @@ apply and the state refresh that would fix it. The fix runs in the workflow's `r
 mode or on a laptop, then lands through a PR. `check` ends a failed run with
 
 ```
-check FAILED: see the ERROR, DRIFT and OFFLINE lines above
+check FAILED: see the ERROR, DRIFT, PENDING, OVERRIDE and OFFLINE lines above
 ```
 
-Find the lines above it and use the matching section. `UNTRACKED:` and `NOTE:` lines do
+Find the lines above it and use the matching section. `NOTE:` and `HIDDEN:` lines do
 not fail `check`.
 
 ### An orphan: a Linear customer in no dataset
 
-The failure line names the customer and both ways out:
+The failure line names the customer and both ways out. Check the exact wording in your
+`check` output:
 
 ```
 ERROR: orphan: Linear customer 'Example Corp' (<linear id>) is in no dataset.
   Add it: dispatch the registry-sync workflow with mode=refresh (or run sync-inbound, ingest --only linear-found, generate) and merge the PR.
-  Or ignore it: customer-registry-sync ignore --linear-id <linear id> --reason "<why>"
+  Or hide it: customer-registry-sync hide --linear-id <linear id> --reason "<why>"
 ```
 
 **Add it to the registry.** Dispatch the workflow: Actions, `registry-sync`, Run
 workflow, `mode: refresh`. (The same mode runs daily from the schedule.) It runs in the
 read-only environment, so it waits for no approval and never writes to Linear. It runs
 `sync-inbound`, `ingest --only linear-found` and `generate`, and opens a PR from branch
-`linear-refresh/<run-id>-<attempt>` with the new mirror, the new stubs, the appended
+`sync-refresh/<run-id>-<attempt>` with the new mirror, the new stubs, the appended
 identities and the regenerated output. It opens no PR when nothing changed. Merge the
 PR. The merge touches `<data_dir>/linear/` or `<data_dir>/identities.yaml`, so the
 workflow runs `deploy` behind its approval: that plan stamps the new stubs' external ids.
@@ -155,28 +186,31 @@ Commit `<data_dir>/linear-state/`, `<data_dir>/datasets/linear-found/`,
 `<data_dir>/identities.yaml`, `<data_dir>/linear/` and both CSVs in one PR. Run
 `sync-inbound` first: stubs built from a stale mirror are stale.
 
-**Or ignore it.** For a customer the sync must never manage (your own company, a test
+**Or hide it.** For a customer the sync must never manage (your own company, a test
 record), run the command from the failure line with a real reason:
 
 ```bash
-customer-registry-sync ignore --linear-id <linear id> --reason "<why>"
+customer-registry-sync hide --linear-id <linear id> --reason "<why>"
 ```
 
-It reads the name from the mirror, so run `sync-inbound` first if it says the id is not
-in the mirror. Exit 4 means the id is already listed and its reason is kept. Commit
-`<data_dir>/linear-ignore.yaml` in a PR. Run `ingest --only linear-found` and `generate`
-as well to drop an existing stub for that customer at once; the next refresh would drop
-it anyway.
+It resolves the customer to its canonical id through the identity table and appends a
+new identity when none matches. It reads the name from the mirror, so run `sync-inbound`
+first if it says the id is not in the mirror. Exit 4 means the customer is already hidden
+and its reason is kept. Commit `<data_dir>/linear-overrides.yaml` (and
+`<data_dir>/identities.yaml`, if `hide` appended an identity) in a PR. Run
+`ingest --only linear-found` and `generate` as well to drop an existing stub for that
+customer at once; the next refresh would drop it anyway. To hide every customer whose
+name starts with a prefix, add an item to `hidden_name_prefixes` in the same file.
 
 ### An unmapped Linear status
 
 The line reads `OFFLINE: unmapped Linear status: '<name>' (<linear id>) has status '<status>'`.
 Either add a row for the status to `linear_status_classification` in
 `<data_dir>/datasets.yaml` (for example `POC: prospect`), then run
-`ingest --only linear-found` and `generate`; or ignore the customer as above. A customer
+`ingest --only linear-found` and `generate`; or hide the customer as above. A customer
 with no status in Linear shows `has status ''`: set its status in Linear, then dispatch
 the refresh (or run `sync-inbound`, `ingest --only linear-found` and `generate`), or
-ignore it.
+hide it.
 
 ### Known duplicates
 
@@ -192,7 +226,7 @@ in Linear first. `check` also fails with
 `two or more Linear customers carry the canonical id <id>` when the canonical id is on
 more than one of them: merge them in Linear, or remove the id from all but one.
 
-### Identity or ignore-list conflicts
+### Identity conflicts
 
 These lines name the files and ids involved:
 
@@ -200,11 +234,64 @@ These lines name the files and ids involved:
   resolves to two identities: edit `<data_dir>/identities.yaml` so each value sits on one
   identity (merging two identities is described in
   [`../customer-registry.md`](../customer-registry.md#identity-resolution)).
-- `desired record 'X' shares domain 'd.com' with ignored Linear customer 'Y'`: remove the
-  ignore entry or change the record.
-- An invalid `<data_dir>/linear-ignore.yaml` or `<data_dir>/datasets.yaml`: fix the listed
-  field (a missing `reason`, a prefix shorter than four characters, a dataset name with
-  no directory).
+- An invalid `<data_dir>/datasets.yaml`: fix the listed field (a dataset name with no
+  directory).
+
+### A pending Linear edit
+
+The line names the customer, the field and Linear's value, then both ways out:
+
+```
+PENDING: acme-robotics: revenue = 150000 (edited in Linear)
+  keep Linear's value: move it to customers.acme-robotics.pin.revenue
+  upstream wins: delete customers.acme-robotics.pending.revenue; the next deploy writes the registry value
+```
+
+`sync-inbound` wrote the entry into `<data_dir>/linear-overrides.yaml` after someone
+edited that field in Linear. `check` fails, and `deploy` aborts that customer's row, until
+the entry is gone. Decide in a PR:
+
+1. **Keep Linear's value.** Under the customer's key, move the value from `pending` into
+   `pin` (for `domains_add`, into `domains.add`). Run `generate`, so `linear/` holds the
+   value, and commit both files.
+2. **Registry wins.** Delete the value from `pending`. The next deploy overwrites Linear.
+   Run no `generate`; the desired row is unchanged.
+
+Delete a `pending:` key that has no values left. The refresh drops a pending entry on its
+own when Linear's value comes to equal the registry's. To record the decision for a later
+reader, add a `reason:` under the customer.
+
+### A deleted customer, and the unverified not-found shape
+
+`sync-inbound` records `deleted: {linear_id, confirmed}` for a customer that is missing
+from Linear's listing and that a direct read by id reports not found. An archived
+customer (`Customer.archivedAt` set) counts as deleted. The sync then never recreates
+it. To bring it back, delete the `deleted` entry and merge: the next deploy creates the
+customer with a new Linear id.
+
+Linear's not-found response is not verified. Linear's schema returns a non-null
+`Customer!` from `customer(id:)`, so an unknown id should come back as an error, and the
+client's not-found test is written from the public docs. The owner-run live test
+`test_get_after_delete_is_not_found` (in `tests/test_e2e_gitops.py`; run it with
+`--run-live` against a throwaway workspace) creates and deletes a throwaway customer and
+asserts the client returns `None`. Until the owner has run it, **a hard-deleted customer
+(deleted with `customerDelete`, not archived) makes `sync-inbound` and `refresh` exit 2**,
+with an error naming the failed read, and nothing is written. Archive the customer
+instead, or run the live test; if it fails, its error text gives the shape the client must
+match. The refresh job stays red until one of those happens.
+
+### Hidden conflicts and overrides errors
+
+- `desired record 'X' shares domain 'd.com' with hidden Linear customer 'Y'` (or a hidden
+  prefix): remove the `hidden` entry or prefix, or change the record.
+- `OVERRIDE:` lines name `linear-overrides.yaml` and a line. The common ones: an unknown
+  key; a `hidden` entry with no reason; a `domains.remove` for a domain upstream does not
+  carry; a `pin` or `pending` on a Linear-owned stub (stubs accept only `hidden`);
+  `pin: null` on `name`, `status` or `external_ids`; a pin of `external_ids`; a
+  `revenue` that is not an integer; an entry for a canonical id with no identity. Fix the
+  named line.
+- A pin equal to the upstream value is reported as `NOTE: ... (redundant)` and does not
+  fail. Delete it when you tidy the file.
 
 ### OFFLINE lines
 
@@ -215,69 +302,56 @@ the result.
 
 `OFFLINE:` lines also carry every error `check` finds without Linear that no generator
 fixes: identity-table conflicts in `<data_dir>/identities.yaml`, an invalid
-`<data_dir>/datasets.yaml` or `<data_dir>/linear-ignore.yaml` (see
-[Identity or ignore-list conflicts](#identity-or-ignore-list-conflicts)) and unmapped
+`<data_dir>/datasets.yaml` (see [Identity conflicts](#identity-conflicts)) and unmapped
 Linear statuses (see [An unmapped Linear status](#an-unmapped-linear-status)). Rerunning a
 generator alone does not clear them: fix the named file first, as the linked section
 says.
 
-### Drift and stale retire entries
+### Drift
 
 `DRIFT` lines mean someone edited Linear since the last `sync-inbound`: follow Runbook 2.
-`STALE RETIRE` lines: Runbook 6.
+The refresh then records the edit as an accepted override or a pending entry (see
+[A pending Linear edit](#a-pending-linear-edit)).
 
-## Runbook 6: Retiring a value
+## Runbook 6: Removing or clearing a value
 
-The sync removes a Linear value only when a reviewed entry in
-`<data_dir>/linear-retire.yaml` names it. Removal takes two steps: a PR with the entry,
-then the apply.
+The registry owns every written field, so the sync removes a Linear domain or clears a
+revenue or tier whenever the desired row lacks it. No separate acknowledgement exists.
+The removal is the visible diff of the pull request. There are two ways to make the
+desired row lack a value:
 
-1. Find the customer's external id: the `external_ids[0]` value in
-   `<data_dir>/linear/<file>.yaml`.
-2. Add the entry with the exact current Linear value of each field to remove:
+1. **Drop it upstream.** Remove the domain, ARR or tier from the Notion page, run
+   `ingest`, then `generate`. A domain that sits on the customer's entry in
+   `<data_dir>/identities.yaml` is merged back into every desired row, so use the next
+   way for it.
+2. **Override it.** Add an entry under the customer's canonical id in
+   `<data_dir>/linear-overrides.yaml`:
 
    ```yaml
-   <external_id>:
-     domains: [acme-robotics.example.test]
-     revenue: 300000
-     tier: Tier 2
+   customers:
+     acme-robotics:
+       domains:
+         remove: [old.acme-robotics.example.test]   # must be a domain upstream carries
+       pin:
+         tier: null        # clear the tier whatever Notion says
+         revenue: null     # likewise (optional fields only)
    ```
 
-   List only the fields to remove. A domain matches case-insensitively.
-3. Run `check` (`generate` does not read the retire file). The plan marks the row
-   `(retire)` and shows each removal (`domains: - acme-robotics.example.test`, or
-   `revenue: 300000 -> None`); `check` exits 0 once nothing else is wrong. Open the PR
-   and have a reviewer read the removals.
-4. Merge. The workflow applies after approval (see "Applying").
-5. **After the apply, delete the entry on the bot's state PR.** The value is no longer in
-   Linear, so `check` reports the entry as a stale retire (exit 3) until it is gone. That
-   includes the bot's state PR, which carries the post-apply mirror and fails `check`
-   with `STALE RETIRE ... not live`. A separate follow-up PR off the default branch also
-   fails: its base still has the pre-apply mirror, so `check` reports drift. Instead,
-   push one commit that deletes the applied entry from `<data_dir>/linear-retire.yaml`
-   onto the state PR's branch (`linear-state/<run-id>-<attempt>`), let `check` go green,
-   and merge that PR. Merging it touches `<data_dir>/linear-retire.yaml`, so the
-   workflow runs `deploy` again. That run plans a no-op apply; the reviewer may approve
-   or reject it.
+   A domain compares case-insensitively. Run `generate`.
 
-Four `STALE RETIRE` failures to expect, each printed as `STALE RETIRE: <id>: ...`:
+Then run `check`. The plan shows each removal (`domains: - old.acme-robotics.example.test`,
+or `revenue: 300000 -> None`) and exits 0 once nothing else is wrong. Open the PR and
+have a reviewer read the removals. After the merge the workflow applies behind its
+approval (see "Applying").
 
-- `... domains <x> not live` (or `revenue`/`tier ... not live`): the value is already
-  absent, or the recorded value does not equal the live one. Delete the entry, or
-  correct it to the live value.
-- `... no registry row`: the external id matches no desired row in
-  `<data_dir>/linear/`. Fix the id to the row's `external_ids[0]`, or delete the entry.
-- `... no live match`: the registry row has no matching Linear customer (no match by
-  source id, domain or name through `<data_dir>/identities.yaml`), so there is nothing to
-  remove from. Delete the entry, or add the missing name, domain or Linear id to the
-  customer's entry in `<data_dir>/identities.yaml`.
-- `... conflicts with registry`: the registry (the Notion dataset or the identity table)
-  still carries the value. For a domain, the same domain is in the registry or on the
-  customer's entry in `<data_dir>/identities.yaml`. For revenue or tier, Notion sets any
-  value for that field, even a different one, because the registry owns the field
-  whenever it sets one. Apply would clear the value and the next run would set it again.
-  Remove the value from its source (for a domain, delete it from the entry in
-  `<data_dir>/identities.yaml`) before retiring it.
+Two follow-ups keep `check` green later:
+
+- A `domains.remove` must name a domain upstream carries. If upstream later drops the
+  domain, `check` fails with `domains.remove <domain>: upstream does not carry it`. Delete
+  the `remove` entry then.
+- A `pin` outlasts upstream. If Notion later gains a revenue, `pin: {revenue: null}` still
+  wins until someone deletes the pin. When upstream comes to equal a pin, `check` reports
+  the pin as redundant (a `NOTE`, no failure).
 
 ## Runbook 7: Restore
 
@@ -289,23 +363,16 @@ snapshot, so it never overwrites newer work.
 1. Make sure the snapshot is on the default branch (the apply's state PR must have
    merged). Take its path from the job summary or `<data_dir>/linear-snapshots/`.
 2. If the change you are undoing is still in the registry (a `<data_dir>/linear/`,
-   `<data_dir>/identities.yaml` or retire change), order matters:
-   - **Undoing a retire:** there is nothing to revert. Runbook 6 step 5 already deleted
-     the applied entry on the state PR branch. Run `restore` (step 3). Its state PR
-     passes `check` with an `UNTRACKED:` line: Linear holds the value again but the
-     registry does not carry it. A restored domain is appended to the customer's entry
-     in `<data_dir>/identities.yaml` by the next refresh (Runbook 5, or run
-     `ingest --only linear-found` and `generate` on the state PR's branch). That merge
-     touches `<data_dir>/identities.yaml`, so it starts a workflow run whose plan is a
-     no-op; approve or reject it. A restored revenue or tier stays in Linear until the
-     Notion page carries it.
-   - **Undoing a domain add or a scalar change (revenue, tier, name, status):** run
-     `restore` first (step 3) and merge its state PR, then revert the registry change in
-     a PR. Reverting first fails twice over. A reverted registry that no longer carries a
-     domain still in Linear does not remove it (apply never drops a Linear-only domain),
-     and the next refresh appends the domain to the identity again. And merging a scalar
-     revert triggers a deploy that redoes the change and bumps `updatedAt`, so `restore`
-     then skips every row.
+   `<data_dir>/identities.yaml` or overrides change), order matters. Run `restore` first
+   (step 3) and merge its state PR, then revert the registry change in a PR. Reverting
+   first fails: merging a revert triggers a deploy that redoes the change and bumps
+   `updatedAt`, so `restore` then skips every row. After a restore, Linear holds values
+   the registry no longer wants, so the `sync-inbound` the restore job runs records them
+   as Linear edits in the restore's state PR: a cleared value or removed domain is
+   absorbed as a pin or `domains.remove` (with `linear/` regenerated to match), and
+   anything else becomes a pending entry. Reverting the registry change makes the
+   registry agree with Linear again; in the revert PR, delete any pin, removal or pending
+   entry the restore's state PR recorded for the same value, then run `generate`.
 
    Do not approve any deploy run that starts between the restore and the registry
    revert; it would re-apply the change.
@@ -337,13 +404,43 @@ customer-registry-sync restore --from <data_dir>/linear-snapshots/<UTC>.yaml --r
 The first restores every row in the snapshot; the second restores one customer. Run
 `sync-inbound` afterwards and commit the state mirror in a PR.
 
+## Runbook 8: Move a v0.2.0 data repository to full ownership
+
+Run this once, from a clone of the data repository, on a branch. It needs no token.
+
+1. Apply and remove any `<data_dir>/linear-retire.yaml` entries under v0.2.0, then empty
+   the file. `adopt-live` refuses while the file has entries.
+2. Make sure `<data_dir>/linear-state/` is current and merged (a merged refresh PR or
+   state PR). `adopt-live` reads the committed mirror and refuses without one.
+3. Preview, then run it:
+
+   ```bash
+   customer-registry-sync adopt-live --dry-run
+   customer-registry-sync adopt-live
+   ```
+
+   It prints `adopt-live: N pins, M domain adds, H hidden, P hidden prefixes, I identities
+   added`. It pins the live revenue and tier the registry lacks, adds the live domains the
+   desired row lacks, turns `linear-ignore.yaml` into `hidden` entries and prefixes,
+   appends an identity for any ignored customer that has none, and deletes the ignore and
+   retire files.
+4. Run `generate`, then `check` with a read-only token. The plan should show no clears and
+   no removals. Commit `<data_dir>/linear-overrides.yaml`, `<data_dir>/identities.yaml`,
+   the deleted files and `<data_dir>/linear/` in one PR, and have a reviewer read the
+   pins.
+5. Merge the PR. The workflow's deploy plan should be a no-op that the reviewer can
+   approve.
+
 ## Shared resolution route: "Linear drifted, pull it back"
 
-1. `sync-inbound` makes `linear-state/` mirror live reality.
-2. `generate` re-projects the desired rows from the (unchanged) datasets.
-3. If the out-of-band change should be **kept**, reflect it in Notion or, for a domain, in
-   `<data_dir>/identities.yaml`, so `generate` stops reverting it. If it should be
-   **overwritten**, the plan re-proposes the registry value. A customer in
+1. `sync-inbound` makes `linear-state/` mirror live reality and records each edit in
+   `<data_dir>/linear-overrides.yaml`: a cleared value or removed domain as an accepted
+   pin or `domains.remove`, anything else as a pending entry.
+2. `generate` re-projects the desired rows from the datasets and the overrides.
+3. If the out-of-band change should be **kept**, move its pending value into `pin` (or
+   `domains.add`), or fix the source in Notion. If it should be **overwritten**, delete
+   the pending value, and the plan re-proposes the registry value. A customer in
    `datasets/linear-found/` is Linear-owned: its edits are copied into the stub, never
    reverted.
-4. Commit `linear-state/` and any `linear/` changes, open the PR, and let CI re-run.
+4. Commit `linear-state/`, `linear-overrides.yaml` and any `linear/` changes, open the PR,
+   and let CI re-run.

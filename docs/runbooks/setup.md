@@ -52,7 +52,7 @@ You need:
 For local runs, export the tokens in your shell. The tool reads `LINEAR_API_TOKEN`
 (`sync-inbound`, `deploy`, `check`, `restore`) and `NOTION_API_TOKEN` (`ingest`).
 `deploy` needs the Linear token even as a dry run, and so does `check`; both exit 2
-without it. `ignore` and `ingest --only linear-found` need no token but need a state
+without it. `hide` and `ingest --only linear-found` need no token but need a state
 mirror, so run `sync-inbound` before them.
 
 ## Stage 1: Linear tokens
@@ -181,12 +181,15 @@ requires-python = ">=3.12"
 dependencies = ["customer-registry-sync", "gitops-engine"]
 
 [tool.uv.sources]
-customer-registry-sync = { git = "https://github.com/markddavidoff/customer-registry-sync.git", tag = "v0.2.0" }
-gitops-engine = { git = "https://github.com/markddavidoff/gitops-engine.git", tag = "v0.2.0" }
+customer-registry-sync = { git = "https://github.com/markddavidoff/customer-registry-sync.git", tag = "v0.3.0" }
+gitops-engine = { git = "https://github.com/markddavidoff/gitops-engine.git", tag = "v0.3.0" }
 ```
 
 Run `uv lock`, then commit `pyproject.toml` and `uv.lock`. Upgrading the tool means
-changing the tag and committing the new lock. Use `https://` URLs only (Stage 3).
+changing the tag and committing the new lock. Use `https://` URLs only (Stage 3). A data
+repository that still has `linear-ignore.yaml` or `linear-retire.yaml` must run
+`adopt-live` before it moves to v0.3.0; see Runbook 8 in
+[`operations.md`](operations.md#runbook-8-move-a-v020-data-repository-to-full-ownership).
 
 **`registry-sync.yaml`**, copied from
 [`examples/registry-sync.example.yaml`](../../examples/registry-sync.example.yaml): your
@@ -211,7 +214,7 @@ name. Set `token-env: LINEAR_API_TOKEN`, the variable the tool reads. Two points
 `uses:`:
 
 - Pin it to the same release tag as the `gitops-engine` entry in your `pyproject.toml`
-  (the example uses `@v0.2.0`), so a change to the engine's default branch cannot change
+  (the example uses `@v0.3.0`), so a change to the engine's default branch cannot change
   your deploys.
 - GitHub can call a reusable workflow when its repository is public, or has the same
   owner as the caller and allows access from it (repository Settings, Actions, General,
@@ -278,7 +281,7 @@ Run these once, before anything writes to Linear:
    `destructive=0` in the `DeployPlan` line. Read every `+` (create) and `~` (update) line of the
    plan, because each one is a write the first deploy makes.
 2. **The live end-to-end tests (optional).** They touch only throwaway test customers,
-   which the sync always ignores (see [`../customer-registry.md`](../customer-registry.md#a-change-from-linears-side)),
+   which the sync always hides (see [`../customer-registry.md`](../customer-registry.md#a-change-from-linears-side)),
    and clean up after themselves. In GitHub, dispatch the workflow with
    `mode: e2e`; it runs the tests from the exact tool commit your lock installed, and
    uses that tool's own lockfile for the test dependencies. From a checkout of the tool:
@@ -301,8 +304,9 @@ enough to read every line.
    intended creates and updates. Before approving, compare the plan in the run with the
    expected list in the PR description. The deploy snapshots first, writes each row with
    check-and-set, and verifies it after the write.
-3. **Land the state PR.** The App opens `linear-state/<run>-<attempt>` after each
-   deploy. Its `check` should show `updates=0`. Merge it.
+3. **Land the state PR.** The App opens `sync-state/<run>-<attempt>` after each
+   deploy. Its `check` should show `updates=0`. Merge it before any refresh PR; a refresh
+   over an unmerged state PR can record a spurious pending entry.
 4. **Verify the refresh.** Dispatch the workflow with `mode: refresh` from the current
    default branch. Expect "No refreshed files changed; no PR to open."
 
@@ -321,7 +325,7 @@ Two mistakes to avoid:
 | What | When | Who acts |
 |---|---|---|
 | PR check (if you added one) | every PR and every merge-queue entry | nobody, unless it fails |
-| `deploy` | every push to the default branch that changes `<data_dir>/linear/**`, `identities.yaml`, `linear-ignore.yaml`, `datasets.yaml` or `linear-retire.yaml` under `<data_dir>`, or `registry-sync.yaml` | the reviewer approves |
+| `deploy` | every push to the default branch that changes `<data_dir>/linear/**`, `identities.yaml`, `linear-overrides.yaml` or `datasets.yaml` under `<data_dir>`, or `registry-sync.yaml` | the reviewer approves |
 | state PR | after every deploy | someone merges it |
 | `refresh` | daily, or on demand | someone reviews and merges the PR, if one opens |
 
@@ -331,8 +335,7 @@ Curated files are edited by hand, through PRs:
 |---|---|
 | `<data_dir>/datasets.yaml` | dataset priority order and the Linear status to classification table |
 | `<data_dir>/identities.yaml` | one entry per company: canonical id, names, domains, source ids |
-| `<data_dir>/linear-ignore.yaml` | Linear customers the sync never touches, each with a reason |
-| `<data_dir>/linear-retire.yaml` | values to remove from Linear (the only way the sync removes anything) |
+| `<data_dir>/linear-overrides.yaml` | every decision that differs from upstream: pins, domain adds and removes, hidden and deleted customers. `sync-inbound` and `hide` also write it |
 | `<data_dir>/self-managed-customers.yaml`, `<data_dir>/classification-overrides.yaml` | inputs to `ingest` |
 
 Never edit generated files by hand: `<data_dir>/datasets/*/`, `<data_dir>/linear/`,

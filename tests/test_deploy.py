@@ -1,5 +1,7 @@
 from dataclasses import replace
 
+import pytest
+
 from customer_registry_sync.datasets import LINEAR_FOUND, NOTION, DatasetRecord
 from customer_registry_sync.deploy import (
     apply_deploy,
@@ -379,39 +381,35 @@ def test_plan_records_changes_and_target():
     plan = plan_deploy([d], [lv])
     [(target, plv)] = plan.updates
     assert plv is lv
-    assert (
-        sorted(target.domains) == ["acmerobotics.example.org", "acmerobotics.example.test"]
-        and target.revenue == 250000
-    )
+    # the registry owns domains: its domain is added and the live-only one removed
+    assert target.domains == ["acmerobotics.example.test"] and target.revenue == 250000
     assert [(c.field, c.kind) for c in plan.changes["lin-1"]] == [
         ("domains", "add"),
+        ("domains", "remove"),
         ("revenue", "change"),
     ]
     assert plan.unacked == [] and not plan.unchanged
 
 
-def test_plan_unchanged_when_only_live_extras():
-    # live carries a domain and a tier the registry does not: kept, not an update
+def test_plan_removes_and_clears_live_extras():
+    # live carries a domain and a tier the registry does not: the registry wins
     d = desired(domains=["acmerobotics.example.test"], tier=None)
     lv = livec(domains=["acmerobotics.example.test", "acmerobotics.example.org"], tier="Tier 2")
     plan = plan_deploy([d], [lv])
-    assert not plan.updates and len(plan.unchanged) == 1
-    [target] = plan.unchanged
-    assert (
-        sorted(target.domains) == ["acmerobotics.example.org", "acmerobotics.example.test"]
-        and target.tier == "Tier 2"
-    )
-    assert plan.changes["lin-1"] == []
-
-
-def test_plan_retire_marks_destructive_as_acknowledged():
-    d = desired()
-    lv = livec(domains=["acmerobotics.example.test", "old.io"])
-    plan = plan_deploy([d], [lv], retire={"acmerobotics": {"domains": ["old.io"]}})
     [(target, _)] = plan.updates
-    assert target.domains == ["acmerobotics.example.test"]
-    [c] = plan.changes["lin-1"]
-    assert (c.kind, c.retire) == ("remove", True) and plan.unacked == []
+    assert (target.domains, target.tier) == (["acmerobotics.example.test"], None)
+    assert plan.changes["lin-1"] == [
+        FieldChange("domains", "acmerobotics.example.org", None, "remove", retire=True),
+        FieldChange("tier", "Tier 2", None, "clear", retire=True),
+    ]
+    assert plan.unacked == []
+
+
+def test_plan_unchanged_when_live_equals_registry():
+    lv = livec(domains=["ACMEROBOTICS.example.test"])  # re-cased: not a change
+    plan = plan_deploy([desired()], [lv])
+    assert not plan.updates and len(plan.unchanged) == 1
+    assert plan.changes["lin-1"] == []
 
 
 def test_name_fallback_ignores_status_suffix_on_both_sides():
@@ -521,25 +519,17 @@ def test_unwritable_snapshot_dir_aborts_before_any_write(tmp_path, recording_lin
 
 
 def test_update_sends_only_changed_fields(tmp_path, recording_linear):
-    # live carries an extra domain and a tier the registry lacks: never sent
-    lv = _robotics(
-        recording_linear,
-        domains=["acmerobotics.example.test", "acmerobotics.example.org"],
-        revenue=300000,
-        tier="Tier 2",
-    )
-    plan = plan_deploy([desired(revenue=250000, tier=None)], [lv])
+    lv = _robotics(recording_linear, revenue=300000)
+    plan = plan_deploy([desired(revenue=250000)], [lv])
     client = recording_linear([lv])
     res = apply_deploy(plan, client, snapshot_dir=tmp_path)
     [(_, cid, fields, retire, _)] = client.updates()
     assert (cid, fields, retire) == ("lin-1", {"revenue": 250000}, False)
     assert res.failure is None
-    assert client.rows["lin-1"].domains == ["acmerobotics.example.test", "acmerobotics.example.org"]
-    assert client.rows["lin-1"].tier == "Tier 2"
 
-    # a retire-backed clear sends exactly that field as null, with retire=True
+    # a clear sends exactly that field as null, with retire=True
     lv2 = _robotics(recording_linear, tier="Tier 2")
-    plan2 = plan_deploy([desired(tier=None)], [lv2], retire={"acmerobotics": {"tier": "Tier 2"}})
+    plan2 = plan_deploy([desired(tier=None)], [lv2])
     client2 = recording_linear([lv2])
     res2 = apply_deploy(plan2, client2, snapshot_dir=tmp_path / "2")
     [(_, _, fields2, retire2, _)] = client2.updates()
@@ -865,19 +855,21 @@ def test_merge_by_hand_restamps_one_row(tmp_path):
     assert not plan.creates and not plan.orphans and not plan.errors
 
 
-# ---- ignore list at write time; apply guards ----
+# ---- hidden rows at write time; apply guards ----
 
 
-def _ignore_list(tmp_path, text):
-    from gitops_engine.ignore import load_ignore
+def _hidden(tmp_path, text):
+    from gitops_engine.hidden import hidden_from
 
-    from customer_registry_sync.linear_files import IGNORE_FILE, IGNORE_FORMAT
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE, load_overrides_file
 
-    (tmp_path / IGNORE_FILE).write_text(text)
-    return load_ignore(tmp_path / IGNORE_FILE, IGNORE_FORMAT)
+    (tmp_path / OVERRIDES_FILE).write_text(text)
+    return hidden_from(load_overrides_file(tmp_path))
 
 
-def test_apply_never_writes_ignored_row_unscoped(tmp_path, recording_linear):
+def test_apply_never_writes_hidden_row_unscoped(tmp_path, recording_linear):
+    from customer_registry_sync.linear_files import hidden_reason
+
     table = _table(tmp_path, ("acme", ["Acme"], ["acme.example.test"], {"notion": "acme"}))
     [d] = _rows(table, (NOTION, "acme", _acme(arr=9.0)))
     lv = recording_linear.node(
@@ -885,24 +877,27 @@ def test_apply_never_writes_ignored_row_unscoped(tmp_path, recording_linear):
     )
     plan = plan_deploy([d], [lv], table)
     assert len(plan.updates) == 1
-    # between plan and write, someone adds Acme to the ignore list
-    ign = _ignore_list(tmp_path, "customers:\n  - linear_id: lin_1\n    reason: now a test org\n")
+    # between plan and write, someone hides Acme; the re-read row resolves to it
+    # through the identity table
+    hidden = _hidden(tmp_path, "customers:\n  acme:\n    hidden: {reason: now a test org}\n")
     client = recording_linear([lv])
-    res = apply_deploy(plan, client, snapshot_dir=tmp_path / "snaps", ignore=ign)
+    res = apply_deploy(
+        plan,
+        client,
+        snapshot_dir=tmp_path / "snaps",
+        exclude=hidden_reason(hidden, table, scope=None),
+    )
     assert client.updates() == [] and res.failure is None
     assert [(t.name, why) for t, _, why in plan.aborts] == [
-        ("Acme [Active]", "ignored at write time: now a test org")
+        ("Acme [Active]", "hidden at write time: now a test org")
     ]
 
 
 def test_apply_writes_zzz_row_when_scoped(tmp_path, recording_linear):
-    from gitops_engine.ignore import BUILTIN_PREFIX, load_ignore
-
-    from customer_registry_sync.linear_files import IGNORE_FORMAT
+    from gitops_engine.ignore import BUILTIN_PREFIX
 
     scope = f"{BUILTIN_PREFIX}1a2b3c4d-"
     rows = generate_linear([_acme(canonical_name=f"{scope}Acme", arr=9.0)])
-    ign = load_ignore(tmp_path / "missing.yaml", IGNORE_FORMAT)  # the built-in prefix only
 
     def run(scope_arg):
         lv = recording_linear.node(
@@ -914,7 +909,8 @@ def test_apply_writes_zzz_row_when_scoped(tmp_path, recording_linear):
         )
         plan = plan_deploy(rows, [lv], IdentityTable())
         client = recording_linear([lv])
-        apply_deploy(plan, client, snapshot_dir=tmp_path / "snaps", ignore=ign, scope=scope_arg)
+        # no `exclude`: the built-in prefix only
+        apply_deploy(plan, client, snapshot_dir=tmp_path / "snaps", scope=scope_arg)
         return plan, client
 
     plan, client = run(scope)
@@ -923,7 +919,7 @@ def test_apply_writes_zzz_row_when_scoped(tmp_path, recording_linear):
     plan, client = run(None)  # an unscoped apply never writes the harness's rows
     assert client.updates() == []
     assert [why for _, _, why in plan.aborts] == [
-        "ignored at write time: live e2e harness throwaway records (built in; always present)"
+        "hidden at write time: live e2e harness throwaway records (built in; always present)"
     ]
 
 
@@ -962,12 +958,62 @@ def test_stub_with_empty_live_status_applies_cleanly(tmp_path, recording_linear)
     assert fields == {"external_ids": ["initech"]}
 
 
-def test_empty_tier_without_retire_is_refused_before_the_client(tmp_path, recording_linear):
-    # The engine's never-null guard refuses a desired tier "" before LinearClient's own
-    # guard can: no update is sent, and the failure names the customer and the field.
-    lv = _robotics(recording_linear, tier="Tier 2")
-    plan = plan_deploy([desired(tier="")], [lv])
+# ---- the registry owns revenue, tier and domains ----
+
+
+def test_empty_registry_revenue_clears_linear(tmp_path, recording_linear):
+    lv = _robotics(recording_linear, revenue=120000)
+    plan = plan_deploy([desired(revenue=None)], [lv])
+    assert plan.changes["lin-1"] == [FieldChange("revenue", 120000, None, "clear", retire=True)]
+    assert plan.unacked == []
     client = recording_linear([lv])
     res = apply_deploy(plan, client, snapshot_dir=tmp_path)
-    assert res.failure == "Acme Robotics: update refused: empty tier without retire"
-    assert client.updates() == [] and res.persisted == []
+    [(_, cid, fields, retire, _)] = client.updates()
+    assert (cid, fields, retire) == ("lin-1", {"revenue": None}, True)
+    # Linear reads the cleared value back as None: verification passes
+    assert res.failure is None and client.rows["lin-1"].revenue is None
+
+
+@pytest.mark.parametrize("empty", [None, ""])
+def test_empty_registry_tier_clears_linear_and_verifies(tmp_path, recording_linear, empty):
+    lv = _robotics(recording_linear, tier="Tier 2")
+    plan = plan_deploy([desired(tier=empty)], [lv])
+    [(target, _)] = plan.updates
+    assert target.tier is None
+    client = recording_linear([lv])
+    res = apply_deploy(plan, client, snapshot_dir=tmp_path)
+    [(_, _, fields, retire, _)] = client.updates()
+    assert (fields, retire) == ({"tier_id": None}, True)
+    assert res.failure is None and client.rows["lin-1"].tier is None
+    assert [p.tier for p in res.persisted] == [None]
+
+
+def test_domain_missing_from_registry_is_removed(tmp_path, recording_linear):
+    lv = _robotics(
+        recording_linear, domains=["acmerobotics.example.test", "acmerobotics.example.org"]
+    )
+    plan = plan_deploy([desired()], [lv])
+    assert plan.changes["lin-1"] == [
+        FieldChange("domains", "acmerobotics.example.org", None, "remove", retire=True)
+    ]
+    assert plan.unacked == []
+    client = recording_linear([lv])
+    res = apply_deploy(plan, client, snapshot_dir=tmp_path)
+    [(_, _, fields, retire, _)] = client.updates()
+    assert (fields, retire) == ({"domains": ["acmerobotics.example.test"]}, True)
+    assert res.failure is None and client.rows["lin-1"].domains == ["acmerobotics.example.test"]
+
+
+def test_shared_domain_still_withheld(tmp_path):
+    lv = livec(domains=["acmerobotics.example.test"])
+    other = livec(id="lin-2", name="Beta", domains=["SHARED.example.test"], external_ids=["beta"])
+    plan = plan_deploy(
+        [desired(domains=["acmerobotics.example.test", "shared.example.test"])],
+        [lv],
+        other_live=[other],
+    )
+    assert plan.withheld == [
+        "withheld domain 'shared.example.test' for 'Acme Robotics': Linear customer 'Beta' "
+        "already holds it (shared domains are unverified)"
+    ]
+    assert plan.changes["lin-1"] == [] and plan.updates == []

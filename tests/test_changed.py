@@ -65,6 +65,7 @@ def repo(tmp_path):
     for rel in (
         "identities.yaml",
         "linear-ignore.yaml",
+        "linear-overrides.yaml",
         "datasets.yaml",
         "linear-retire.yaml",
         "linear/acme.yaml",
@@ -90,9 +91,8 @@ def test_deploy_inputs_are_repo_relative(repo):
     assert deploy_inputs(cfg, root) == [
         "registry/linear/**",
         "registry/identities.yaml",
-        "registry/linear-ignore.yaml",
+        "registry/linear-overrides.yaml",
         "registry/datasets.yaml",
-        "registry/linear-retire.yaml",
         "registry-sync.yaml",
     ]
 
@@ -104,6 +104,22 @@ def test_config_edit_is_changed(repo):
     _commit_all(root, "edit config")
     cfg = load_config(root / "registry-sync.yaml")
     assert changed_since(root, base, deploy_inputs(cfg, root)) is True
+
+
+def test_overrides_file_is_deploy_input(repo):
+    """`generate` applies the overrides and `deploy` holds pending rows: a deploy input.
+    The retire file is no longer read."""
+    root, base = repo
+    cfg = load_config(root / "registry-sync.yaml")
+    inputs = deploy_inputs(cfg, root)
+    assert "registry/linear-overrides.yaml" in inputs
+    assert "registry/linear-retire.yaml" not in inputs
+    _edit(root / "registry" / "linear-retire.yaml")
+    _commit_all(root, "edit retire")
+    assert changed_since(root, base, inputs) is False
+    _edit(root / "registry" / "linear-overrides.yaml")
+    _commit_all(root, "edit overrides")
+    assert changed_since(root, base, inputs) is True
 
 
 def test_state_only_push_is_unchanged(repo):
@@ -121,8 +137,7 @@ def test_state_only_push_is_unchanged(repo):
     [
         "identities.yaml",
         "datasets.yaml",
-        "linear-ignore.yaml",
-        "linear-retire.yaml",
+        "linear-overrides.yaml",
         "linear/acme.yaml",
         "linear/new-row.yaml",
     ],
@@ -193,8 +208,8 @@ def test_cli_changed_prints_and_exits_zero(repo, capsys, monkeypatch):
 
 def test_cli_changed_from_a_subdirectory(repo, capsys, monkeypatch):
     root, base = repo
-    _edit(root / "registry" / "linear-retire.yaml")
-    _commit_all(root, "edit retire")
+    _edit(root / "registry" / "linear-overrides.yaml")
+    _commit_all(root, "edit overrides")
     monkeypatch.chdir(root / "registry")
     assert cli.main(["--config", str(root / "registry-sync.yaml"), "changed", "--since", base]) == 0
     assert capsys.readouterr().out.strip() == "changed"

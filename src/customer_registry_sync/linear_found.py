@@ -1,33 +1,46 @@
 """The `linear-found` dataset: a stub for each Linear customer the Notion dataset lacks.
 
-`ingest` builds it offline from the state mirror. Each managed (non-ignored) Linear
+`ingest` builds it offline from the state mirror. Each managed (non-hidden) Linear
 customer is resolved against the identity table. One that resolves to nothing gets a
 new identity first; one whose identity has no `notion` record becomes a stub. Every
-primary customer's Linear-only domains and its Linear id are appended to its identity.
+primary customer's Linear id is appended to its identity, and a stub's Linear-only
+domains too. A customer with a `notion` record learns no domain from Linear: a domain
+added in Linear reaches the registry only through `linear-overrides.yaml`.
 A stub's file stem is its canonical id, and a stub keeps that stem across runs, keyed
 by its Linear id, so the external id stamped into Linear never drifts when the
 customer's name or domain changes there.
+
+When a Notion record starts to resolve to a stub's identity, the Notion row wins and
+the stub goes. `handover_entries` gives the overrides that keep the revenue, tier and
+domains the stub carried in Linear but the Notion row lacks, so the handover clears
+nothing in Linear (the same comparison as `adopt-live`).
 """
 
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 
 from gitops_engine.found import FoundBuild, build_found
+from gitops_engine.hidden import hidden_from
+from gitops_engine.overrides import OverrideEntry, adopt_entry
 
-from .datasets import LINEAR_FOUND, NOTION, DatasetConfig, DatasetRecord
+from .datasets import LINEAR_FOUND, NOTION, DatasetConfig, DatasetRecord, load_datasets_config
+from .generate import canonical_id_for, merge_datasets
 from .identity import (
     IDENTITY_SPEC,
     SOURCE_NOTION,
     IdentityStore,
+    IdentityTable,
     keys_for_record,
     resolve,
     strip_status_suffix,
 )
 from .linear_client import LiveCustomer
+from .linear_overrides import load_overrides_file, uncurated
 from .linear_schema import LINEAR_SCHEMA
 from .schema import VALID_CLASSIFICATIONS, CustomerRecord
-from .writers import slug_for
+from .writers import load_state, slug_for
 
 STUB_NOTE = "Found in Linear {date}; no Notion record."
 
@@ -81,7 +94,7 @@ def build_linear_found(
 ) -> FoundBuild[CustomerRecord]:
     """Stubs for the managed customers whose identity has no `notion` record.
 
-    `managed` must already exclude ignored customers. Customers are taken in Linear-id
+    `managed` must already exclude hidden customers. Customers are taken in Linear-id
     order. Of several on one identity, the primary is the one carrying the canonical id
     or the recorded Linear id (as the planner picks it); the others are known duplicates
     and contribute nothing. When neither id is on any of them, nothing is recorded on the
@@ -114,6 +127,7 @@ def build_linear_found(
             "domains": list(lv.domains),
         },
         learned_values=lambda lv: {"domains": list(lv.domains)},
+        learn_with_record=False,
     )
 
 
@@ -136,7 +150,68 @@ def status_errors(entries: list[DatasetRecord], cfg: DatasetConfig) -> list[str]
         errors.append(
             f"unmapped Linear status: '{rec.canonical_name}' ({lid}) has status '{status}'. "
             f"Add '{status}: prospect' (or the right class) to linear_status_classification "
-            f"in datasets.yaml, or ignore it: customer-registry-sync ignore "
+            f"in datasets.yaml, or hide it: customer-registry-sync hide "
             f'--linear-id {lid} --reason "<why>"'
         )
     return errors
+
+
+def stub_ids(entries: list[DatasetRecord], table: IdentityTable) -> set[str]:
+    """The canonical ids of the `linear-found` stubs among `entries`."""
+    return {canonical_id_for(e, table) for e in entries if e.dataset == LINEAR_FOUND}
+
+
+def handover_entries(
+    data_dir: Path,
+    old_stub_ids: set[str],
+    new_stub_ids: set[str],
+    entries: list[DatasetRecord],
+    table: IdentityTable,
+) -> dict[str, OverrideEntry]:
+    """Canonical id -> the overrides that keep a handed-over stub's Linear values.
+
+    A stub hands over when its id is in `old_stub_ids` but not `new_stub_ids` and a
+    `notion` record in `entries` now resolves to it. A hidden or deleted customer hands
+    nothing over. For each, the upstream desired row (`merge_datasets` without
+    overrides, the old stub left out) is compared through `adopt_entry` with the
+    mirror row for the old stub's Linear id: the result pins each revenue or tier the
+    Notion row leaves empty and adds each domain it lacks. An id with nothing to keep,
+    or no mirror row, is absent."""
+    with_record = {canonical_id_for(e, table) for e in entries if e.dataset == NOTION}
+    handed = (old_stub_ids - new_stub_ids) & with_record
+    if not handed:
+        return {}
+    overrides = load_overrides_file(data_dir)
+    hidden = hidden_from(overrides)
+    linear_ids: dict[str, str] = {}
+    upstream_entries: list[DatasetRecord] = []
+    for e in entries:
+        cid = canonical_id_for(e, table)
+        if e.dataset == LINEAR_FOUND and cid in handed:
+            if e.record.linear_customer_id:
+                linear_ids[cid] = e.record.linear_customer_id
+            continue
+        upstream_entries.append(e)
+    mirror = {
+        s.linear_synced.linear_id: LINEAR_SCHEMA.state_to_live(s)
+        for s in load_state(data_dir)
+        if s.linear_synced is not None
+    }
+    rows = merge_datasets(upstream_entries, table, load_datasets_config(data_dir).names).upstream
+    out: dict[str, OverrideEntry] = {}
+    for row in rows:
+        cid = row.external_ids[0] if row.external_ids else ""
+        lv = mirror.get(linear_ids.get(cid, ""))
+        if cid not in handed or lv is None:
+            continue
+        current = overrides.entries.get(cid)
+        if current is not None and current.deleted is not None:
+            continue
+        if hidden.match(cid, LINEAR_SCHEMA.live_label(lv), scope=None) is not None:
+            continue
+        entry = adopt_entry(row, lv, schema=LINEAR_SCHEMA)
+        if entry is not None and current is not None:
+            entry = uncurated(entry, current)
+        if entry is not None:
+            out[cid] = entry
+    return out

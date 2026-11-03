@@ -77,18 +77,47 @@ def _state_from(lv):
 
 
 def _seed(tmp_path, desired, state):
-    write_desired(desired, tmp_path)
+    """`linear/` as the real `generate` builds it, plus the state mirror `state`. Each
+    `desired` row becomes a Notion dataset record; the rows `generate` then builds must
+    equal `desired`, so a test's explicit rows are what deploy really reads."""
+    from gitops_engine.datasets import dataset_dir
+    from gitops_engine.manifest import write_manifest
+
+    from customer_registry_sync.datasets import NOTION
+    from customer_registry_sync.generate import generate_from_dir, strip_status_suffix
+    from customer_registry_sync.schema import CustomerRecord
+    from customer_registry_sync.writers import write_csvs, write_dataset
+
+    records = [
+        CustomerRecord(
+            canonical_name=strip_status_suffix(d.name),
+            domains=list(d.domains),
+            classification="real",
+            arr=None if d.revenue is None else float(d.revenue),
+            tier=d.tier,
+        )
+        for d in desired
+    ]
+    write_dataset(records, tmp_path)
+    write_manifest(dataset_dir(tmp_path, NOTION), "ingest")
+    gen = generate_from_dir(tmp_path)
+    assert [r.to_dict() for r in gen.rows] == [
+        d.to_dict() for d in sorted(desired, key=lambda d: d.name.lower())
+    ]
+    write_desired(gen.rows, tmp_path)
+    write_csvs(gen.winners, tmp_path)
+    write_manifest(tmp_path / "linear", "generate")
     write_state(state, tmp_path)
 
 
 def test_deploy_dry_run_returns_3_on_abort(tmp_path, monkeypatch, run_cli):
-    recorded = _live("lin_1", "Acme")
-    live_now = _live("lin_1", "Acme", updated="2026-10-02T00:00:00.000Z", revenue=99)
+    recorded = _live("lin_1", "Acme [Active]")
+    live_now = _live("lin_1", "Acme [Active]", updated="2026-10-02T00:00:00.000Z", revenue=99)
     _seed(
         tmp_path,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -106,7 +135,7 @@ def test_deploy_apply_refuses_prod_dir_without_prod_flag(tmp_path, monkeypatch, 
         tmp_path,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -130,7 +159,7 @@ def test_apply_prod_guard_resolves_symlinked_dir(tmp_path, monkeypatch, run_cli)
         real,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -148,12 +177,12 @@ def test_apply_prod_guard_resolves_symlinked_dir(tmp_path, monkeypatch, run_cli)
 
 
 def test_deploy_apply_writes_and_refreshes_state(tmp_path, monkeypatch, run_cli):
-    live = _live("lin_1", "Acme")
+    live = _live("lin_1", "Acme [Active]")
     _seed(
         tmp_path,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -171,12 +200,12 @@ def test_deploy_apply_writes_and_refreshes_state(tmp_path, monkeypatch, run_cli)
 
 
 def test_scope_no_match_is_empty_plan(tmp_path, monkeypatch, run_cli):
-    live = _live("lin_1", "Acme")
+    live = _live("lin_1", "Acme [Active]")
     _seed(
         tmp_path,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -195,13 +224,13 @@ def test_scope_no_match_is_empty_plan(tmp_path, monkeypatch, run_cli):
 
 def _seed_acme(tmp_path, recording_linear):
     live = recording_linear.node(
-        "lin_1", "Acme", domains=["acme.example.test"], revenue=1, xids=["acme"]
+        "lin_1", "Acme [Active]", domains=["acme.example.test"], revenue=1, xids=["acme"]
     )
     _seed(
         tmp_path,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -293,7 +322,7 @@ def test_deploy_refuses_on_planner_errors_and_loads_identities(
         tmp_path,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -312,17 +341,21 @@ def test_deploy_refuses_on_planner_errors_and_loads_identities(
     assert not (tmp_path / "linear-snapshots").exists()
 
 
-def test_deploy_passes_retire_file_to_planner(tmp_path, monkeypatch, recording_linear, run_cli):
-    from customer_registry_sync.linear_files import RETIRE_FILE
-
+def test_deploy_removes_a_domain_the_registry_lacks(
+    tmp_path, monkeypatch, recording_linear, run_cli
+):
     live = recording_linear.node(
-        "lin_1", "Acme", domains=["acme.example.test", "old.example.org"], revenue=5, xids=["acme"]
+        "lin_1",
+        "Acme [Active]",
+        domains=["acme.example.test", "old.example.org"],
+        revenue=5,
+        xids=["acme"],
     )
     _seed(
         tmp_path,
         [
             LinearCustomer(
-                name="Acme",
+                name="Acme [Active]",
                 domains=["acme.example.test"],
                 revenue=5,
                 status="Active",
@@ -331,12 +364,34 @@ def test_deploy_passes_retire_file_to_planner(tmp_path, monkeypatch, recording_l
         ],
         [_state_from(live)],
     )
-    (tmp_path / RETIRE_FILE).write_text("acme:\n  domains: [old.example.org]\n")
     fake = recording_linear([live])
     monkeypatch.setattr(cli, "_linear_client", lambda: fake)
     assert run_cli(["deploy", "--apply", "--out-dir", str(tmp_path)]) == 0
     [(_, _, fields, retire, _)] = fake.updates()
     assert (fields, retire) == ({"domains": ["acme.example.test"]}, True)
+
+
+def test_deploy_holds_pending_row(tmp_path, monkeypatch, capsys, recording_linear, run_cli):
+    acme = recording_linear.node("lin_a", "Acme [Active]", revenue=1, xids=["acme"])
+    beta = recording_linear.node("lin_b", "Beta [Active]", revenue=1, xids=["beta"])
+    _seed(
+        tmp_path,
+        [
+            LinearCustomer(name="Acme [Active]", revenue=5, status="Active", external_ids=["acme"]),
+            LinearCustomer(name="Beta [Active]", revenue=5, status="Active", external_ids=["beta"]),
+        ],
+        [_state_from(acme), _state_from(beta)],
+    )
+    (tmp_path / "linear-overrides.yaml").write_text(
+        "customers:\n  acme:\n    pending: {revenue: 9}\n"
+    )
+    fake = recording_linear([acme, beta])
+    monkeypatch.setattr(cli, "_linear_client", lambda: fake)
+    assert run_cli(["deploy", "--apply", "--out-dir", str(tmp_path)]) == 3
+    out = capsys.readouterr().out
+    assert "ABORT: Acme [Active] — pending decision in linear-overrides.yaml" in out
+    assert [(c[1], c[2]) for c in fake.updates()] == [("lin_b", {"revenue": 5})]
+    assert (fake.rows["lin_a"].revenue, fake.rows["lin_b"].revenue) == (1, 5)
 
 
 def test_deploy_apply_reports_verification_failure(
@@ -347,7 +402,7 @@ def test_deploy_apply_reports_verification_failure(
     monkeypatch.setattr(cli, "_linear_client", lambda: fake)
     assert run_cli(["deploy", "--apply", "--out-dir", str(tmp_path)]) == 3
     out = capsys.readouterr().out
-    assert "Acme: tier expected None got Tier 2" in out and "restore: " in out
+    assert "Acme [Active]: tier expected None got Tier 2" in out and "restore: " in out
 
 
 def test_restore_cli_round_trip_and_break_glass(
@@ -408,11 +463,17 @@ def test_restore_stops_on_linear_error_and_reports_partial(
     assert [c[1] for c in fake2.updates()] == ["lin_1", "lin_2"]
 
 
-# ---- the ignore list in check and deploy ----
+# ---- hidden customers in check and deploy ----
 
-_IGNORE_OWN = (
-    "customers:\n  - linear_id: lin_own\n    name: Pied Piper\n    reason: our own company\n"
-)
+_HIDE_OWN = "customers:\n  own:\n    hidden: {reason: our own company}\n"
+# Pied Piper reaches the hidden `own` entry through its identity's Linear id.
+_OWN_ID = ("own", ["Pied Piper"], [], {"linear": "lin_own"})
+
+
+def _hide_own(tmp_path, text=_HIDE_OWN):
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE
+
+    (tmp_path / OVERRIDES_FILE).write_text(text)
 
 
 def _generated(tmp_path, recs, *identities):
@@ -447,26 +508,29 @@ def _mirror(tmp_path, live):
     write_manifest(tmp_path / "linear-state", "sync-inbound")
 
 
-def test_deploy_refuses_on_ignore_conflict(
+def test_deploy_refuses_on_hidden_conflict(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
-    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
-    _generated(
+    # The hidden Pied Piper carries the consulting record's canonical id as an external
+    # id, so it resolves to that record's identity, not its own: a hidden row the deploy
+    # would otherwise pair with a desired row.
+    _hide_own(tmp_path)
+    [d] = _generated(
         tmp_path,
         [
             CustomerRecord(
                 canonical_name="Pied Piper Consulting",
-                domains=["piedpiper.example.test"],
+                domains=["consulting.example.test"],
                 classification="real",
                 arr=5.0,
             )
         ],
+        _OWN_ID,
     )
-    (tmp_path / IGNORE_FILE).write_text(_IGNORE_OWN)
     own = recording_linear.node(
-        "lin_own", "Pied Piper", domains=["piedpiper.example.test"], revenue=1
+        "lin_own", "Pied Piper", domains=["piedpiper.example.test"], revenue=1, xids=d.external_ids
     )
     _mirror(tmp_path, [own])
     fake = recording_linear([own])
@@ -475,23 +539,23 @@ def test_deploy_refuses_on_ignore_conflict(
     assert run_cli(["deploy", "--apply", "--out-dir", str(tmp_path)]) == 3
     out = capsys.readouterr().out
     assert (
-        "ERROR: desired record 'Pied Piper Consulting' shares domain 'piedpiper.example.test' with ignored Linear "
-        "customer 'Pied Piper' (linear-ignore.yaml:2). Remove that entry or change Pied Piper Consulting."
-        in out
+        f"ERROR: desired record 'Pied Piper Consulting' shares source id '{d.external_ids[0]}' "
+        "with hidden Linear customer 'Pied Piper' (entry own, linear-overrides.yaml). "
+        "Remove that entry from linear-overrides.yaml or change Pied Piper Consulting." in out
     )
     assert "REFUSED" in out
     assert [c for c in fake.calls if c[0] != "get"] == []
     assert not (tmp_path / "linear-snapshots").exists()
 
 
-def test_deploy_withholds_domain_held_only_by_ignored_customer(
+def test_deploy_withholds_domain_held_only_by_hidden_customer(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
-    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
     # the identity lists only acme.example.test, so Pied Piper does not resolve to Acme (no conflict),
-    # yet the record also carries piedpiper.example.test, which only the ignored Pied Piper holds
+    # yet the record also carries piedpiper.example.test, which only the hidden Pied Piper holds
+    _hide_own(tmp_path)
     [d] = _generated(
         tmp_path,
         [
@@ -503,9 +567,9 @@ def test_deploy_withholds_domain_held_only_by_ignored_customer(
             )
         ],
         ("acme", ["Acme"], ["acme.example.test"], {"notion": "acme"}),
+        _OWN_ID,
     )
     assert d.domains == ["acme.example.test", "piedpiper.example.test"]
-    (tmp_path / IGNORE_FILE).write_text(_IGNORE_OWN)
     acme = recording_linear.node(
         "lin_1", d.name, domains=["acme.example.test"], revenue=1, xids=["acme"]
     )
@@ -523,11 +587,11 @@ def test_deploy_withholds_domain_held_only_by_ignored_customer(
 
 
 def _acme_and_own_holder(tmp_path, recording_linear):
-    """Acme's record carries piedpiper.example.test, which only the ignored Pied Piper holds; the
+    """Acme's record carries piedpiper.example.test, which only the hidden Pied Piper holds; the
     identity lists only acme.example.test, so Pied Piper does not resolve to Acme."""
-    from customer_registry_sync.linear_files import IGNORE_FILE
     from customer_registry_sync.schema import CustomerRecord
 
+    _hide_own(tmp_path)
     [d] = _generated(
         tmp_path,
         [
@@ -539,8 +603,8 @@ def _acme_and_own_holder(tmp_path, recording_linear):
             )
         ],
         ("acme", ["Acme"], ["acme.example.test"], {"notion": "acme"}),
+        _OWN_ID,
     )
-    (tmp_path / IGNORE_FILE).write_text(_IGNORE_OWN)
     acme = recording_linear.node(
         "lin_1", d.name, domains=["acme.example.test"], revenue=1, xids=["acme"]
     )
@@ -558,7 +622,7 @@ _WITHHELD_OWN = (
 def test_scoped_deploy_withholds_domain_held_outside_the_scope(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
-    # the holder is ignored AND outside --scope: it is neither managed nor in the
+    # the holder is hidden AND outside --scope: it is neither managed nor in the
     # scoped live list, yet its domain still counts as held
     fake = _acme_and_own_holder(tmp_path, recording_linear)
     monkeypatch.setattr(cli, "_linear_client", lambda: fake)
@@ -578,10 +642,10 @@ def test_scoped_check_withholds_domain_held_outside_the_scope(
     assert "~ Acme [Active]" not in out  # no update planned that would add piedpiper.example.test
 
 
-def test_check_lists_ignored_customers(tmp_path, monkeypatch, capsys, recording_linear, run_cli):
-    from customer_registry_sync.linear_files import IGNORE_FILE
+def test_check_lists_hidden_customers(tmp_path, monkeypatch, capsys, recording_linear, run_cli):
     from customer_registry_sync.schema import CustomerRecord
 
+    _hide_own(tmp_path)
     [d] = _generated(
         tmp_path,
         [
@@ -589,9 +653,7 @@ def test_check_lists_ignored_customers(tmp_path, monkeypatch, capsys, recording_
                 canonical_name="Acme", domains=["acme.example.test"], classification="real", arr=1.0
             )
         ],
-    )
-    (tmp_path / IGNORE_FILE).write_text(
-        _IGNORE_OWN + "  - linear_id: lin_gone\n    reason: deleted test org\n"
+        _OWN_ID,
     )
     acme = recording_linear.node(
         "lin_1", d.name, domains=["acme.example.test"], revenue=1, xids=d.external_ids
@@ -600,22 +662,21 @@ def test_check_lists_ignored_customers(tmp_path, monkeypatch, capsys, recording_
     e2e = recording_linear.node("lin_e2e", "zzz-gitops-test-0000-Acme")
     _mirror(tmp_path, [acme])
     monkeypatch.setattr(cli, "_linear_client", lambda: recording_linear([acme, own, e2e]))
-    assert run_cli(["check", "--out-dir", str(tmp_path)]) == 0  # stale entries only warn
+    assert run_cli(["check", "--out-dir", str(tmp_path)]) == 0
     out = capsys.readouterr().out
-    assert "IGNORED: 'Pied Piper' (lin_own): our own company" in out
+    assert "HIDDEN: 'Pied Piper' (lin_own): our own company" in out
     assert (
-        "IGNORED: 'zzz-gitops-test-0000-Acme' (lin_e2e): live e2e harness throwaway "
+        "HIDDEN: 'zzz-gitops-test-0000-Acme' (lin_e2e): live e2e harness throwaway "
         "records (built in; always present)"
     ) in out
-    assert "IGNORED PREFIX: zzz-gitops-test- (built-in)" in out
-    assert "stale ignore entry: linear-ignore.yaml:5: lin_gone is not in Linear" in out
+    assert "HIDDEN PREFIX: zzz-gitops-test- (built-in)" in out
     assert "DRIFT added" not in out and "ORPHAN" not in out
 
 
 def test_check_orphan_lines_print_before_the_plan_and_reports_after(
     tmp_path, monkeypatch, capsys, recording_linear, run_cli
 ):
-    from customer_registry_sync.linear_files import IGNORE_FILE
+    from customer_registry_sync.identity import IDENTITIES_FILE, IdentityStore
     from customer_registry_sync.schema import CustomerRecord
 
     [d] = _generated(
@@ -640,7 +701,7 @@ def test_check_orphan_lines_print_before_the_plan_and_reports_after(
         "  ERROR: orphan: Linear customer 'Hooli' (lin_hooli) is in no dataset.\n"
         "    Add it: dispatch the registry-sync workflow with mode=refresh (or run sync-inbound, "
         "ingest --only linear-found, generate) and merge the PR.\n"
-        "    Or ignore it: customer-registry-sync ignore --linear-id lin_hooli "
+        "    Or hide it: customer-registry-sync hide --linear-id lin_hooli "
         '--reason "<why>"\n'
     ) in out
     assert (
@@ -651,9 +712,10 @@ def test_check_orphan_lines_print_before_the_plan_and_reports_after(
     # a scoped run sees only its own customers: no orphan, and no identity looks unused
     assert run_cli(["check", "--out-dir", str(tmp_path), "--scope", "Acme"]) == 0
     assert "unused identity" not in capsys.readouterr().out
-    # the printed ignore command clears the orphan
-    (tmp_path / IGNORE_FILE).write_text(
-        "customers:\n  - linear_id: lin_hooli\n    name: Hooli\n    reason: not a customer\n"
-    )
+    # hiding it clears the orphan: an identity carrying its Linear id, and a hidden entry
+    store = IdentityStore(tmp_path / IDENTITIES_FILE)
+    store.add_identity("hooli", names=["Hooli"], domains=[], sources={"linear": "lin_hooli"})
+    store.save()
+    _hide_own(tmp_path, "customers:\n  hooli:\n    hidden: {reason: not a customer}\n")
     assert run_cli(["check", "--out-dir", str(tmp_path)]) == 0
     assert "orphan:" not in capsys.readouterr().out

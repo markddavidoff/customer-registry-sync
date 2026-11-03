@@ -8,6 +8,7 @@ import pytest
 from customer_registry_sync.linear_client import (
     LinearClient,
     LinearError,
+    LinearNotFound,
     LiveCustomer,
     parse_customer_node,
 )
@@ -169,6 +170,19 @@ def test_update_allows_null_with_retire():
     assert gql.calls[0]["input"] == {"revenue": None}
 
 
+@pytest.mark.parametrize(
+    ("field", "empty"),
+    [("name", ""), ("name", None), ("status_id", None), ("external_ids", [])],
+)
+def test_client_refuses_empty_name_even_with_retire(field, empty):
+    gql = _recording_gql()
+    with pytest.raises(LinearError, match=f"refusing to send empty {field}: Linear requires it"):
+        LinearClient(gql=gql).update_customer("c1", retire=True, **{field: empty})
+    with pytest.raises(LinearError, match=f"refusing to send empty {field}"):
+        LinearClient(gql=gql).create_customer(**{field: empty})
+    assert gql.calls == []
+
+
 def test_create_refuses_null():
     gql = _recording_gql()
     with pytest.raises(LinearError, match="refusing to send empty tier_id"):
@@ -206,3 +220,77 @@ def test_http_gql_retries_429_with_retry_after(monkeypatch):
     )
     out = LinearClient(token="t")._http_gql("{ x }")
     assert out == {"data": {"ok": True}} and calls["n"] == 2 and sleeps == [0.01]
+
+
+def _raising(exc):
+    def gql(query, variables=None):
+        raise exc
+
+    return gql
+
+
+def test_get_null_node_is_none():
+    assert LinearClient(gql=_pager([{"data": {"customer": None}}])).get_customer("x") is None
+
+
+def test_get_not_found_error_is_none():
+    assert LinearClient(gql=_raising(LinearNotFound("gone"))).get_customer("x") is None
+
+
+def test_get_other_error_raises():
+    with pytest.raises(LinearError, match="boom"):
+        LinearClient(gql=_raising(LinearError("boom"))).get_customer("x")
+
+
+def test_get_archived_node_is_none():
+    node = _node("A", archivedAt="2026-10-30T00:00:00.000Z")
+    assert LinearClient(gql=_pager([{"data": {"customer": node}}])).get_customer("a") is None
+
+
+def test_get_unarchived_node_is_parsed():
+    node = _node("A", archivedAt=None)
+    got = LinearClient(gql=_pager([{"data": {"customer": node}}])).get_customer("a")
+    assert got is not None and got.id == "a"
+
+
+def test_customer_fields_read_archived_at():
+    gql = _pager([{"data": {"customer": _node("A")}}])
+    seen = []
+
+    def recording(query, variables=None):
+        seen.append(query)
+        return gql(query, variables)
+
+    LinearClient(gql=recording).get_customer("a")
+    assert "archivedAt" in seen[0]
+
+
+def _errors_response(monkeypatch, errors):
+    monkeypatch.setattr(
+        "customer_registry_sync.linear_client.urllib.request.urlopen",
+        lambda req, timeout: io.BytesIO(json.dumps({"data": None, "errors": errors}).encode()),
+    )
+
+
+def test_http_gql_raises_not_found_when_the_errors_match(monkeypatch):
+    _errors_response(monkeypatch, [{"message": "m"}])
+    monkeypatch.setattr("customer_registry_sync.linear_client._is_not_found", lambda e: True)
+    with pytest.raises(LinearNotFound):
+        LinearClient(token="t")._http_gql("{ x }")
+
+
+def test_http_gql_other_errors_are_not_not_found(monkeypatch):
+    _errors_response(monkeypatch, [{"message": "m"}])
+    monkeypatch.setattr("customer_registry_sync.linear_client._is_not_found", lambda e: False)
+    with pytest.raises(LinearError) as info:
+        LinearClient(token="t")._http_gql("{ x }")
+    assert not isinstance(info.value, LinearNotFound)
+
+
+def test_is_not_found_matches_no_error_shape_until_one_is_observed():
+    """Linear's docs do not state the error for an unknown `customer(id:)`, so no
+    error shape counts as not found yet (docs/linear-api-notes.md)."""
+    from customer_registry_sync.linear_client import _is_not_found
+
+    assert _is_not_found([]) is False
+    assert _is_not_found([{"message": "anything", "extensions": {"type": "x"}}]) is False

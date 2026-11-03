@@ -98,3 +98,39 @@ def test_refresh_is_in_the_parser():
     parser, handlers = cli.build_parser()
     assert "refresh" in handlers
     assert parser.parse_args(["refresh", "--no-input"]).no_input is True
+
+
+def test_refresh_records_a_linear_edit_in_the_data_dir(tmp_path, monkeypatch, run_cli):
+    """The refresh PR commits the whole data dir, so it carries linear-overrides.yaml
+    beside the mirror it refreshed."""
+    from customer_registry_sync.linear_client import LiveCustomer
+    from customer_registry_sync.linear_schema import LinearCustomer, LinearSynced
+    from customer_registry_sync.writers import write_desired, write_state
+
+    old = LinearCustomer(name="Acme [Active]", revenue=5, status="Active", external_ids=["acme"])
+    write_desired([old], tmp_path)
+    old.linear_synced = LinearSynced("lin_1", "2026-10-01T00:00:00.000Z", "h")
+    write_state([old], tmp_path)
+    edited = LiveCustomer(
+        id="lin_1",
+        name="Acme [Active]",
+        domains=[],
+        revenue=7,
+        tier=None,
+        status="Active",
+        external_ids=["acme"],
+        updated_at="2026-10-02T00:00:00.000Z",
+    )
+
+    class _Client:
+        def list_customers(self):
+            return [edited]
+
+    monkeypatch.setattr(cli, "_linear_client", lambda: _Client())
+    monkeypatch.setattr(cli, "_cmd_ingest", lambda args: 0)
+    monkeypatch.setattr(cli, "_cmd_generate", lambda args: 0)
+    assert run_cli(["refresh", "--no-input"], data_dir=tmp_path) == 0
+    import yaml
+
+    data = yaml.safe_load((tmp_path / "linear-overrides.yaml").read_text())
+    assert data == {"customers": {"acme": {"pending": {"revenue": 7}}}}

@@ -8,8 +8,8 @@
 #   uv project in this repository (`project_dir`, default the root; a committed
 #   uv.lock), so the lock pins the tool and its dependencies. The project's
 #   pyproject.toml depends on the tool at the same release as the workflow's
-#   `@v0.2.0`:
-#     customer-registry-sync = { git = "https://github.com/markddavidoff/customer-registry-sync.git", tag = "v0.2.0" }
+#   `@v0.3.0`:
+#     customer-registry-sync = { git = "https://github.com/markddavidoff/customer-registry-sync.git", tag = "v0.3.0" }
 # - The two Linear tokens are not passed. Store DESTINATION_TOKEN (the write token) as
 #   a secret of the deploy environment and DESTINATION_READONLY_TOKEN as a secret of
 #   the read-only environment, both named in registry-sync.yaml. A secret of the same name in a job's environment takes
@@ -46,7 +46,7 @@ on:
 
 jobs:
   registry-sync:
-    uses: markddavidoff/gitops-engine/.github/workflows/sync.yml@v0.2.0
+    uses: markddavidoff/gitops-engine/.github/workflows/sync.yml@v0.3.0
     permissions:
       contents: read
     secrets:

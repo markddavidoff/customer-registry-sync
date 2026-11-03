@@ -3,8 +3,10 @@
 import shutil
 from datetime import date
 
+import pytest
+
 from gitops_engine.datasets import dataset_dir
-from gitops_engine.ignore import BUILTIN_PREFIX, load_ignore, partition_live
+from gitops_engine.ignore import BUILTIN_PREFIX
 from gitops_engine.manifest import MANIFEST, write_manifest
 from gitops_engine.mirror import reconcile_mirror
 
@@ -19,7 +21,7 @@ from customer_registry_sync.deploy import plan_deploy
 from customer_registry_sync.generate import generate_from_dir
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
 from customer_registry_sync.identity import IdentityStore
-from customer_registry_sync.linear_files import IGNORE_FILE, IGNORE_FORMAT
+from customer_registry_sync.linear_files import no_hidden, partition_hidden
 from customer_registry_sync.linear_client import parse_customer_node
 from customer_registry_sync.linear_found import (
     STUB_NOTE,
@@ -70,12 +72,11 @@ def _mirror(tmp_path, *nodes):
     write_manifest(tmp_path / STATE_SUBDIR, "sync-inbound")
 
 
-def _managed(tmp_path):
-    ignore = load_ignore(tmp_path / IGNORE_FILE, IGNORE_FORMAT)
+def _managed(tmp_path, table):
     live = [
         LINEAR_SCHEMA.state_to_live(r) for r in load_state(tmp_path) if r.linear_synced is not None
     ]
-    return partition_live(live, ignore, LINEAR_SCHEMA, scope=None)[0]
+    return partition_hidden(live, no_hidden(), table, scope=None)[0]
 
 
 def _ingest(run_cli, tmp_path):
@@ -93,11 +94,11 @@ def _identities(tmp_path):
 
 
 def _build(tmp_path, today=DAY1):
-    """`build_linear_found` over the tree's mirror, as `ingest` calls it (no ignore file)."""
+    """`build_linear_found` over the tree's mirror, as `ingest` calls it (no overrides file)."""
     store = IdentityStore(tmp_path / IDENTITIES_FILE)
     entries = load_datasets(tmp_path, BOTH)
     append_record_identities(store, entries)
-    managed = sorted(_managed(tmp_path), key=lambda lv: lv.id)
+    managed = sorted(_managed(tmp_path, store.table), key=lambda lv: lv.id)
     return store, build_linear_found(
         managed, store, entries, load_datasets_config(tmp_path), today=today
     )
@@ -253,7 +254,7 @@ def test_name_only_and_alias_name_only_match_create_no_stub(tmp_path, run_cli):
     assert ids["dunder"].sources["linear"] == "lin_t"
 
 
-def test_linear_only_domain_appended_to_identity(tmp_path, run_cli):
+def test_linear_only_domain_appended_to_stub_identity_only(tmp_path, run_cli):
     _tree(
         tmp_path,
         records=[ACME],
@@ -263,10 +264,11 @@ def test_linear_only_domain_appended_to_identity(tmp_path, run_cli):
         ],
     )
     assert _ingest(run_cli, tmp_path) == 0
-    assert _identities(tmp_path)["acme"].values["domains"] == [
-        "acme.example.test",
-        "Acme-Alt.example.test",
-    ]
+    # a customer with a notion record learns only its Linear id: a domain added in
+    # Linear reaches the registry through linear-overrides.yaml, never the identity
+    acme = _identities(tmp_path)["acme"]
+    assert acme.values["domains"] == ["acme.example.test"]
+    assert acme.sources["linear"] == "lin_a"
     # a stub's later Linear-only domain lands on its identity too
     _mirror(
         tmp_path,
@@ -280,21 +282,30 @@ def test_linear_only_domain_appended_to_identity(tmp_path, run_cli):
     ]
 
 
-def test_ignored_customer_not_stubbed_and_gets_no_identity(tmp_path, run_cli):
+def test_hidden_customer_not_stubbed(tmp_path, run_cli):
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE
+
     _tree(
         tmp_path,
         nodes=[
             _node("lin_own", "Pied Piper", domains=["piedpiper.example.test"]),
             _node("lin_z", f"{BUILTIN_PREFIX}alpha", domains=["zzz.example.test"]),
+            _node("lin_s", "sandbox-lab", domains=["lab.example.test"]),
             _node("lin_b", "Beta Corp", domains=["beta.example.test"]),
         ],
     )
-    (tmp_path / IGNORE_FILE).write_text(
-        "customers:\n  - linear_id: lin_own\n    name: Pied Piper\n    reason: our own company\n"
+    # hidden by id: its identity (which `hide` appends) carries the Linear id
+    store = IdentityStore(tmp_path / IDENTITIES_FILE)
+    store.add_identity("own", names=["Pied Piper"], domains=[], sources={"linear": "lin_own"})
+    store.save()
+    (tmp_path / OVERRIDES_FILE).write_text(
+        "customers:\n  own:\n    hidden: {reason: our own company}\n"
+        "hidden_name_prefixes:\n  - {prefix: sandbox-, reason: manual experiments}\n"
     )
     assert _ingest(run_cli, tmp_path) == 0
     assert list(_stubs(tmp_path)) == ["beta"]
-    assert list(_identities(tmp_path)) == ["beta"]
+    # prefix-hidden customers get no identity either; the hidden one keeps its own
+    assert list(_identities(tmp_path)) == ["own", "beta"]
 
 
 def test_same_name_live_customers_make_one_stub(tmp_path, capsys, run_cli):
@@ -430,7 +441,7 @@ def test_status_errors_name_unmapped_and_unclassified_stubs(tmp_path):
     assert errors[0].startswith("stub 'Blank' has no classification")
     assert errors[1].startswith("unmapped Linear status: 'Odd' (lin_s) has status 'Paused'.")
     assert "linear_status_classification in datasets.yaml" in errors[1]
-    assert "ignore --linear-id lin_s" in errors[1]
+    assert "hide --linear-id lin_s" in errors[1]
 
 
 def test_two_customers_stamped_with_the_canonical_id_are_reported(tmp_path, capsys, run_cli):
@@ -466,8 +477,150 @@ def test_recorded_linear_id_picks_the_primary_and_the_other_is_a_known_duplicate
     assert build.stubs == []
     assert build.reports == []
     assert build.duplicates == ["acme: 'Acme Inc' (lin_1) is a known duplicate; merge it in Linear"]
-    # only the primary contributes its Linear-only domain
-    assert store.table.entries["acme"].values["domains"] == [
-        "acme.example.test",
-        "acme-two.example.test",
-    ]
+    # a customer with a notion record learns no Linear-only domain, from either row
+    assert store.table.entries["acme"].values["domains"] == ["acme.example.test"]
+    assert store.table.entries["acme"].sources["linear"] == "lin_2"
+
+
+# --- a stub handing over to Notion -------------------------------------------------
+
+BETA_NODE = _node("lin_b", "Beta Corp", domains=["a.test", "b.test"], revenue=5000, tier="Gold")
+BETA = CustomerRecord(canonical_name="Beta Corp", domains=["a.test"], classification="real")
+
+
+def _notion(tmp_path, *records):
+    write_dataset(list(records), tmp_path, dataset=NOTION)
+    write_manifest(dataset_dir(tmp_path, NOTION), "ingest")
+
+
+def _overrides(tmp_path):
+    from customer_registry_sync.linear_overrides import load_overrides_file
+
+    return load_overrides_file(tmp_path).entries
+
+
+def _plan_changes(tmp_path, run_cli, linear_id):
+    """`generate`, then the field changes `deploy` would plan for `linear_id`."""
+    from customer_registry_sync.deploy_plan import load_inputs, plan_for_deploy
+
+    assert run_cli(["generate", "--out-dir", str(tmp_path), "--no-input"]) == 0
+    inp = load_inputs(tmp_path, None, require_desired=True)
+    live = [LINEAR_SCHEMA.state_to_live(r) for r in load_state(tmp_path)]
+    plan = plan_for_deploy(inp, live, None).plan
+    assert plan.errors == []
+    return plan.changes[linear_id]
+
+
+def _stub_then_notion(tmp_path, run_cli):
+    """A real `ingest` makes Beta a stub; then a Notion record for it appears."""
+    _tree(tmp_path, nodes=[BETA_NODE])
+    assert _ingest(run_cli, tmp_path) == 0
+    assert list(_stubs(tmp_path)) == ["a"]
+    assert _identities(tmp_path)["a"].values["domains"] == ["a.test", "b.test"]
+    _notion(tmp_path, BETA)
+
+
+def test_handover_absorbs_stub_values(tmp_path, capsys, run_cli):
+    _stub_then_notion(tmp_path, run_cli)
+    capsys.readouterr()
+    assert _ingest(run_cli, tmp_path) == 0
+    assert _stubs(tmp_path) == {}
+    assert "handover: 1 customers kept their Linear values" in capsys.readouterr().out
+    entry = _overrides(tmp_path)["a"]
+    assert entry.pin == {"revenue": 5000, "tier": "Gold"}
+    # the identity already holds b.test, so the upstream row carries it: no add needed
+    assert entry.add == {}
+    changes = _plan_changes(tmp_path, run_cli, "lin_b")
+    assert [c for c in changes if c.kind in ("clear", "remove")] == []
+
+
+def test_handover_adds_a_stub_domain_the_identity_lacks(tmp_path, run_cli):
+    _stub_then_notion(tmp_path, run_cli)
+    # c.test reached Linear after the last ingest: the stub's identity never learned it
+    _mirror(
+        tmp_path,
+        _node(
+            "lin_b", "Beta Corp", domains=["a.test", "b.test", "c.test"], revenue=5000, tier="Gold"
+        ),
+    )
+    assert _ingest(run_cli, tmp_path) == 0
+    assert _overrides(tmp_path)["a"].add == {"domains": ["c.test"]}
+    changes = _plan_changes(tmp_path, run_cli, "lin_b")
+    assert [c for c in changes if c.kind in ("clear", "remove")] == []
+
+
+@pytest.mark.parametrize(
+    ("ops", "want_add", "want_remove"),
+    [
+        # a case variant already added is not written twice
+        ("{add: [C.test]}", {"domains": ["C.test"]}, {}),
+        # a curated remove stands: the handover adds nothing back
+        ("{remove: [C.test]}", {}, {"domains": ["C.test"]}),
+    ],
+)
+def test_handover_leaves_curated_domains(tmp_path, run_cli, ops, want_add, want_remove):
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE
+
+    _stub_then_notion(tmp_path, run_cli)
+    _mirror(
+        tmp_path,
+        _node(
+            "lin_b", "Beta Corp", domains=["a.test", "b.test", "c.test"], revenue=5000, tier="Gold"
+        ),
+    )
+    (tmp_path / OVERRIDES_FILE).write_text(f"customers:\n  a:\n    domains: {ops}\n")
+    assert _ingest(run_cli, tmp_path) == 0
+    entry = _overrides(tmp_path)["a"]
+    assert entry.pin == {"revenue": 5000, "tier": "Gold"}
+    assert entry.add == want_add
+    assert entry.remove == want_remove
+
+
+def test_handover_keeps_existing_pin(tmp_path, run_cli):
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE
+
+    _stub_then_notion(tmp_path, run_cli)
+    (tmp_path / OVERRIDES_FILE).write_text("customers:\n  a:\n    pin: {revenue: 7000}\n")
+    assert _ingest(run_cli, tmp_path) == 0
+    assert _overrides(tmp_path)["a"].pin == {"revenue": 7000, "tier": "Gold"}
+
+
+def test_handover_is_once(tmp_path, run_cli):
+    _stub_then_notion(tmp_path, run_cli)
+    assert _ingest(run_cli, tmp_path) == 0
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE
+
+    path = tmp_path / OVERRIDES_FILE
+    path.write_text("customers:\n  a:\n    pin: {revenue: 5000}\n")
+    # the stub is gone: a later run hands nothing over, so a hand edit stands
+    assert _ingest(run_cli, tmp_path) == 0
+    assert _overrides(tmp_path)["a"].pin == {"revenue": 5000}
+
+
+def test_handover_dry_run_writes_nothing(tmp_path, capsys, run_cli):
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE
+
+    _stub_then_notion(tmp_path, run_cli)
+    capsys.readouterr()
+    args = ["ingest", "--only", "linear-found", "--out-dir", str(tmp_path), "--dry-run"]
+    assert run_cli(args) == 0
+    assert "would keep the Linear values of 1 customers" in capsys.readouterr().out
+    assert not (tmp_path / OVERRIDES_FILE).exists()
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "hidden: {reason: test account}",
+        "deleted: {linear_id: lin_b, confirmed: '2026-10-30'}",
+    ],
+)
+def test_no_handover_when_stub_just_dropped(tmp_path, run_cli, entry):
+    from customer_registry_sync.linear_overrides import OVERRIDES_FILE
+
+    _stub_then_notion(tmp_path, run_cli)
+    (tmp_path / OVERRIDES_FILE).write_text(f"customers:\n  a:\n    {entry}\n")
+    assert _ingest(run_cli, tmp_path) == 0
+    got = _overrides(tmp_path)["a"]
+    assert got.pin == {}
+    assert got.add == {}

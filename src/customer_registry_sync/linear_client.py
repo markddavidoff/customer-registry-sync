@@ -21,9 +21,15 @@ from gitops_engine.destination import DestinationError
 
 GQL_URL = "https://api.linear.app/graphql"
 
+# `archivedAt` is read only so `get_customer` can treat an archived customer as gone:
+# the default `customers` listing omits archived customers.
 _CUSTOMER_FIELDS = (
-    "id name domains revenue externalIds updatedAt status { id name } tier { id name }"
+    "id name domains revenue externalIds updatedAt archivedAt status { id name } tier { id name }"
 )
+
+
+# Fields a write never empties, `retire` or not: the never-null rule.
+_REQUIRED_INPUTS = ("name", "status_id", "external_ids")
 
 
 @dataclass
@@ -55,6 +61,20 @@ class LinearError(DestinationError):
     """A Linear API failure; the engine's apply and restore stop at the first."""
 
 
+class LinearNotFound(LinearError):
+    """Linear reported the requested customer does not exist."""
+
+
+def _is_not_found(errors: list[dict[str, Any]]) -> bool:
+    """Whether a GraphQL `errors` list says the requested entity does not exist.
+
+    Linear's published schema and docs do not state the error `customer(id:)` returns
+    for an unknown id (docs/linear-api-notes.md), so no shape matches yet: only a null
+    node or an archived one reads as not found, and every error stays a `LinearError`.
+    The owner-run live test `test_get_after_delete_is_not_found` settles the shape."""
+    return False
+
+
 class LinearClient:
     def __init__(
         self,
@@ -80,6 +100,8 @@ class LinearClient:
                 with urllib.request.urlopen(req, timeout=30) as r:
                     out = json.load(r)
                 if "errors" in out:
+                    if _is_not_found(out["errors"]):
+                        raise LinearNotFound(json.dumps(out["errors"])[:500])
                     raise LinearError(json.dumps(out["errors"])[:500])
                 return out
             except urllib.error.HTTPError as e:  # retry 429 (honor Retry-After) and 5xx
@@ -131,12 +153,17 @@ class LinearClient:
         return {n["name"]: n["id"] for n in nodes}
 
     def get_customer(self, customer_id: str) -> LiveCustomer | None:
+        """The customer as it is now, or `None` when Linear reports it gone: a null
+        node, a `LinearNotFound`, or an archived customer. Any other `LinearError`
+        raises, so a failed read never reads as a deletion."""
         q = "query($id: String!){ customer(id: $id){ %s } }" % _CUSTOMER_FIELDS
         try:
             node = self._data(q, {"id": customer_id})["customer"]
-        except LinearError:
+        except LinearNotFound:
             return None
-        return parse_customer_node(node) if node else None
+        if not node or node.get("archivedAt"):
+            return None
+        return parse_customer_node(node)
 
     # ---- writes ----
     @staticmethod
@@ -144,11 +171,14 @@ class LinearClient:
         """Map python field names to Linear input keys.
 
         Refuses a null or empty-list value unless ``retire`` is set, so a sync
-        can never erase a value in Linear by accident.
+        can never erase a value in Linear by accident. A required field (`name`,
+        `status_id`, `external_ids`) is refused when empty even under ``retire``.
         """
         key = {"status_id": "statusId", "tier_id": "tierId", "external_ids": "externalIds"}
         out: dict[str, Any] = {}
         for k, v in fields.items():
+            if k in _REQUIRED_INPUTS and (v is None or v == "" or v == []):
+                raise LinearError(f"refusing to send empty {k}: Linear requires it")
             if (v is None or v == []) and not retire:
                 raise LinearError(f"refusing to send empty {k} without retire")
             out[key.get(k, k)] = v

@@ -1,7 +1,9 @@
 from dataclasses import replace
 
+import pytest
+
 from gitops_engine.datasets import dataset_dir
-from gitops_engine.ignore import load_ignore
+from gitops_engine.hidden import hidden_from
 from gitops_engine.manifest import MANIFEST, write_manifest
 from gitops_engine.mirror import reconcile_mirror
 
@@ -30,8 +32,8 @@ from gitops_engine.fieldplan import FieldChange
 from customer_registry_sync.generate import generate_from_dir, merge_datasets
 from customer_registry_sync.identity import IDENTITIES_FILE, load_identities
 from customer_registry_sync.identity import IdentityStore
-from customer_registry_sync.linear_files import IGNORE_FILE, IGNORE_FORMAT
 from customer_registry_sync.linear_client import LiveCustomer, parse_customer_node
+from customer_registry_sync.linear_overrides import OVERRIDES_FILE, load_overrides_file
 from customer_registry_sync.linear_schema import (
     LINEAR_SCHEMA,
     LinearCustomer,
@@ -127,22 +129,6 @@ def _desired_acme(**kw):
     return LinearCustomer(**{**base, **kw})
 
 
-def test_check_reports_untracked_and_passes():
-    # untracked values are reported, not failed
-    lv = _live("lin_1", "Acme")  # live carries acme.example.test; the registry row has no domains
-    res = run_check([_desired_acme(domains=[])], [_state_from(lv)], [lv])
-    assert res.code == EXIT_OK and not res.drift.any() and not res.plan.aborts
-    assert [(u.field, u.value) for u in res.untracked] == [("domains", "acme.example.test")]
-
-
-def test_check_exits_3_on_stale_retire():
-    lv = _live("lin_1", "Acme")
-    retire = {"acme": {"domains": ["gone.example.org"]}}
-    res = run_check([_desired_acme()], [_state_from(lv)], [lv], retire=retire)
-    assert res.code == EXIT_DRIFT and res.stale == ["acme: domains gone.example.org not live"]
-    assert not res.drift.any() and not res.untracked
-
-
 def test_check_exits_3_on_unacked_destructive(monkeypatch):
     lv = _live("lin_1", "Acme")
     bad = FieldChange("revenue", 1, None, "clear")  # retire=False: a planner bug
@@ -185,26 +171,9 @@ def test_cli_check_exit_3_on_drift_and_prints_classes(tmp_path, monkeypatch, cap
     assert "DRIFT changed: Acme" in out and "DRIFT added: Newco" in out
     assert (
         out.rstrip().splitlines()[-1]
-        == "check FAILED: see the ERROR, DRIFT and OFFLINE lines above"
+        == "check FAILED: see the ERROR, DRIFT, PENDING, OVERRIDE and OFFLINE lines above"
     )
     assert "run sync-inbound, resolve, re-run" not in out
-
-
-def test_cli_check_prints_untracked_and_stale_retire(tmp_path, monkeypatch, capsys, run_cli):
-    lv = _live("lin_1", "Acme")
-    write_desired([_desired_acme(domains=[], revenue=None)], tmp_path)
-    write_state([_state_from(lv)], tmp_path)
-    (tmp_path / "linear-retire.yaml").write_text(
-        "acme:\n  domains: [gone.example.org]\nghost:\n  tier: Tier 1\n"
-    )
-    monkeypatch.setattr(cli, "_linear_client", lambda: _Fake([lv]))
-    assert run_cli(["check", "--out-dir", str(tmp_path)]) == 3
-    out = capsys.readouterr().out
-    assert "UNTRACKED: Acme: domains += acme.example.test" in out
-    assert "UNTRACKED: Acme: revenue = 1" in out
-    assert out.index("DeployPlan:") < out.index("UNTRACKED: Acme: domains += acme.example.test")
-    assert "STALE RETIRE: acme: domains gone.example.org not live" in out
-    assert "STALE RETIRE: ghost: no registry row" in out
 
 
 def _generated_tree(tmp_path):
@@ -309,10 +278,12 @@ def test_cli_generate_writes_rows_and_csvs_that_check_accepts(tmp_path, capsys, 
     assert offline_errors(tmp_path) == []
 
 
-def test_offline_errors_on_invalid_ignore_file(tmp_path):
+def test_offline_errors_no_longer_read_the_ignore_file(tmp_path):
+    # `check` and `deploy` refuse a legacy ignore file before planning
+    # (`deploy_plan.legacy_refused`); the offline errors no longer validate it
     _generated_tree(tmp_path)
-    (tmp_path / IGNORE_FILE).write_text("customers:\n  - linear_id: lin_a\n")
-    assert offline_errors(tmp_path) == ["linear-ignore.yaml:2: missing reason"]
+    (tmp_path / "linear-ignore.yaml").write_text("customers:\n  - linear_id: lin_a\n")
+    assert offline_errors(tmp_path) == []
 
 
 def test_offline_errors_on_stale_csv(tmp_path):
@@ -408,16 +379,17 @@ def test_identity_offline_errors_include_table_errors(tmp_path):
     ]
 
 
-# ---- the one managed/ignored partition ----
+# ---- the one managed/hidden partition ----
 
-_IGNORE_OWN = (
-    "customers:\n  - linear_id: lin_own\n    name: Pied Piper\n    reason: our own company\n"
-)
+_HIDE_OWN = "customers:\n  own:\n    hidden: {reason: our own company}\n"
 
 
-def _ignore_list(tmp_path, text=_IGNORE_OWN):
-    (tmp_path / IGNORE_FILE).write_text(text)
-    return load_ignore(tmp_path / IGNORE_FILE, IGNORE_FORMAT)
+def _hidden_own(tmp_path):
+    """(hidden, table): `own` is hidden in linear-overrides.yaml, and its identity
+    records Pied Piper's Linear id, through which the live row reaches it."""
+    table = _store(tmp_path, ("own", ["Pied Piper"], [], {"linear": "lin_own"}))
+    (tmp_path / OVERRIDES_FILE).write_text(_HIDE_OWN)
+    return hidden_from(load_overrides_file(tmp_path)), table
 
 
 def _node(
@@ -455,8 +427,8 @@ _TWO_STAMPED = (
 )
 
 
-def test_ignored_not_in_drift(tmp_path):
-    ign = _ignore_list(tmp_path)
+def test_hidden_not_in_drift(tmp_path):
+    hid, table = _hidden_own(tmp_path)
     acme = _managed_acme()
     own_then = _node("lin_own", "Pied Piper", domains=["piedpiper.example.test"])
     own_now = _node(
@@ -467,30 +439,30 @@ def test_ignored_not_in_drift(tmp_path):
         updated="2026-10-05T00:00:00.000Z",
     )
     state = [_state_from(acme), _state_from(own_then)]
-    res = run_check([_desired_acme()], state, [acme, own_now], ignore=ign)
+    res = run_check([_desired_acme()], state, [acme, own_now], table, hidden=hid)
     assert not res.drift.any() and res.code == EXIT_OK
     assert [lv.id for lv in res.ignored] == ["lin_own"]
-    # an ignored customer deleted from Linear is not "deleted" drift either
-    res = run_check([_desired_acme()], state, [acme], ignore=ign)
+    # a hidden customer deleted from Linear is not "deleted" drift either
+    res = run_check([_desired_acme()], state, [acme], table, hidden=hid)
     assert not res.drift.any()
-    # control: without the ignore entry the same edit is drift
-    assert run_check([_desired_acme()], state, [acme, own_now]).drift.changed
+    # control: without the hidden entry the same edit is drift
+    assert run_check([_desired_acme()], state, [acme, own_now], table).drift.changed
 
 
-def test_ignored_not_in_plan(tmp_path):
-    ign = _ignore_list(tmp_path)
+def test_hidden_not_in_plan(tmp_path):
+    hid, table = _hidden_own(tmp_path)
     acme, own = _managed_acme(), _node("lin_own", "Pied Piper", domains=["piedpiper.example.test"])
     state = [_state_from(acme), _state_from(own)]
-    res = run_check([_desired_acme()], state, [acme, own], ignore=ign)
+    res = run_check([_desired_acme()], state, [acme, own], table, hidden=hid)
     assert res.plan.orphans == [] and not res.plan.updates and not res.plan.creates
     assert [d.name for d in res.plan.unchanged] == ["Acme"]
-    assert run_check([_desired_acme()], state, [acme, own]).plan.orphans == [own]
+    assert run_check([_desired_acme()], state, [acme, own], table).plan.orphans == [own]
 
 
-def test_ignored_not_untracked(tmp_path):
-    # the ignored customer carries the canonical id too and comes first, so an
+def test_hidden_not_untracked(tmp_path):
+    # the hidden customer carries the canonical id too and comes first, so an
     # unpartitioned planner would pair it and report its extra domain
-    ign = _ignore_list(tmp_path)
+    hid, table = _hidden_own(tmp_path)
     acme = _managed_acme()
     own = _node(
         "lin_own",
@@ -498,34 +470,20 @@ def test_ignored_not_untracked(tmp_path):
         domains=["acme.example.test", "piedpiper.example.test"],
         xids=["acme"],
     )
-    res = run_check([_desired_acme()], [], [own, acme], ignore=ign)
+    res = run_check([_desired_acme()], [], [own, acme], table, hidden=hid)
     assert res.untracked == []
     assert [d.name for d in res.plan.unchanged] == ["Acme"]
-    # it resolves to Acme's identity, so it is an ignore conflict instead
+    # it shares Acme's canonical id, so it is a hidden conflict instead
     assert res.failures == [
         (
-            "desired record 'Acme' shares source id 'acme' with ignored Linear customer 'Pied Piper' "
-            "(linear-ignore.yaml:2). Remove that entry or change Acme."
+            "desired record 'Acme' shares source id 'acme' with hidden Linear customer "
+            "'Pied Piper' (entry own, linear-overrides.yaml). "
+            "Remove that entry from linear-overrides.yaml or change Acme."
         )
     ]
     assert res.code == EXIT_DRIFT
     # control: unpartitioned, both carry the canonical id, so the planner refuses
-    assert run_check([_desired_acme()], [], [own, acme]).plan.errors == [_TWO_STAMPED]
-
-
-def test_ignored_not_in_stale_retire(tmp_path):
-    ign = _ignore_list(tmp_path)
-    acme = _managed_acme()
-    own = _node(
-        "lin_own", "Pied Piper", domains=["acme.example.test", "old.example.org"], xids=["acme"]
-    )
-    retire = {"acme": {"domains": ["old.example.org"]}}
-    res = run_check([_desired_acme()], [], [own, acme], retire=retire, ignore=ign)
-    assert res.stale == ["acme: domains old.example.org not live"]  # only the ignored row has it
-    # control: unpartitioned, both carry the canonical id, so the planner refuses
-    unpartitioned = run_check([_desired_acme()], [], [own, acme], retire=retire)
-    assert unpartitioned.plan.errors == [_TWO_STAMPED]
-    assert unpartitioned.code == EXIT_DRIFT
+    assert run_check([_desired_acme()], [], [own, acme], table).plan.errors == [_TWO_STAMPED]
 
 
 def test_linear_edit_to_stub_is_not_drift(tmp_path):
@@ -581,7 +539,7 @@ def test_unmapped_status_fails_naming_customer_and_status(tmp_path, run_cli):
     assert (
         "unmapped Linear status: 'Pilot Co' (lin_p) has status 'POC'. Add 'POC: prospect' "
         "(or the right class) to linear_status_classification in datasets.yaml, "
-        'or ignore it: customer-registry-sync ignore --linear-id lin_p --reason "<why>"'
+        'or hide it: customer-registry-sync hide --linear-id lin_p --reason "<why>"'
     ) in offline_errors(tmp_path)
 
 
@@ -593,7 +551,7 @@ _ORPHAN_HOOLI = [
         "  Add it: dispatch the registry-sync workflow with mode=refresh (or run sync-inbound, "
         "ingest --only linear-found, generate) and merge the PR."
     ),
-    '  Or ignore it: customer-registry-sync ignore --linear-id lin_hooli --reason "<why>"',
+    '  Or hide it: customer-registry-sync hide --linear-id lin_hooli --reason "<why>"',
 ]
 
 
@@ -643,16 +601,18 @@ def test_record_with_no_identity_makes_its_live_customer_no_orphan(tmp_path):
     assert orphans([acme], load_identities(tmp_path / IDENTITIES_FILE), entries) == []
 
 
-def test_ignored_is_not_an_orphan(tmp_path):
-    ign = _ignore_list(tmp_path)
+def test_hidden_is_not_an_orphan(tmp_path):
+    hid, table = _hidden_own(tmp_path)
     own = _node("lin_own", "Pied Piper", domains=["piedpiper.example.test"])
-    res = run_check([], [], [own], ignore=ign, entries=[])
+    res = run_check([], [], [own], table, hidden=hid, entries=[])
     assert res.orphans == [] and res.code == EXIT_OK
-    # control: without the ignore entry the same customer is an orphan
-    assert run_check([], [], [own], entries=[]).orphans == [own]
+    # control: without the hidden entry the same customer is an orphan
+    assert run_check([], [], [own], table, entries=[]).orphans == [own]
 
 
-def test_untracked_revenue_tier_and_domain_pass_with_report(tmp_path):
+def test_live_only_revenue_tier_and_domain_are_planned_clears(tmp_path):
+    """The registry owns every written field: a live value it lacks is a planned removal
+    or clear, never an untracked report, and the check passes."""
     table = _store(tmp_path, ("acme", ["Acme"], [], {"notion": "acme"}))
     entries = _notion_entries(
         tmp_path, CustomerRecord(canonical_name="Acme", classification="real")
@@ -663,12 +623,12 @@ def test_untracked_revenue_tier_and_domain_pass_with_report(tmp_path):
         "lin_1", d.name, domains=["acme.example.test"], revenue=7, tier="Tier 2", xids=["acme"]
     )
     res = run_check([d], [_state_from(lv)], [lv], table, entries=entries)
-    assert res.code == EXIT_OK
-    assert {(u.field, u.value) for u in res.untracked} == {
-        ("domains", "acme.example.test"),
-        ("revenue", 7),
-        ("tier", "Tier 2"),
-    }
+    assert res.code == EXIT_OK and res.untracked == [] and res.stale == []
+    assert res.plan.changes["lin_1"] == [
+        FieldChange("domains", "acme.example.test", None, "remove", retire=True),
+        FieldChange("revenue", 7, None, "clear", retire=True),
+        FieldChange("tier", "Tier 2", None, "clear", retire=True),
+    ]
 
 
 def test_known_duplicate_reported_and_passes(tmp_path):
@@ -773,3 +733,162 @@ def test_linear_edit_to_stub_passes_check(tmp_path, monkeypatch, capsys, run_cli
     out = capsys.readouterr().out
     assert out.rstrip().endswith("IN SYNC")
     assert "UNTRACKED" not in out and "orphan:" not in out
+
+
+# ---- linear-overrides.yaml ----
+
+
+def _regenerate(tmp_path):
+    """`generate` as the CLI runs it: linear/ and the CSVs, with the manifest."""
+    gen = generate_from_dir(tmp_path)
+    write_desired(gen.rows, tmp_path)
+    write_csvs(gen.winners, tmp_path)
+    write_manifest(tmp_path / "linear", "generate")
+
+
+def _with_overrides(tmp_path, text):
+    (tmp_path / "linear-overrides.yaml").write_text(text)
+    _regenerate(tmp_path)
+
+
+def test_check_pending_prints_both_resolutions(tmp_path, monkeypatch, capsys, run_cli):
+    _, lv = _generated_tree(tmp_path)
+    _with_overrides(
+        tmp_path, "customers:\n  acme:\n    pending: {revenue: 150000, domains_add: [acme.dev]}\n"
+    )
+    monkeypatch.setattr(cli, "_linear_client", lambda: _Fake([lv]))
+    assert run_cli(["check", "--out-dir", str(tmp_path)]) == 3
+    out = capsys.readouterr().out
+    assert "PENDING: acme: revenue = 150000 (edited in Linear)" in out
+    assert "keep Linear's value: move it to customers.acme.pin.revenue" in out
+    assert "PENDING: acme: domains_add = [acme.dev] (edited in Linear)" in out
+    assert "keep Linear's value: move it to customers.acme.domains.add" in out
+    assert (
+        "upstream wins: delete customers.acme.pending.revenue; "
+        "the next deploy writes the registry value"
+    ) in out
+    assert "upstream wins: delete customers.acme.pending.domains_add" in out
+    assert out.rstrip().splitlines()[-1] == (
+        "check FAILED: see the ERROR, DRIFT, PENDING, OVERRIDE and OFFLINE lines above"
+    )
+
+
+def _stub_tree(tmp_path, run_cli):
+    """A `linear-found` stub built by the real CLI from the mirror; returns its live row."""
+    (tmp_path / "datasets.yaml").write_text(_FOUND_YAML)
+    write_dataset([], tmp_path)
+    write_manifest(dataset_dir(tmp_path, NOTION), "ingest")
+    hooli = _node("lin_hooli", "Hooli", domains=["hooli.example.test"], revenue=3, xids=["hooli"])
+    write_state(reconcile_mirror([hooli], LINEAR_SCHEMA), tmp_path)
+    write_manifest(tmp_path / "linear-state", "sync-inbound")
+    args = ["--out-dir", str(tmp_path), "--no-input"]
+    assert run_cli(["ingest", "--only", "linear-found", *args]) == 0
+    assert run_cli(["generate", *args]) == 0
+    return hooli
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("customers:\n  acme:\n    pin: {status: null}\n", "status cannot be pinned empty"),
+        (
+            "customers:\n  acme:\n    pin: {external_ids: [x]}\n",
+            "external_ids can never be pinned",
+        ),
+        (
+            "customers:\n  acme:\n    domains: {remove: [nope.example.test]}\n",
+            "acme: domains.remove nope.example.test: upstream does not carry it",
+        ),
+        ("customers:\n  ghost:\n    pin: {revenue: 5}\n", "ghost: no identity"),
+        (
+            "customers:\n  hooli:\n    pin: {revenue: 5}\n",
+            "hooli: pin does not apply to a Linear-owned stub",
+        ),
+        ("customers:\n  acme:\n    pin: {revenue: lots}\n", "revenue must be an integer"),
+    ],
+)
+def test_check_override_failures(tmp_path, monkeypatch, capsys, run_cli, text, message):
+    if "hooli" in text:
+        live = [_stub_tree(tmp_path, run_cli)]
+        (tmp_path / "linear-overrides.yaml").write_text(text)
+    else:
+        _, lv = _generated_tree(tmp_path)
+        live = [lv]
+        (tmp_path / "linear-overrides.yaml").write_text(text)
+        if "null" not in text and "external_ids" not in text:
+            _regenerate(tmp_path)
+    monkeypatch.setattr(cli, "_linear_client", lambda: _Fake(live))
+    assert run_cli(["check", "--out-dir", str(tmp_path)]) == 3
+    out = capsys.readouterr().out
+    [line] = [x for x in out.splitlines() if message in x]
+    assert line.lstrip().startswith("OVERRIDE: ")
+
+
+def test_check_reports_redundant_pin_and_deleted(tmp_path, monkeypatch, capsys, run_cli):
+    write_dataset(
+        [
+            CustomerRecord(
+                canonical_name="Acme", domains=["acme.example.test"], classification="real", arr=1.0
+            ),
+            CustomerRecord(
+                canonical_name="Gone", domains=["gone.example.test"], classification="real"
+            ),
+        ],
+        tmp_path,
+    )
+    write_manifest(dataset_dir(tmp_path, NOTION), "ingest")
+    _with_overrides(
+        tmp_path,
+        "customers:\n"
+        "  acme:\n    pin: {revenue: 1}\n"
+        "  gone:\n    deleted: {linear_id: lin_gone, confirmed: 2026-10-28}\n",
+    )
+    [desired] = generate_from_dir(tmp_path).rows
+    lv = LiveCustomer(
+        id="lin_1",
+        name=desired.name,
+        domains=desired.domains,
+        revenue=desired.revenue,
+        tier=desired.tier,
+        status=desired.status,
+        external_ids=desired.external_ids,
+        updated_at="2026-10-01T00:00:00.000Z",
+    )
+    write_state([_state_from(lv)], tmp_path)
+    write_manifest(tmp_path / "linear-state", "sync-inbound")
+    monkeypatch.setattr(cli, "_linear_client", lambda: _Fake([lv]))
+    assert run_cli(["check", "--out-dir", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "NOTE: acme: pin revenue equals upstream (redundant)" in out
+    assert "NOTE: gone: deleted at Linear (lin_gone, 2026-10-28): not recreated" in out
+    assert out.rstrip().endswith("IN SYNC")
+
+
+def test_malformed_overrides_check_exits_3_deploy_exits_2(tmp_path, monkeypatch, capsys, run_cli):
+    _, lv = _generated_tree(tmp_path)
+    (tmp_path / "linear-overrides.yaml").write_text("customers: [acme]\n")
+    reads = []
+
+    class _Counting(_Fake):
+        def list_customers(self):
+            reads.append(1)
+            return super().list_customers()
+
+    monkeypatch.setattr(cli, "_linear_client", lambda: _Counting([lv]))
+    assert run_cli(["check", "--out-dir", str(tmp_path)]) == 3
+    out = capsys.readouterr().out
+    assert "OVERRIDE: linear-overrides.yaml:1: 'customers' must be a mapping" in out
+    assert reads == []  # Linear is never read
+    assert run_cli(["deploy", "--out-dir", str(tmp_path)]) == 2
+    assert "linear-overrides.yaml:1: 'customers' must be a mapping" in capsys.readouterr().err
+    assert reads == []
+
+
+def test_retire_file_present_refuses(tmp_path, monkeypatch, capsys, run_cli):
+    _, lv = _generated_tree(tmp_path)
+    (tmp_path / "linear-retire.yaml").write_text("acme:\n  tier: Tier 1\n")
+    monkeypatch.setattr(cli, "_linear_client", lambda: _Fake([lv]))
+    for command in ("check", "deploy"):
+        assert run_cli([command, "--out-dir", str(tmp_path)]) == 2
+        err = capsys.readouterr().err
+        assert "ERROR: linear-retire.yaml is no longer read by v0.3.0: run adopt-live" in err

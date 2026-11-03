@@ -30,9 +30,9 @@ def _triggers(wf: dict) -> dict:
     return wf.get("on", wf.get(True))
 
 
-def test_example_caller_calls_the_engine_workflow_at_v0_2_0():
+def test_example_caller_calls_the_engine_workflow_at_v0_3_0():
     (job,) = _load(CALLER)["jobs"].values()
-    assert job["uses"] == "markddavidoff/gitops-engine/.github/workflows/sync.yml@v0.2.0"
+    assert job["uses"] == "markddavidoff/gitops-engine/.github/workflows/sync.yml@v0.3.0"
     assert set(job["secrets"]) == SECRETS, "the App secrets are passed by name"
     assert not TOKENS & set(job["secrets"]), "the tokens come from the job environments"
     assert all(re.fullmatch(r"[A-Z][A-Z0-9_]*", name) for name in job["secrets"])
@@ -43,7 +43,7 @@ def test_example_caller_calls_the_engine_workflow_at_v0_2_0():
     assert with_["token-env"] == "LINEAR_API_TOKEN"
     # The tool comes from the caller's locked uv project, at the workflow's release.
     assert "tool" not in with_ and "project_dir" not in with_
-    assert 'tag = "v0.2.0"' in CALLER.read_text()
+    assert 'tag = "v0.3.0"' in CALLER.read_text()
     assert with_["mode"] == "${{ inputs.mode }}"
     assert with_["snapshot"] == "${{ inputs.snapshot }}"
     assert with_["rows"] == "${{ inputs.rows }}"
